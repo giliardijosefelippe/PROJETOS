@@ -85,6 +85,16 @@ export function PlanView({ draw, positionLabel }: PlanViewProps) {
         ))}
         <path d={toPath(draw.perimeter, draw.perimeterClosed)} className="perimeter" />
 
+        {draw.bars.map((piece, i) => {
+          const px = X(piece.x);
+          const py = Y(piece.z);
+          return draw.barType === "estribos" ? (
+            <StirrupMark key={i} x={px} y={py} angle={piece.angle} />
+          ) : (
+            <StudMark key={i} x={px} y={py} />
+          );
+        })}
+
         <rect
           x={X(column.x0)}
           y={Y(column.z1)}
@@ -141,9 +151,38 @@ export function PlanView({ draw, positionLabel }: PlanViewProps) {
               </text>
             </>
           )}
+          {draw.bars.length > 0 && (
+            <text x={svgW - 168} y={draw.outer ? 54 : 40}>
+              {draw.barSuggested ? "sugestão · " : ""}
+              {draw.bars.length} {draw.barType === "estribos" ? "estribos" : "studs"}
+            </text>
+          )}
         </g>
       </svg>
     </div>
+  );
+}
+
+function StudMark({ x, y }: { x: number; y: number }) {
+  return (
+    <g className="stud">
+      <circle cx={x} cy={y} r="4.2" />
+      <line x1={x - 2.4} y1={y} x2={x + 2.4} y2={y} />
+      <line x1={x} y1={y - 2.4} x2={x} y2={y + 2.4} />
+    </g>
+  );
+}
+
+function StirrupMark({ x, y, angle }: { x: number; y: number; angle: number }) {
+  const len = 6.5;
+  const dx = Math.cos(-angle) * len;
+  const dy = Math.sin(-angle) * len;
+  return (
+    <g className="stirrup">
+      <line x1={x - dx} y1={y - dy} x2={x + dx} y2={y + dy} />
+      <circle cx={x - dx} cy={y - dy} r="2.1" />
+      <circle cx={x + dx} cy={y + dy} r="2.1" />
+    </g>
   );
 }
 

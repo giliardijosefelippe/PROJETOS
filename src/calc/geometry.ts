@@ -302,6 +302,127 @@ export function reinforcementLine(rect: Rect, s: number, distX: number, distZ: n
   return criticalPerimeter(rect, s, distX, distZ);
 }
 
+export interface ContourPart {
+  /** Reta: paralela à face. Diagonal: arco do canto. */
+  kind: "reta" | "diagonal";
+  length: number;
+  at: (t: number) => Pt;
+  tangent: (t: number) => Pt;
+}
+
+/**
+ * Mesmo contorno de `criticalPerimeter`, separado em trechos retos e diagonais
+ * para posicionar as peças da armadura de punção.
+ */
+export function contourParts(rect: Rect, r: number, distX: number, distZ: number): ContourPart[] {
+  const cutX = Number.isFinite(distX) && distX < r - 1e-9;
+  const cutZ = Number.isFinite(distZ) && distZ < r - 1e-9;
+  if (!cutX && !cutZ) return roundedParts(rect, r);
+  if (cutZ && !cutX) return edgeXParts(rect, r, distZ);
+  if (cutX && !cutZ) return edgeZParts(rect, r, distX);
+  return cornerParts(rect, r, distX, distZ);
+}
+
+function linePart(a: Pt, b: Pt, kind: ContourPart["kind"]): ContourPart | null {
+  const length = dist(a, b);
+  if (length < 1e-6) return null;
+  const tx = (b.x - a.x) / length;
+  const tz = (b.z - a.z) / length;
+  return {
+    kind,
+    length,
+    at: (t) => ({ x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t }),
+    tangent: () => ({ x: tx, z: tz }),
+  };
+}
+
+function arcPart(cx: number, cz: number, r: number, a0: number, a1: number): ContourPart | null {
+  const sweep = a1 - a0;
+  const length = Math.abs(sweep) * r;
+  if (length < 1e-6 || r <= 1e-9) return null;
+  const dir = sweep >= 0 ? 1 : -1;
+  return {
+    kind: "diagonal",
+    length,
+    at: (t) => {
+      const a = a0 + sweep * t;
+      return { x: cx + r * Math.cos(a), z: cz + r * Math.sin(a) };
+    },
+    tangent: (t) => {
+      const a = a0 + sweep * t;
+      return { x: -Math.sin(a) * dir, z: Math.cos(a) * dir };
+    },
+  };
+}
+
+function keep(parts: Array<ContourPart | null>): ContourPart[] {
+  return parts.filter((p): p is ContourPart => p !== null);
+}
+
+function roundedParts(rect: Rect, r: number): ContourPart[] {
+  const { x0, x1, z0, z1 } = rect;
+  if (r <= 1e-9) {
+    return keep([
+      linePart({ x: x0, z: z0 }, { x: x1, z: z0 }, "reta"),
+      linePart({ x: x1, z: z0 }, { x: x1, z: z1 }, "reta"),
+      linePart({ x: x1, z: z1 }, { x: x0, z: z1 }, "reta"),
+      linePart({ x: x0, z: z1 }, { x: x0, z: z0 }, "reta"),
+    ]);
+  }
+  return keep([
+    linePart({ x: x0, z: z0 - r }, { x: x1, z: z0 - r }, "reta"),
+    arcPart(x1, z0, r, -Math.PI / 2, 0),
+    linePart({ x: x1 + r, z: z0 }, { x: x1 + r, z: z1 }, "reta"),
+    arcPart(x1, z1, r, 0, Math.PI / 2),
+    linePart({ x: x1, z: z1 + r }, { x: x0, z: z1 + r }, "reta"),
+    arcPart(x0, z1, r, Math.PI / 2, Math.PI),
+    linePart({ x: x0 - r, z: z1 }, { x: x0 - r, z: z0 }, "reta"),
+    arcPart(x0, z0, r, Math.PI, (3 * Math.PI) / 2),
+  ]);
+}
+
+function edgeXParts(rect: Rect, r: number, b: number): ContourPart[] {
+  const { x0, x1, z0, z1 } = rect;
+  const alpha = Math.asin(clamp(b / r, 0, 1));
+  return keep([
+    arcPart(x0, z0, r, Math.PI + alpha, Math.PI),
+    linePart({ x: x0 - r, z: z0 }, { x: x0 - r, z: z1 }, "reta"),
+    arcPart(x0, z1, r, Math.PI, Math.PI / 2),
+    linePart({ x: x0, z: z1 + r }, { x: x1, z: z1 + r }, "reta"),
+    arcPart(x1, z1, r, Math.PI / 2, 0),
+    linePart({ x: x1 + r, z: z1 }, { x: x1 + r, z: z0 }, "reta"),
+    arcPart(x1, z0, r, 0, -alpha),
+  ]);
+}
+
+function edgeZParts(rect: Rect, r: number, b: number): ContourPart[] {
+  const { x0, x1, z0, z1 } = rect;
+  const beta = Math.acos(clamp(b / r, 0, 1));
+  return keep([
+    arcPart(x0, z0, r, Math.PI + beta, (3 * Math.PI) / 2),
+    linePart({ x: x0, z: z0 - r }, { x: x1, z: z0 - r }, "reta"),
+    arcPart(x1, z0, r, -Math.PI / 2, 0),
+    linePart({ x: x1 + r, z: z0 }, { x: x1 + r, z: z1 }, "reta"),
+    arcPart(x1, z1, r, 0, Math.PI / 2),
+    linePart({ x: x1, z: z1 + r }, { x: x0, z: z1 + r }, "reta"),
+    arcPart(x0, z1, r, Math.PI / 2, Math.PI - beta),
+  ]);
+}
+
+function cornerParts(rect: Rect, r: number, bx: number, bz: number): ContourPart[] {
+  const { x0, x1, z0, z1 } = rect;
+  const ax = Math.acos(clamp(bx / Math.max(r, 1e-9), 0, 1));
+  const az = Math.asin(clamp(bz / Math.max(r, 1e-9), 0, 1));
+  return keep([
+    arcPart(x1, z0, r, bz < r ? -az : -Math.PI / 2, 0),
+    linePart({ x: x1 + r, z: z0 }, { x: x1 + r, z: z1 }, "reta"),
+    arcPart(x1, z1, r, 0, Math.PI / 2),
+    linePart({ x: x1, z: z1 + r }, { x: x0, z: z1 + r }, "reta"),
+    arcPart(x0, z1, r, Math.PI / 2, bx < r ? Math.PI - ax : Math.PI),
+    bx < r ? null : linePart({ x: x0 - r, z: z1 }, { x: x0 - r, z: z0 }, "reta"),
+  ]);
+}
+
 function clamp(v: number, lo: number, hi: number): number {
   return Math.min(hi, Math.max(lo, v));
 }

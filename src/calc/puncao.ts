@@ -12,8 +12,10 @@ import {
   type Polyline,
   type Rect,
 } from "./geometry";
+import { layoutBars } from "./armadura";
 import { fmt, fmtRho } from "./format";
 import type {
+  BarLayout,
   DrawModel,
   PunchingInput,
   PunchingResult,
@@ -39,6 +41,7 @@ const PREMISSAS = [
   "Wp de pilar interno usa a expressão fechada de 19.5.2.2. Em borda e canto, Wp = ∫|e| dl sobre o perímetro u (o geométrico), com o eixo passando pelo centro do pilar, que é a definição do mesmo item. u* entra na parcela da força e na excentricidade e*.",
   "Armadura contra colapso progressivo (19.5.4) não é dimensionada.",
   "γs = 1,15. Para estribos, fywd segue a limitação com a espessura da laje do item 19.4.2 (250 MPa até 15 cm e 435 MPa a partir de 35 cm, interpolação linear). Para studs, fywd ≤ 300 MPa (19.5.3.3), além do limite de 19.4.2.",
+  "As peças são desenhadas em contornos paralelos a C', na parte reta e na diagonal dos cantos, em raios a partir do pilar (19.5.3.3 e item 20.4). sr ≤ 0,75d e a primeira linha a ≤ 0,5d. A norma não publica outro número para o espaçamento ao longo do contorno; na linha mais externa essa distância também fica ≤ 0,75d. Cada stud é uma peça. Cada estribo é uma peça com duas pernas.",
 ];
 
 export const defaultInput: PunchingInput = {
@@ -598,9 +601,13 @@ export function calculate(input: PunchingInput): PunchingResult {
   const s0Max = 0.5 * d;
   const alphaDeg = input.punchingOn ? input.angulo : 90;
   const alpha = (alphaDeg * Math.PI) / 180;
-  const steelType = input.punchingOn ? input.punchingType : "studs";
+  const steelType = input.punchingType;
   const fy = fywdEffective(input.h, input.fyk, steelType);
   const fyUser = fywdEffective(input.h, input.fyk, input.punchingType);
+  const refFy = fy.fywd;
+  const delta = best.tau - conc3;
+  const ratioReq = aswOverSrRequired(Math.max(delta, 0), best.uUsed, refFy, alpha);
+  const aswAtMax = ratioReq * srMax;
 
   let tauRd3: number | null = null;
   let tauOut: number | null = null;
@@ -611,6 +618,7 @@ export function calculate(input: PunchingInput): PunchingResult {
   let passesOuter: boolean | null = null;
   let passesDetailing = true;
   const detailNotes: string[] = [];
+  let bars: BarLayout | null = null;
 
   if (input.punchingOn) {
     if (input.nLinhas < 1 || !Number.isInteger(input.nLinhas)) {
@@ -662,7 +670,21 @@ export function calculate(input: PunchingInput): PunchingResult {
     const out = stressAt(geom, rOut, d, atOut.force, bestMX, bestMZ);
     tauOut = out.tau;
     uOut = out.uUsed;
-    const steel = tauSteel(input.asw, fyUser.fywd, input.sr, best.uUsed, (input.angulo * Math.PI) / 180);
+    bars = layoutBars({
+      rect: geom.rect,
+      distX: geom.distX,
+      distZ: geom.distZ,
+      d,
+      s0: input.s0,
+      sr: input.sr,
+      nLines: input.nLinhas,
+      type: input.punchingType,
+      phiMm: input.bitolaW,
+      aswTarget: Math.max(input.asw, ratioReq * input.sr),
+      suggested: false,
+    });
+    const aswUsed = bars?.aswPerContour ?? input.asw;
+    const steel = tauSteel(aswUsed, fyUser.fywd, input.sr, best.uUsed, (input.angulo * Math.PI) / 180);
     tauRd3 = conc3 + steel;
     passesOuter = tauOut <= rd1.tau + 1e-9;
     if (out.floored) {
@@ -681,11 +703,6 @@ export function calculate(input: PunchingInput): PunchingResult {
     passesCompression &&
     passesPunching &&
     (input.punchingOn ? passesOuter === true && passesDetailing : true);
-
-  const refFy = fy.fywd;
-  const delta = best.tau - conc3;
-  const ratioReq = aswOverSrRequired(Math.max(delta, 0), best.uUsed, refFy, alpha);
-  const aswAtMax = ratioReq * srMax;
 
   let suggestedLines: number | null = null;
   let suggestedP: number | null = null;
@@ -711,6 +728,24 @@ export function calculate(input: PunchingInput): PunchingResult {
         text: "Com sr = 0,75d e primeira linha a 0,5d, 16 linhas ainda não levam C'' a τSd ≤ τRd1.",
       });
     }
+  }
+
+  if (!input.punchingOn && reinforcementRequired) {
+    const nLines =
+      steelType === "studs" ? Math.max(suggestedLines ?? 3, 3) : Math.max(suggestedLines ?? 1, 1);
+    bars = layoutBars({
+      rect: geom.rect,
+      distX: geom.distX,
+      distZ: geom.distZ,
+      d,
+      s0: s0Max,
+      sr: srMax,
+      nLines,
+      type: steelType,
+      phiMm: input.bitolaW,
+      aswTarget: aswAtMax,
+      suggested: true,
+    });
   }
 
   if (!passesCompression) {
@@ -778,6 +813,7 @@ export function calculate(input: PunchingInput): PunchingResult {
     s0Max,
     suggestedLines,
     suggestedP,
+    bars,
     refFy,
     fyUser,
     steelType,
@@ -789,7 +825,7 @@ export function calculate(input: PunchingInput): PunchingResult {
     if (input.position === "borda" && input.edgeAxis === "x") freeEdges.push("minZ");
     if (input.position === "canto") freeEdges.push("minX", "minZ");
   }
-  const draw = buildDraw(input, geom, d, freeEdges);
+  const draw = buildDraw(input, geom, d, freeEdges, bars);
 
   return {
     ok: true,
@@ -841,6 +877,7 @@ export function calculate(input: PunchingInput): PunchingResult {
     s0Max,
     suggestedLines,
     suggestedP,
+    bars,
     p,
     governing: { mSdx: bestMX, mSdz: bestMZ, label: bestLabel },
     kRatioX: best.ratio2,
@@ -892,26 +929,33 @@ export function calculate(input: PunchingInput): PunchingResult {
   };
 }
 
-function buildDraw(input: PunchingInput, geom: Geom, d: number, freeEdges: Array<"minX" | "minZ">): DrawModel {
+function buildDraw(
+  input: PunchingInput,
+  geom: Geom,
+  d: number,
+  freeEdges: Array<"minX" | "minZ">,
+  bars: BarLayout | null,
+): DrawModel {
   const r = 2 * d;
   const poly = fullPoly(geom, r);
-  const margin = Math.max(45, 1.6 * d);
-  let x0 = geom.rect.x0 - margin - r;
-  let x1 = geom.rect.x1 + margin + r;
-  let z0 = geom.rect.z0 - margin - r;
-  let z1 = geom.rect.z1 + margin + r;
+  const reach = bars ? bars.s0 + (bars.lines - 1) * bars.sr + 2 * d : r;
+  const margin = Math.max(36, 0.9 * d);
+  let x0 = geom.rect.x0 - margin - reach;
+  let x1 = geom.rect.x1 + margin + reach;
+  let z0 = geom.rect.z0 - margin - reach;
+  let z1 = geom.rect.z1 + margin + reach;
   if (freeEdges.includes("minX")) x0 = geom.rect.x0 - input.distX;
   if (freeEdges.includes("minZ")) z0 = geom.rect.z0 - input.distZ;
   const reinforcement: DrawModel["reinforcement"] = [];
   let outer: DrawModel["outer"] = null;
   let outerClosed = false;
-  if (input.punchingOn && input.nLinhas >= 1 && input.sr > 0 && input.s0 >= 0) {
-    for (let i = 0; i < input.nLinhas; i++) {
-      const s = input.s0 + i * input.sr;
+  if (bars && bars.lines >= 1 && bars.sr > 0) {
+    for (let i = 0; i < bars.lines; i++) {
+      const s = bars.s0 + i * bars.sr;
       const linePoly = reinforcementLine(geom.rect, s, geom.distX, geom.distZ);
       reinforcement.push(linePoly.pts);
     }
-    const p = input.s0 + (input.nLinhas - 1) * input.sr;
+    const p = bars.s0 + (bars.lines - 1) * bars.sr;
     const outerPoly = fullPoly(geom, p + 2 * d);
     outer = outerPoly.pts;
     outerClosed = outerPoly.closed;
@@ -924,6 +968,9 @@ function buildDraw(input: PunchingInput, geom: Geom, d: number, freeEdges: Array
     outer,
     outerClosed,
     reinforcement,
+    bars: bars?.pieces ?? [],
+    barType: bars?.type ?? null,
+    barSuggested: bars?.suggested ?? false,
     freeEdges,
     cx: input.cx,
     cz: input.cz,
@@ -984,6 +1031,7 @@ function emptyResult(input: PunchingInput): PunchingResult {
     s0Max: 0,
     suggestedLines: null,
     suggestedP: null,
+    bars: null,
     p: null,
     governing: { mSdx: 0, mSdz: 0, label: "" },
     kRatioX: null,
@@ -1049,9 +1097,32 @@ interface ReportCtx {
   s0Max: number;
   suggestedLines: number | null;
   suggestedP: number | null;
+  bars: BarLayout | null;
   refFy: number;
   fyUser: { fywd: number; fyd: number };
   steelType: "estribos" | "studs";
+}
+
+function pieceLines(bars: BarLayout | null): ReportLine[] {
+  if (!bars) return [];
+  const nome = bars.type === "studs" ? "studs" : "estribos";
+  const pernas = bars.type === "estribos" ? `, ${bars.perLine * bars.legsPerPiece} pernas por contorno` : "";
+  return [
+    line(
+      bars.suggested ? "Peças da disposição sugerida" : "Peças desenhadas",
+      `${bars.lines * bars.perLine} ${nome}`,
+      "Parte reta e parte diagonal, com distância ≤ 0,75d ao longo do contorno externo.",
+      `${bars.perLine} por linha × ${bars.lines} linhas. Reta: ${bars.reta}. Diagonal: ${bars.diagonal}. φ = ${fmt(bars.phiMm, 1)} mm${pernas}.`,
+    ),
+    line(
+      "Asw da disposição",
+      `${fmt(bars.aswPerContour, 2)} cm² por contorno`,
+      bars.type === "estribos"
+        ? "Cada estribo entra com duas pernas."
+        : "Cada stud entra com uma barra.",
+      `${bars.perLine} × ${bars.legsPerPiece} × ${fmt(bars.areaLeg, 3)} cm²`,
+    ),
+  ];
 }
 
 function buildReport(ctx: ReportCtx): ReportBlock[] {
@@ -1236,7 +1307,7 @@ function buildReport(ctx: ReportCtx): ReportBlock[] {
               "τRd3",
               `${fmt(ctx.tauRd3, 3)} MPa`,
               "Parcela de concreto + 1,5 · (d/sr) · (Asw · fywd · sen α) / (u · d).",
-              `Asw = ${fmt(ctx.input.asw, 2)} cm², sr = ${fmt(ctx.input.sr, 2)} cm, α = ${fmt(ctx.input.angulo, 1)}°, fywd = ${fmt(ctx.fyUser.fywd, 1)} MPa, u = ${fmt(ctx.best.uUsed, 2)} cm`,
+              `Asw = ${fmt(ctx.bars && !ctx.bars.suggested ? ctx.bars.aswPerContour : ctx.input.asw, 2)} cm², sr = ${fmt(ctx.input.sr, 2)} cm, α = ${fmt(ctx.input.angulo, 1)}°, fywd = ${fmt(ctx.fyUser.fywd, 1)} MPa, u = ${fmt(ctx.best.uUsed, 2)} cm`,
             ),
           ]
         : []),
@@ -1264,9 +1335,14 @@ function buildReport(ctx: ReportCtx): ReportBlock[] {
         line(
           "Linhas para C'' passar",
           ctx.suggestedLines
-            ? `${ctx.suggestedLines} linhas, primeira a 0,5d = ${fmt(ctx.s0Max, 2)} cm, sr = 0,75d, p = ${fmt(ctx.suggestedP ?? 0, 2)} cm até a última linha.`
+            ? `${ctx.suggestedLines} ${ctx.suggestedLines === 1 ? "linha basta" : "linhas bastam"} para C'', primeira a 0,5d = ${fmt(ctx.s0Max, 2)} cm, sr = 0,75d, p = ${fmt(ctx.suggestedP ?? 0, 2)} cm.${
+                ctx.bars?.type === "studs" && ctx.bars.lines > ctx.suggestedLines
+                  ? ` A planta desenha ${ctx.bars.lines} linhas: o item 19.5.3.3 prefere três ou mais linhas de conectores.`
+                  : ""
+              }`
             : "Não foi encontrada uma disposição em até 16 linhas com sr = 0,75d.",
         ),
+        ...pieceLines(ctx.bars),
       );
     } else {
       lines.push(
@@ -1278,6 +1354,7 @@ function buildReport(ctx: ReportCtx): ReportBlock[] {
         line("α", `${fmt(ctx.input.angulo, 1)}°`),
         line("fywd", `${fmt(ctx.fyUser.fywd, 1)} MPa`, `fyd = fyk/γs = ${fmt(ctx.fyUser.fyd, 1)} MPa.`),
         line("p até a última linha", `${fmt(ctx.p ?? 0, 2)} cm`),
+        ...pieceLines(ctx.bars),
         line("FSd em C''", ctx.fOut !== null ? `${fmt(ctx.fOut, 2)} kN` : "—"),
       );
       if (!ctx.passesPunching) {

@@ -55,7 +55,12 @@ export function App() {
             </button>
           </div>
           {result.ok && result.reinforcementRequired && tab === "grafico" && (
-            <p className="banner fail no-print">Armadura de punção é necessária.</p>
+            <p className="banner fail no-print">
+              Armadura de punção é necessária.
+              {result.bars
+                ? ` Sugestão desenhada: ${result.bars.lines * result.bars.perLine} ${result.bars.type === "studs" ? "studs" : "estribos"} (${result.bars.reta} na parte reta, ${result.bars.diagonal} na diagonal).`
+                : ""}
+            </p>
           )}
           {result.ok && result.overallPass && tab === "grafico" && (
             <p className="banner pass no-print">Compressão diagonal e punção atendidas.</p>

@@ -95,7 +95,7 @@ export function Inputs({ input, result, set }: InputsProps) {
           on={input.punchingOn}
           onChange={(v) => set("punchingOn", v)}
         />
-        {input.punchingOn && (
+        {(input.punchingOn || result.reinforcementRequired) && (
           <>
             <Select
               label="Tipo"
@@ -106,6 +106,25 @@ export function Inputs({ input, result, set }: InputsProps) {
                 ["studs", "Studs"],
               ]}
             />
+            {!input.punchingOn && (
+              <Num label="φ da armadura" value={input.bitolaW} unit="mm" onChange={(v) => set("bitolaW", v)} />
+            )}
+            {result.bars && (
+              <p className="readout">
+                {result.bars.suggested ? "Sugestão: " : "Desenho: "}
+                {result.bars.lines * result.bars.perLine} {result.bars.type === "studs" ? "studs" : "estribos"}
+                {" · "}
+                {result.bars.perLine} por linha × {result.bars.lines}
+                {" · reta "}
+                {result.bars.reta}
+                {" · diagonal "}
+                {result.bars.diagonal}
+              </p>
+            )}
+          </>
+        )}
+        {input.punchingOn && (
+          <>
             <Num label="Asw por contorno" value={input.asw} unit="cm²" onChange={(v) => set("asw", v)} />
             <Num label="sr" value={input.sr} unit="cm" onChange={(v) => set("sr", v)} />
             <Num label="Ângulo α" value={input.angulo} unit="°" onChange={(v) => set("angulo", v)} />

@@ -161,6 +161,8 @@ export interface PunchingResult {
   s0Max: number;
   suggestedLines: number | null;
   suggestedP: number | null;
+  /** Peças desenhadas. Nulo quando não há armadura a mostrar. */
+  bars: BarLayout | null;
   p: number | null;
   governing: {
     mSdx: number;
@@ -183,6 +185,33 @@ export interface PunchingResult {
   draw: DrawModel | null;
 }
 
+export interface BarPiece {
+  x: number;
+  z: number;
+  /** Tangente ao contorno, radianos. */
+  angle: number;
+  kind: "reta" | "diagonal";
+  line: number;
+}
+
+export interface BarLayout {
+  pieces: BarPiece[];
+  lines: number;
+  perLine: number;
+  reta: number;
+  diagonal: number;
+  s0: number;
+  sr: number;
+  stMax: number;
+  stUsed: number;
+  type: PunchingType;
+  phiMm: number;
+  legsPerPiece: number;
+  areaLeg: number;
+  aswPerContour: number;
+  suggested: boolean;
+}
+
 export interface DrawModel {
   column: { x0: number; x1: number; z0: number; z1: number };
   slab: { x0: number; x1: number; z0: number; z1: number };
@@ -194,6 +223,10 @@ export interface DrawModel {
   outerClosed: boolean;
   /** Linhas de armadura (polilinhas abertas ou fechadas). */
   reinforcement: Pt[][];
+  /** Cada stud ou estribo, na parte reta e na diagonal. */
+  bars: BarPiece[];
+  barType: PunchingType | null;
+  barSuggested: boolean;
   freeEdges: Array<"minX" | "minZ">;
   cx: number;
   cz: number;
