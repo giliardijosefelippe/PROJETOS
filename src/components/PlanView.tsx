@@ -42,7 +42,7 @@ export function PlanView({ draw, positionLabel }: PlanViewProps) {
       <svg viewBox={`0 0 ${svgW} ${svgH}`} role="img" aria-label="Vista em planta do pilar e do perímetro crítico">
         <defs>
           <pattern id="hatch" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-            <line x1="0" y1="0" x2="0" y2="7" stroke="#4b5563" strokeWidth="1.4" />
+            <line x1="0" y1="0" x2="0" y2="7" stroke="#efe4d2" strokeWidth="1.4" />
           </pattern>
           <marker id="arrow-x" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
             <path d="M0 0 L7 3.5 L0 7 Z" fill="#d11a2a" />

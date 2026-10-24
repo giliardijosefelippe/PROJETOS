@@ -1,4 +1,5 @@
 import type { PunchingResult, ReportLevel } from "../calc/types";
+import { RebarDetail } from "./RebarDetail";
 
 interface ReportViewProps {
   result: PunchingResult;
@@ -36,6 +37,13 @@ export function ReportView({ result, level }: ReportViewProps) {
             </li>
           ))}
         </ul>
+      )}
+
+      {completo && (
+        <section className="report-section">
+          <h2>Detalhe da armadura</h2>
+          <RebarDetail result={result} active={result.input.punchingType} />
+        </section>
       )}
 
       {result.blocks.map((block) => (

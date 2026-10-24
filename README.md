@@ -14,7 +14,7 @@ npm run dev
 
 O servidor de desenvolvimento abre em `http://localhost:5173`. `npm run build` gera a versão de produção em `dist/`. `npm run typecheck` só confere os tipos.
 
-A tela tem a entrada à esquerda, com recálculo imediato, e as abas **Gráfico** e **Relatório** à direita. **Imprimir / salvar PDF** usa a impressão do navegador; a folha de estilos de impressão deixa só o memorial.
+A planta ocupa a área principal, à esquerda, e a entrada fica na coluna da direita, com recálculo imediato. As abas são **Planta**, **Modelo 3D**, **Armadura** e **Memorial**. O modelo 3D mostra a laje, o pilar atravessando a espessura e a superfície de punção até o perímetro C'; arrastar gira a vista. A aba Armadura desenha o estribo vertical aberto, com dois ramos e ganchos a 135° para dentro (item 9.4.6.1), e o stud com cabeça nas duas pontas. As cotas saem da laje em verificação: altura h − 2c, gancho de 5φ com mínimo de 5 cm, φ ≤ h/20 e pino da Tabela 9.2. A largura entre os ramos é uma adoção para caber em 0,75d, porque a norma não fixa essa medida. No memorial, esse detalhe aparece quando o nível está em **Completo**. **Imprimir** usa a impressão do navegador e deixa só o memorial.
 
 ## Edição da norma
 
@@ -90,4 +90,4 @@ Resultados esperados no memorial (três casas decimais):
 
 ## Testes
 
-`npm test` cobre o módulo `src/calc`, sem DOM: pilar interno sem momento, interno com momentos nas duas direções, pilar de borda, pilar de canto, um caso que não passa sem armadura de punção e passa quando ela é informada, e a contagem das peças na parte reta e na diagonal. O exemplo padrão da interface também está fixado no teste.
+`npm test` cobre o módulo `src/calc`, sem DOM: pilar interno sem momento, interno com momentos nas duas direções, pilar de borda, pilar de canto, um caso que não passa sem armadura de punção e passa quando ela é informada, a contagem das peças na parte reta e na diagonal, e as cotas do estribo e do stud. O exemplo padrão da interface também está fixado no teste.
