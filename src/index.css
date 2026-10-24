@@ -1,3 +1,46 @@
+@font-face {
+  font-family: "Outfit";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("@fontsource/outfit/files/outfit-latin-400-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Outfit";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("@fontsource/outfit/files/outfit-latin-500-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Outfit";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("@fontsource/outfit/files/outfit-latin-600-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Outfit";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("@fontsource/outfit/files/outfit-latin-700-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Fraunces";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("@fontsource/fraunces/files/fraunces-latin-600-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Fraunces";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("@fontsource/fraunces/files/fraunces-latin-700-normal.woff2") format("woff2");
+}
+
 :root {
   color: #241c16;
   background: #e7e1d4;
@@ -49,7 +92,7 @@ button, input, select { font: inherit; color: inherit; }
   margin: 0;
   font-family: "Fraunces", "Palatino Linotype", Palatino, serif;
   font-size: 22px;
-  font-weight: 560;
+  font-weight: 600;
   letter-spacing: -0.02em;
 }
 
@@ -274,7 +317,7 @@ button, input, select { font: inherit; color: inherit; }
   margin: 0 0 10px;
   font-family: "Fraunces", Palatino, serif;
   font-size: 26px;
-  font-weight: 560;
+  font-weight: 600;
 }
 
 .inputs h3 {
@@ -372,7 +415,7 @@ button, input, select { font: inherit; color: inherit; }
   margin: 0;
   font-family: "Fraunces", Palatino, serif;
   font-size: 28px;
-  font-weight: 560;
+  font-weight: 600;
   color: var(--ink);
 }
 
@@ -382,7 +425,7 @@ button, input, select { font: inherit; color: inherit; }
   margin: 22px 0 8px;
   font-family: "Fraunces", Palatino, serif;
   font-size: 18px;
-  font-weight: 560;
+  font-weight: 600;
   color: var(--copper-deep);
 }
 

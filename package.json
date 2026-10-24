@@ -3,11 +3,41 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
+  "main": "electron/main.cjs",
+  "author": "Punção NBR 6118",
+  "description": "Calculadora de punção em lajes pela NBR 6118",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
+    "build:html": "vite build --config vite.singlefile.config.ts && node scripts/copy-html.mjs",
+    "build:win": "npm run build:html && electron-builder --win portable --x64",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
+  },
+  "build": {
+    "appId": "br.abnt.puncao.nbr6118",
+    "productName": "Puncao NBR 6118",
+    "directories": {
+      "output": "dist-electron"
+    },
+    "files": [
+      "electron/**/*",
+      "dist-html/puncao.html",
+      "!node_modules/**"
+    ],
+    "electronLanguages": ["pt-BR", "en-US"],
+    "compression": "maximum",
+    "asar": true,
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ],
+      "signAndEditExecutable": false,
+      "artifactName": "puncao-windows.${ext}"
+    }
   },
   "dependencies": {
     "react": "^18.3.1",
@@ -15,12 +45,17 @@
     "three": "^0.169.0"
   },
   "devDependencies": {
+    "@fontsource/fraunces": "^5.3.0",
+    "@fontsource/outfit": "^5.3.0",
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
     "@types/three": "^0.169.0",
     "@vitejs/plugin-react": "^4.3.4",
+    "electron": "^45.0.0",
+    "electron-builder": "^26.18.0",
     "typescript": "^5.7.3",
     "vite": "^6.0.11",
+    "vite-plugin-singlefile": "^2.3.4",
     "vitest": "^3.0.4"
   }
 }

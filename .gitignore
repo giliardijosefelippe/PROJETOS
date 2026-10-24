@@ -1,5 +1,7 @@
 node_modules
 dist
+dist-html
+dist-electron
 .DS_Store
 *.local
 .vite
