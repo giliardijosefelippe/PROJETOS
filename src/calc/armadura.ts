@@ -61,6 +61,14 @@ export function layoutBars(opts: {
     guard += 1;
   }
 
+  const rayOf: number[][] = [];
+  let nextRay = 0;
+  for (let j = 0; j < outer.length; j++) {
+    const ids: number[] = [];
+    for (let k = 0; k < counts[j]; k++) ids.push(nextRay++);
+    rayOf.push(ids);
+  }
+
   const pieces: BarPiece[] = [];
   for (let line = 0; line < nLines; line++) {
     const s = s0 + line * sr;
@@ -78,6 +86,7 @@ export function layoutBars(opts: {
           angle: Math.atan2(tan.z, tan.x),
           kind: parts[j].kind,
           line,
+          ray: rayOf[j][k],
         });
       }
     }
@@ -102,6 +111,23 @@ export function layoutBars(opts: {
     aswPerContour: perLine * legsPerPiece * areaLeg,
     suggested,
   };
+}
+
+/** Uma fiada radial com pelo menos duas peças, da mais interna à mais externa. */
+export function radialRays(pieces: BarPiece[]): BarPiece[][] {
+  const map = new Map<number, BarPiece[]>();
+  for (const piece of pieces) {
+    const list = map.get(piece.ray);
+    if (list) list.push(piece);
+    else map.set(piece.ray, [piece]);
+  }
+  const rays: BarPiece[][] = [];
+  for (const list of map.values()) {
+    if (list.length < 2) continue;
+    list.sort((a, b) => a.line - b.line);
+    rays.push(list);
+  }
+  return rays;
 }
 
 function maxGap(parts: ContourPart[], counts: number[], closed: boolean): number {

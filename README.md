@@ -43,7 +43,7 @@ O colapso progressivo (19.5.4) não é dimensionado.
 - MSd como na norma, inclusive o tratamento da excentricidade na borda e no canto. Se a excentricidade passa do limite em que a norma define a expressão, o memorial avisa em vez de extrapolar.
 - Cargas já de cálculo, ou características com γf (padrão 1,4). A opção de ambos os sinais dos momentos escolhe a combinação governante.
 - Carga uniforme opcional, desligada por padrão. Quando ligada, FSd é reduzido pela carga dentro do perímetro e o memorial declara a redução. Quando desligada, o memorial diz que FSd não foi reduzido.
-- Quando a armadura de punção é necessária, a planta já desenha as peças: studs ou estribos, na parte reta e na diagonal dos cantos. A primeira linha fica a 0,5d da face, as seguintes a 0,75d, e a distância entre peças vizinhas na linha externa também não passa de 0,75d. O painel e o memorial informam quantas peças são, separando reta e diagonal. Cada stud é uma peça; cada estribo é uma peça de duas pernas. Para conectores, a disposição usa pelo menos três linhas, como prefere o item 19.5.3.3.
+- Quando a armadura de punção é necessária, a planta já desenha as peças: studs ou estribos, na parte reta e na diagonal dos cantos. A primeira linha fica a 0,5d da face, as seguintes a 0,75d, e a distância entre peças vizinhas na linha externa também não passa de 0,75d. O painel e o memorial informam quantas peças são, separando reta e diagonal. Cada fiada radial ganha uma linha da primeira peça à última. Cada stud é uma peça; cada estribo é uma peça de duas pernas. Para conectores, a disposição usa pelo menos três linhas, como prefere o item 19.5.3.3.
 
 ## Exemplo padrão
 

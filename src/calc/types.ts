@@ -192,6 +192,8 @@ export interface BarPiece {
   angle: number;
   kind: "reta" | "diagonal";
   line: number;
+  /** Fiada radial: o mesmo índice liga as peças das linhas concêntricas. */
+  ray: number;
 }
 
 export interface BarLayout {

@@ -1,3 +1,4 @@
+import { radialRays } from "../calc/armadura";
 import type { DrawModel, Pt } from "../calc/types";
 import { fmt } from "../calc/format";
 
@@ -84,6 +85,21 @@ export function PlanView({ draw, positionLabel }: PlanViewProps) {
           <path key={i} d={toPath(pts, false)} className="rebar" />
         ))}
         <path d={toPath(draw.perimeter, draw.perimeterClosed)} className="perimeter" />
+
+        {radialRays(draw.bars).map((ray) => {
+          const inner = ray[0];
+          const outer = ray[ray.length - 1];
+          return (
+            <line
+              key={`ray-${inner.ray}`}
+              className="ray"
+              x1={X(inner.x)}
+              y1={Y(inner.z)}
+              x2={X(outer.x)}
+              y2={Y(outer.z)}
+            />
+          );
+        })}
 
         {draw.bars.map((piece, i) => {
           const px = X(piece.x);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { layoutBars } from "./armadura";
+import { layoutBars, radialRays } from "./armadura";
 import { contourParts, criticalPerimeter, dist } from "./geometry";
 import { calculate, defaultInput } from "./puncao";
 import type { PunchingInput } from "./types";
@@ -109,6 +109,59 @@ describe("disposição das peças", () => {
         expect(best).toBeLessThan(0.05);
       }
     }
+  });
+});
+
+describe("fiadas radiais", () => {
+  it("liga a primeira peça à última na reta e na diagonal, sem criar peça nova", () => {
+    const edge = layoutBars({
+      rect: { x0: -25, x1: 25, z0: 0, z1: 50 },
+      distX: Number.POSITIVE_INFINITY,
+      distZ: 0,
+      d: 20,
+      s0: 10,
+      sr: 15,
+      nLines: 4,
+      type: "studs",
+      phiMm: 8,
+      aswTarget: 0,
+      suggested: true,
+    })!;
+    const rays = radialRays(edge.pieces);
+    expect(rays.length).toBe(edge.perLine);
+    expect(rays.reduce((n, ray) => n + ray.length, 0)).toBe(edge.pieces.length);
+    const straight = rays.filter((ray) => ray[0].kind === "reta");
+    const diagonal = rays.filter((ray) => ray[0].kind === "diagonal");
+    expect(straight.length).toBeGreaterThan(0);
+    expect(diagonal.length).toBeGreaterThan(0);
+    for (const ray of straight) {
+      const dx = Math.abs(ray[ray.length - 1].x - ray[0].x);
+      const dz = Math.abs(ray[ray.length - 1].z - ray[0].z);
+      expect(Math.min(dx, dz)).toBeLessThan(1e-6);
+      expect(Math.max(dx, dz)).toBeGreaterThan(1);
+    }
+    for (const ray of diagonal) {
+      expect(Math.abs(ray[ray.length - 1].x - ray[0].x)).toBeGreaterThan(0.5);
+      expect(Math.abs(ray[ray.length - 1].z - ray[0].z)).toBeGreaterThan(0.5);
+    }
+  });
+
+  it("não desenha fiada quando só existe uma linha de peças", () => {
+    const one = layoutBars({
+      rect,
+      distX: Number.POSITIVE_INFINITY,
+      distZ: Number.POSITIVE_INFINITY,
+      d: 20,
+      s0: 10,
+      sr: 15,
+      nLines: 1,
+      type: "estribos",
+      phiMm: 8,
+      aswTarget: 0,
+      suggested: false,
+    })!;
+    expect(one.pieces.length).toBeGreaterThan(0);
+    expect(radialRays(one.pieces)).toHaveLength(0);
   });
 });
 
