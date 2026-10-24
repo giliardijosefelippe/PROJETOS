@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Estacas — cálculo de apoio</title>
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <header class="top">
+    <h1>Estacas — cálculo de apoio</h1>
+    <p>Hélice contínua e outros tipos. Métodos de Aoki-Velloso e Décourt-Quaresma. Critérios da ABNT NBR 6122:2019 com a Emenda 1 de 25/03/2022 (o conjunto equivale à NBR 6122:2022). Seção de concreto pela Tabela 4 dessa norma e pelo diagrama da NBR 6118. Leitura do SPT pela NBR 6484.</p>
+  </header>
+  <div class="aviso">Cálculo de apoio. Não substitui o engenheiro responsável nem a ART.</div>
+  <div class="barra">
+    <button type="button" id="btn-palmar">Carregar preset Palmar / Palmas do Arvoredo</button>
+    <button type="button" class="sec" id="btn-novo">Projeto novo</button>
+    <button type="button" class="sec" id="btn-exportar">Exportar JSON</button>
+    <button type="button" class="sec" id="btn-importar">Importar JSON</button>
+    <input type="file" id="arquivo" accept="application/json" hidden>
+    <button type="button" class="sec" id="btn-imprimir">Imprimir</button>
+  </div>
+  <nav class="abas" id="abas">
+    <button type="button" data-aba="sondagem" class="ativa">Sondagem</button>
+    <button type="button" data-aba="estaca">Estaca</button>
+    <button type="button" data-aba="blocos">Blocos</button>
+    <button type="button" data-aba="resultados">Resultados</button>
+    <button type="button" data-aba="coef">Coeficientes</button>
+    <button type="button" data-aba="verif">Verificação Palmar</button>
+  </nav>
+  <main>
+    <section class="painel ativo" id="aba-sondagem"></section>
+    <section class="painel" id="aba-estaca"></section>
+    <section class="painel" id="aba-blocos"></section>
+    <section class="painel" id="aba-resultados"></section>
+    <section class="painel" id="aba-coef"></section>
+    <section class="painel" id="aba-verif"></section>
+  </main>
+  <footer class="rodape">Cálculo de apoio. Não substitui o engenheiro responsável nem a ART. Os coeficientes estão citados na aba Coeficientes. O que a norma não fixa em número fica marcado como hipótese.</footer>
+  <script src="js/engine.js"></script>
+  <script src="js/preset-palmar.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

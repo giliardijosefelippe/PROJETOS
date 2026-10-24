@@ -1,0 +1,99 @@
+:root {
+  --ink: #1b2420;
+  --muted: #5c675f;
+  --line: #d5d0c6;
+  --paper: #f6f3ec;
+  --card: #fffdf8;
+  --green: #0e4b38;
+  --green-2: #1f6b4f;
+  --alert: #8d2c2c;
+  --warn: #8a5a12;
+  --ok: #1d6b3c;
+  --chip: #efe8d8;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: "Liberation Sans", "DejaVu Sans", "Segoe UI", sans-serif;
+  color: var(--ink);
+  background: var(--paper);
+  line-height: 1.45;
+}
+header.top {
+  background: var(--green);
+  color: #f4f7f2;
+  padding: 16px 22px 12px;
+}
+header.top h1 { margin: 0 0 4px; font-size: 1.35rem; font-weight: 650; letter-spacing: 0.01em; }
+header.top p { margin: 0; max-width: 78rem; color: #e4efe8; }
+.aviso {
+  background: #f3e2c2;
+  color: #4a3208;
+  padding: 8px 22px;
+  border-bottom: 1px solid #e2c98a;
+  font-size: 0.95rem;
+}
+.barra {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  padding: 10px 22px; background: #fff; border-bottom: 1px solid var(--line);
+  position: sticky; top: 0; z-index: 5;
+}
+button, .btn {
+  background: var(--green); color: white; border: 0; border-radius: 4px;
+  padding: 7px 12px; cursor: pointer; font: inherit;
+}
+button.sec { background: #e7e1d4; color: var(--ink); }
+button.warn { background: var(--alert); }
+button:hover { filter: brightness(1.08); }
+nav.abas { display: flex; gap: 0; padding: 0 22px; background: #fff; border-bottom: 1px solid var(--line); overflow-x: auto; }
+nav.abas button {
+  background: transparent; color: var(--muted); border-radius: 0;
+  border-bottom: 3px solid transparent; padding: 10px 14px;
+}
+nav.abas button.ativa { color: var(--green); border-bottom-color: var(--green); font-weight: 700; }
+main { padding: 16px 22px 48px; max-width: 1180px; }
+.painel { display: none; }
+.painel.ativo { display: block; }
+.grade { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+@media (max-width: 900px) { .grade { grid-template-columns: 1fr; } }
+.cartao {
+  background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px;
+  overflow-x: auto;
+}
+.cartao h2, .cartao h3 { margin: 0 0 8px; font-size: 1.05rem; }
+label { display: block; font-size: 0.82rem; color: var(--muted); margin-top: 8px; }
+input, select, textarea {
+  width: 100%; font: inherit; padding: 6px 8px; border: 1px solid #cfc8ba; border-radius: 4px;
+  background: white; color: var(--ink);
+}
+.linha { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
+table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+th, td { border-bottom: 1px solid var(--line); padding: 4px 6px; text-align: left; vertical-align: top; }
+th { font-size: 0.78rem; color: var(--muted); font-weight: 650; }
+td input, td select { padding: 4px 6px; }
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.chip { background: var(--chip); border-radius: 99px; padding: 3px 10px; font-size: 0.82rem; }
+.chip.falha { background: #f4d6d6; color: var(--alert); }
+.chip.ok { background: #d9efe2; color: var(--ok); }
+.chip.aviso { background: #f8e7c8; color: var(--warn); }
+.grande { font-size: 1.35rem; font-weight: 700; color: var(--green); margin: 0; }
+.fonte { font-size: 0.8rem; color: var(--muted); }
+.formula {
+  font-family: "Liberation Mono", "DejaVu Sans Mono", monospace;
+  background: #f3f0e7; padding: 8px 10px; border-radius: 4px; white-space: pre-wrap;
+  font-size: 0.82rem;
+}
+ul.lista { margin: 6px 0 0; padding-left: 18px; }
+.mini { font-size: 0.8rem; color: var(--muted); }
+svg.bloco { width: 100%; height: auto; background: #fbfaf6; border: 1px solid var(--line); border-radius: 6px; }
+.lista-blocos { display: flex; flex-direction: column; gap: 4px; max-height: 280px; overflow: auto; }
+.lista-blocos button { text-align: left; background: #f3efe4; color: var(--ink); }
+.lista-blocos button.ativa { background: var(--green); color: white; }
+footer.rodape { padding: 12px 22px 28px; color: var(--muted); font-size: 0.85rem; }
+@media print {
+  .barra, nav.abas, .nao-imprime { display: none !important; }
+  .painel { display: block !important; }
+  header.top { background: white; color: black; }
+  body { background: white; }
+}
