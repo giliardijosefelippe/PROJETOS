@@ -1,117 +1,114 @@
 # Lunardeli Engenharia — Conferência de Projetos
 
-Aplicativo web para padronizar, executar, conferir, corrigir e rastrear pranchas de projetos estruturais (Forma, Vigas, Lajes e categorias expansíveis).
+**Lunardeli Engenharia — Gestão e Qualidade de Projetos Estruturais**  
+Nome curto na navegação: **Lunardeli | Qualidade**
 
-> **Estado atual:** Etapa A (planejamento). Documentação e contratos de ambiente prontos; o MVP (Etapa B) ainda não foi implementado.
+Aplicativo web (pt-BR) para padronizar, executar, conferir, corrigir e rastrear pranchas de projetos estruturais (Forma, Vigas, Lajes e categorias expansíveis).
 
-## Stack alvo
+> **Estado:** Etapa B (MVP funcional) implementada neste repositório. Persistência real via Supabase — **requer chaves e migrations aplicadas** para login e dados. Sem credenciais, o código e as instruções estão prontos; integrações não são fingidas como concluídas.
+
+## Stack
 
 | Camada | Tecnologia |
 |--------|------------|
-| App | Next.js (App Router) + TypeScript + Tailwind CSS |
-| UI | Biblioteca de componentes acessíveis (a definir na Etapa B: ex. Radix/shadcn) |
-| Auth / DB / Storage | Supabase (Auth, Postgres, Storage privado) |
-| Autorização | RLS no Postgres + validação no servidor |
-| PDF (visualização) | PDF.js (ou equivalente) |
-| PDF (relatórios) | Geração no servidor (biblioteca a escolher na Etapa B) |
-| Idioma | Português do Brasil (pt-BR) |
+| App | Next.js 15 (App Router) + TypeScript + Tailwind CSS |
+| Auth / DB / Storage | Supabase (Auth, Postgres, Storage privado) + RLS |
+| PDF | PDFKit no servidor |
+| Identidade | Tokens CSS em `src/app/globals.css` (vermelho `#E00024`, grafite, branco, cinza claro) |
+
+Documentação de produto: [`docs/PRODUCT_SPEC.md`](./docs/PRODUCT_SPEC.md), modelo [`docs/DATA_MODEL.md`](./docs/DATA_MODEL.md), roadmap [`docs/ROADMAP.md`](./docs/ROADMAP.md), marca [`docs/identidade-visual.md`](./docs/identidade-visual.md).
 
 ## Pré-requisitos
 
-- Node.js 20+ e npm (ou pnpm/yarn)
-- Conta e projeto Supabase (Auth, Postgres, Storage)
-- Variáveis de ambiente conforme [`.env.example`](./.env.example)
+- Node.js 20+ e npm
+- Projeto Supabase (Auth + Postgres + Storage)
+- Variáveis conforme [`.env.example`](./.env.example)
 
-## Como rodar localmente (após Etapa B)
+## Configuração Supabase (obrigatória para uso real)
+
+1. Crie um projeto no [Supabase](https://supabase.com).
+2. **SQL:** no SQL Editor, execute na ordem:
+   - `supabase/migrations/00001_init.sql`
+   - `supabase/migrations/00002_rls.sql`
+   - `supabase/migrations/00003_storage.sql`
+3. **Auth:** Authentication → Providers → Email habilitado. Em URL Configuration, adicione `http://localhost:3000/auth/callback` (e a URL de produção quando houver).
+4. **API keys:** Project Settings → API → copie URL, `anon` e `service_role`.
+5. Confirme buckets privados `library`, `evidence`, `reports` (criados pela migration 00003).
+
+## Como rodar localmente
 
 ```bash
 cp .env.example .env.local
-# Preencher NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY
-# e SUPABASE_SERVICE_ROLE_KEY (somente servidor; nunca no browser)
+# Preencha NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY,
+# SUPABASE_SERVICE_ROLE_KEY (somente servidor; nunca no browser)
 
 npm install
 npm run dev
 ```
 
-Abrir [http://localhost:3000](http://localhost:3000).
+Abra [http://localhost:3000](http://localhost:3000).
 
-Migrations, seed (Forma / Vigas / Lajes) e scripts de teste serão adicionados na Etapa B. Até lá, estes comandos ainda não existem no repositório.
+### Seed (demo Forma / Vigas / Lajes)
 
-### Comandos previstos (Etapa B+)
+Com `.env.local` e migrations aplicadas:
 
 ```bash
-npm run build          # build de produção
-npm run lint           # lint
-npm test               # testes unitários / fluxos críticos
-npm run db:migrate     # aplicar migrations (Supabase CLI ou equivalente)
-npm run db:seed        # seed editável de demonstração
+npm run seed
 ```
 
-## Variáveis de ambiente
+Cria organização demo, usuários por papel, tipos Forma/Vigas/Lajes, templates produção+conferência publicados, projeto `DEMO-001` e prancha `VIG-01` R00.
 
-Ver [`.env.example`](./.env.example). Resumo:
+Senhas padrão (altere em produção) são impressas no terminal; também configuráveis via `SEED_*` no `.env.local`.
 
-| Variável | Escopo | Uso |
-|----------|--------|-----|
-| `NEXT_PUBLIC_SUPABASE_URL` | Cliente + servidor | URL do projeto Supabase |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Cliente + servidor | Chave anon (RLS ativo) |
-| `SUPABASE_SERVICE_ROLE_KEY` | **Somente servidor** | Admin / jobs; **nunca** expor no browser |
-| `NEXT_PUBLIC_APP_URL` | Cliente + servidor | URL canônica do app (links, redirects) |
-| `STORAGE_BUCKET_LIBRARY` | Servidor | Bucket privado da biblioteca (padrão sugerido: `library`) |
-| `STORAGE_BUCKET_EVIDENCE` | Servidor | Bucket privado de evidências (padrão sugerido: `evidence`) |
-| `STORAGE_BUCKET_REPORTS` | Servidor | Bucket privado de PDFs exportados (padrão sugerido: `reports`) |
+### Marca / logotipo
 
-Credenciais reais ficam apenas em `.env.local` / secrets do ambiente de deploy. Não versionar segredos.
+Admin → **Marca** (`/admin/branding`): upload do logotipo oficial. Slot placeholder até o arquivo da marca estar disponível. O logo entra no cabeçalho e nos PDFs. **Não** redesenhar a marca.
 
-## Documentação
+## Scripts
 
-| Documento | Conteúdo |
-|-----------|----------|
-| [`docs/PRODUCT_SPEC.md`](./docs/PRODUCT_SPEC.md) | Papéis, fluxos, MVP e critérios de aceite |
-| [`docs/DATA_MODEL.md`](./docs/DATA_MODEL.md) | Entidades, relacionamentos, índices, imutabilidade |
-| [`docs/ROADMAP.md`](./docs/ROADMAP.md) | Etapas A–D e incrementos |
-| [`AGENTS.md`](./AGENTS.md) | Convenções para agentes de código |
+| Comando | Descrição |
+|---------|-----------|
+| `npm run dev` | Servidor de desenvolvimento |
+| `npm run build` | Build de produção |
+| `npm run lint` | ESLint |
+| `npm run test` | Testes unitários do workflow |
+| `npm run typecheck` | TypeScript |
+| `npm run seed` | Seed demo (precisa service role) |
 
-Prompt mestre de requisitos (contexto do projeto Cursor): ver store do projeto / handoff do coordenador.
+## O que o MVP cobre
 
-## Arquitetura (visão)
+- Login / sessão / papéis (admin, coordenador, desenhista, conferente, consulta)
+- Projetos, pranchas, revisões e workflow
+- Templates editáveis com seções/itens/mídia; publicar versão; nova versão sem alterar runs antigos
+- Runs de produção e conferência com snapshot; respostas + evidências; NC gera pendência
+- Pendências com histórico; reconferência; aprovação interna (**bloqueio de auto-aprovação**)
+- Relatórios PDF (produção, conferência, pendências, resumo)
+- Seed didático Forma/Vigas/Lajes (não normativo)
+- Identidade visual com tokens CSS e estados com **texto + ícone**
 
-```
-┌─────────────────────────────────────────────────────────┐
-│  Next.js App Router (pt-BR)                             │
-│  Route Handlers / Server Actions + validação servidor   │
-└────────────┬──────────────────────────────┬─────────────┘
-             │ anon key (RLS)               │ service role
-             ▼                              ▼ (somente server)
-      ┌──────────────┐              ┌──────────────────┐
-      │ Supabase Auth│              │ Storage privado  │
-      │ + Postgres   │◄── RLS ──────│ library/evidence │
-      └──────────────┘              │ /reports         │
-                                    └──────────────────┘
-```
+## Critérios de aceite — como validar
 
-- **Organização** é a unidade de isolamento (multi-tenant).
-- Checklists publicados viram **snapshot imutável** em cada execução (`checklist_runs`).
-- Revisão aprovada: evidências/respostas/template adotado **imutáveis**; mudanças → **nova revisão**.
-- Relatórios PDF gerados no servidor; aprovação interna autenticada (não é assinatura digital jurídica).
+1. Admin cria/edita checklist de **Vigas** com foto, vídeo, parâmetro e referência → `/templates`.
+2. Desenhista faz login, abre `DEMO-001` / `VIG-01` / R00, inicia produção, responde, anexa evidência, encaminha.
+3. Conferente **diferente** marca NC → pendência criada; devolve.
+4. Desenhista corrige (status da issue → em correção → aguardando reconferência).
+5. Conferente reconfere e **aprova** (não pode ser o production owner).
+6. Gera PDF na revisão.
+7. Admin publica v2 do template; runs da v1 permanecem com snapshot antigo.
+8. Usuário de outra org (ou sem membership) não vê dados (RLS).
 
-## Decisões que dependem de configuração externa
+## O que depende de configuração externa
 
-Estas **não** estão concluídas até alguém provisionar o projeto Supabase e buckets:
-
-1. Criar projeto Supabase e obter URL + anon key + service role key.
-2. Criar buckets privados (`library`, `evidence`, `reports`) e policies de Storage alinhadas às memberships.
-3. Configurar Auth (e-mail/senha e/ou provedores) e redirect URLs (`NEXT_PUBLIC_APP_URL`).
-4. Aplicar migrations + RLS + seed quando a Etapa B existir.
-5. Escolher biblioteca de geração de PDF no servidor e limites de upload (tamanho/MIME).
+- Chaves Supabase e Auth redirects
+- Buckets + policies de storage (migrations)
+- Seed / usuários reais
+- Arquivo oficial do logotipo (`image.png` / logo da marca) — validar vermelho `#E00024` contra o original
 
 ## Etapas
 
-- **A** — Planejamento (este PR) ✅
-- **B** — MVP funcional (auth, projetos/pranchas, checklists, pendências, aprovação, PDF, seed)
-- **C** — Robustez (versionamento, auditoria, RLS testada, dashboard)
-- **D** — Evolução futura (não bloquear MVP)
-
-## Licença / propriedade
-
-Uso interno Lunardeli Engenharia / repositório do projeto. Ajustar licença formalmente se necessário.
+| Etapa | Status |
+|-------|--------|
+| A — Planejamento | Concluída |
+| B — MVP funcional | Este branch |
+| C — Robustez | Próxima |
+| D — Evolução | Backlog |
