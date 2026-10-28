@@ -3,15 +3,33 @@ import { requireSession } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { Button } from "@/components/ui/button";
 import { StatusChip } from "@/components/ui/status-chip";
+import { Input, Label, Select } from "@/components/ui/input";
 
-export default async function ProjectsPage() {
+export default async function ProjectsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; status?: string }>;
+}) {
   const session = await requireSession();
+  const filters = await searchParams;
   const supabase = await createClient();
-  const { data: projects } = await supabase
+
+  let query = supabase
     .from("projects")
     .select("id, code, name, status, description, created_at")
     .eq("organization_id", session.organizationId)
     .order("created_at", { ascending: false });
+
+  if (filters.status === "active" || filters.status === "archived") {
+    query = query.eq("status", filters.status);
+  }
+  if (filters.q?.trim()) {
+    query = query.or(
+      `code.ilike.%${filters.q.trim()}%,name.ilike.%${filters.q.trim()}%`,
+    );
+  }
+
+  const { data: projects } = await query;
 
   const canCreate =
     session.role === "admin" || session.role === "coordenador";
@@ -32,6 +50,29 @@ export default async function ProjectsPage() {
         )}
       </div>
 
+      <form className="flex flex-wrap items-end gap-3 rounded-lg border border-border bg-surface p-3">
+        <div>
+          <Label htmlFor="q">Busca</Label>
+          <Input
+            id="q"
+            name="q"
+            defaultValue={filters.q || ""}
+            placeholder="Código ou nome"
+          />
+        </div>
+        <div>
+          <Label htmlFor="status">Status</Label>
+          <Select id="status" name="status" defaultValue={filters.status || ""}>
+            <option value="">Todos</option>
+            <option value="active">Ativo</option>
+            <option value="archived">Arquivado</option>
+          </Select>
+        </div>
+        <Button type="submit" variant="secondary">
+          Filtrar
+        </Button>
+      </form>
+
       <div className="overflow-hidden rounded-lg border border-border bg-surface">
         <table className="w-full text-left text-sm">
           <thead className="border-b border-divider bg-muted text-ink-muted">
@@ -45,7 +86,10 @@ export default async function ProjectsPage() {
             {(projects || []).map((p) => (
               <tr key={p.id} className="hover:bg-muted/60">
                 <td className="px-4 py-3">
-                  <Link href={`/projects/${p.id}`} className="font-medium text-brand">
+                  <Link
+                    href={`/projects/${p.id}`}
+                    className="font-medium text-brand"
+                  >
                     {p.code}
                   </Link>
                 </td>
@@ -61,7 +105,8 @@ export default async function ProjectsPage() {
             {!projects?.length && (
               <tr>
                 <td colSpan={3} className="px-4 py-6 text-ink-muted">
-                  Nenhum projeto. {canCreate ? "Crie o primeiro ou rode o seed." : ""}
+                  Nenhum projeto com estes filtros.
+                  {canCreate ? " Crie o primeiro ou rode o seed." : ""}
                 </td>
               </tr>
             )}

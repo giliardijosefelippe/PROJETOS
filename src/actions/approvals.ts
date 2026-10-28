@@ -4,8 +4,14 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireSession, canApprove } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { findBlockingProblems } from "@/lib/workflow";
-import type { ResponseStatus } from "@/lib/types/domain";
+import { canApproveRevision } from "@/lib/approval";
+import { writeAudit } from "@/lib/audit/log";
+import {
+  AppErrors,
+  redirectWithError,
+  redirectWithOk,
+} from "@/lib/validation/errors";
+import type { IssueStatus, ResponseStatus } from "@/lib/types/domain";
 
 export async function approveRevisionAction(formData: FormData) {
   const session = await requireSession([
@@ -26,27 +32,31 @@ export async function approveRevisionAction(formData: FormData) {
     .from("drawing_revisions")
     .select("*")
     .eq("id", revisionId)
+    .eq("organization_id", session.organizationId)
     .single();
 
-  if (!revision || revision.immutable) {
-    redirect(`/revisions/${revisionId}?error=Revisão indisponível`);
-  }
-
-  if (revision.production_owner_id === session.userId) {
-    redirect(
-      `/revisions/${revisionId}?error=Não é permitido aprovar a própria prancha (autor de produção)`,
-    );
+  if (!revision) {
+    redirect(redirectWithError(`/revisions/${revisionId}`, AppErrors.NOT_FOUND));
   }
 
   const { data: runs } = await supabase
     .from("checklist_runs")
-    .select("id, activity_kind")
+    .select("id")
     .eq("revision_id", revisionId)
     .eq("activity_kind", "conferencia")
     .order("created_at", { ascending: false })
     .limit(1);
 
   const confRun = runs?.[0];
+  let flattened: Array<{
+    id: string;
+    code: string;
+    title: string;
+    is_blocking: boolean;
+    priority: string;
+    status: ResponseStatus;
+  }> = [];
+
   if (confRun) {
     const { data: items } = await supabase
       .from("checklist_run_items")
@@ -55,7 +65,7 @@ export async function approveRevisionAction(formData: FormData) {
       )
       .eq("run_id", confRun.id);
 
-    const flattened =
+    flattened =
       items?.map((i) => {
         const resp = i.checklist_item_responses as
           | { status: ResponseStatus }
@@ -73,38 +83,25 @@ export async function approveRevisionAction(formData: FormData) {
           status: (status || "nao_iniciado") as ResponseStatus,
         };
       }) || [];
-
-    const blockers = findBlockingProblems(flattened);
-    if (blockers.length && !exceptionNote) {
-      redirect(
-        `/revisions/${revisionId}?error=Há itens críticos/bloqueantes pendentes. Registre exceção formal ou resolva-os.`,
-      );
-    }
   }
 
-  const { data: openIssues } = await supabase
+  const { data: issues } = await supabase
     .from("issues")
-    .select("id")
-    .eq("revision_id", revisionId)
-    .not("status", "eq", "resolvida");
+    .select("status")
+    .eq("revision_id", revisionId);
 
-  if ((openIssues?.length || 0) > 0 && !exceptionNote) {
-    redirect(
-      `/revisions/${revisionId}?error=Há pendências abertas. Resolva-as ou registre exceção formal.`,
-    );
+  const check = canApproveRevision({
+    actorId: session.userId,
+    productionOwnerId: revision.production_owner_id,
+    immutable: revision.immutable,
+    items: flattened,
+    openIssueStatuses: (issues || []).map((i) => i.status as IssueStatus),
+    exceptionNote,
+  });
+
+  if (!check.ok) {
+    redirect(redirectWithError(`/revisions/${revisionId}`, check.message));
   }
-
-  const exception_records = exceptionNote
-    ? [
-        {
-          note: exceptionNote,
-          by: session.userId,
-          at: new Date().toISOString(),
-          disclaimer:
-            "Exceção formal registrada; não transforma erro técnico em conformidade.",
-        },
-      ]
-    : [];
 
   const { error: apprErr } = await supabase.from("approvals").insert({
     organization_id: session.organizationId,
@@ -112,12 +109,17 @@ export async function approveRevisionAction(formData: FormData) {
     decision: "aprovado_emissao",
     decided_by: session.userId,
     notes,
-    exception_records,
+    exception_records: check.exceptionRecords,
   });
 
   if (apprErr) {
     redirect(
-      `/revisions/${revisionId}?error=${encodeURIComponent(apprErr.message)}`,
+      redirectWithError(
+        `/revisions/${revisionId}`,
+        apprErr.message.includes("própria")
+          ? AppErrors.SELF_APPROVAL
+          : apprErr.message,
+      ),
     );
   }
 
@@ -132,22 +134,25 @@ export async function approveRevisionAction(formData: FormData) {
     .eq("id", revisionId);
 
   if (error) {
-    redirect(
-      `/revisions/${revisionId}?error=${encodeURIComponent(error.message)}`,
-    );
+    redirect(redirectWithError(`/revisions/${revisionId}`, error.message));
   }
 
-  await supabase.from("audit_events").insert({
-    organization_id: session.organizationId,
-    actor_id: session.userId,
+  await writeAudit({
+    organizationId: session.organizationId,
+    actorId: session.userId,
     action: "revision.approve",
-    entity_type: "drawing_revisions",
-    entity_id: revisionId,
-    payload: { notes, exception_records },
+    entityType: "drawing_revisions",
+    entityId: revisionId,
+    payload: { notes, exception_records: check.exceptionRecords },
   });
 
   revalidatePath(`/revisions/${revisionId}`);
-  redirect(`/revisions/${revisionId}?ok=Aprovado para emissão (imutável)`);
+  redirect(
+    redirectWithOk(
+      `/revisions/${revisionId}`,
+      "Aprovado para emissão (imutável)",
+    ),
+  );
 }
 
 export async function rejectRevisionAction(formData: FormData) {
@@ -167,11 +172,13 @@ export async function rejectRevisionAction(formData: FormData) {
     .single();
 
   if (!revision || revision.immutable) {
-    redirect(`/revisions/${revisionId}?error=Revisão indisponível`);
+    redirect(
+      redirectWithError(`/revisions/${revisionId}`, AppErrors.IMMUTABLE_REVISION),
+    );
   }
   if (revision.production_owner_id === session.userId) {
     redirect(
-      `/revisions/${revisionId}?error=Não é permitido decidir sobre a própria prancha`,
+      redirectWithError(`/revisions/${revisionId}`, AppErrors.SELF_APPROVAL),
     );
   }
 
@@ -189,6 +196,20 @@ export async function rejectRevisionAction(formData: FormData) {
     .update({ workflow_status: "com_pendencias" })
     .eq("id", revisionId);
 
+  await writeAudit({
+    organizationId: session.organizationId,
+    actorId: session.userId,
+    action: "revision.reject",
+    entityType: "drawing_revisions",
+    entityId: revisionId,
+    payload: { notes },
+  });
+
   revalidatePath(`/revisions/${revisionId}`);
-  redirect(`/revisions/${revisionId}?ok=Reprovado — devolvido com pendências`);
+  redirect(
+    redirectWithOk(
+      `/revisions/${revisionId}`,
+      "Reprovado — devolvido com pendências",
+    ),
+  );
 }

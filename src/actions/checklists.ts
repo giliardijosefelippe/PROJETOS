@@ -371,42 +371,28 @@ export async function uploadEvidenceAction(formData: FormData) {
   const runId = String(formData.get("run_id") || "");
   const runItemId = String(formData.get("run_item_id") || "");
   const file = formData.get("file") as File | null;
+  const base = `/revisions/${revisionId}/checklist/${runId}?item=${runItemId}`;
 
-  if (!file || file.size === 0) {
-    redirect(
-      `/revisions/${revisionId}/checklist/${runId}?item=${runItemId}&error=Selecione um arquivo`,
-    );
-  }
-
-  const allowed = [
-    "image/jpeg",
-    "image/png",
-    "image/webp",
-    "application/pdf",
-  ];
-  if (!allowed.includes(file.type)) {
-    redirect(
-      `/revisions/${revisionId}/checklist/${runId}?item=${runItemId}&error=Formato não permitido`,
-    );
-  }
-  if (file.size > 20 * 1024 * 1024) {
-    redirect(
-      `/revisions/${revisionId}/checklist/${runId}?item=${runItemId}&error=Arquivo maior que 20MB`,
-    );
+  const { validateUpload, uploadErrorRedirect } = await import(
+    "@/lib/validation/upload"
+  );
+  const validation = validateUpload("evidence", file);
+  if (!validation.ok) {
+    redirect(uploadErrorRedirect(base, validation));
   }
 
   const supabase = await createClient();
   const bucket = process.env.STORAGE_BUCKET_EVIDENCE || "evidence";
-  const path = `${session.organizationId}/evidence/${responseId}/${Date.now()}-${file.name}`;
+  const path = `${session.organizationId}/evidence/${responseId}/${Date.now()}-${file!.name}`;
 
-  const buffer = Buffer.from(await file.arrayBuffer());
+  const buffer = Buffer.from(await file!.arrayBuffer());
   const { error: upErr } = await supabase.storage
     .from(bucket)
-    .upload(path, buffer, { contentType: file.type, upsert: false });
+    .upload(path, buffer, { contentType: file!.type, upsert: false });
 
   if (upErr) {
     redirect(
-      `/revisions/${revisionId}/checklist/${runId}?item=${runItemId}&error=${encodeURIComponent(upErr.message)}`,
+      `${base}&error=${encodeURIComponent(upErr.message)}`,
     );
   }
 
@@ -414,12 +400,12 @@ export async function uploadEvidenceAction(formData: FormData) {
     response_id: responseId,
     organization_id: session.organizationId,
     storage_path: path,
-    file_name: file.name,
-    mime_type: file.type,
-    size_bytes: file.size,
+    file_name: file!.name,
+    mime_type: file!.type,
+    size_bytes: file!.size,
     uploaded_by: session.userId,
   });
 
   revalidatePath(`/revisions/${revisionId}/checklist/${runId}`);
-  redirect(`/revisions/${revisionId}/checklist/${runId}?item=${runItemId}&ok=Evidência anexada`);
+  redirect(`${base}&ok=${encodeURIComponent("Evidência anexada")}`);
 }

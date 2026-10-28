@@ -10,6 +10,7 @@ const NAV = [
   { href: "/projects", label: "Projetos" },
   { href: "/templates", label: "Templates" },
   { href: "/issues", label: "Pendências" },
+  { href: "/indicators", label: "Indicadores" },
   { href: "/reports", label: "Relatórios" },
   { href: "/admin/members", label: "Equipe" },
   { href: "/admin/branding", label: "Marca" },
