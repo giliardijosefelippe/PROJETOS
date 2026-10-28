@@ -5,7 +5,7 @@ Nome curto na navegação: **Lunardeli | Qualidade**
 
 Aplicativo web (pt-BR) para padronizar, executar, conferir, corrigir e rastrear pranchas de projetos estruturais (Forma, Vigas, Lajes e categorias expansíveis).
 
-> **Estado:** Etapa B (MVP funcional) implementada neste repositório. Persistência real via Supabase — **requer chaves e migrations aplicadas** para login e dados. Sem credenciais, o código e as instruções estão prontos; integrações não são fingidas como concluídas.
+> **Estado:** Etapas A–D no código (planejamento + MVP + robustez + evolução com stubs honestos). Persistência real via Supabase — **requer chaves e migrations aplicadas** para login e dados. Sem credenciais, o código/testes unitários e as instruções estão prontos; PRUMO/DWG/IFC/IA externa **não** são fingidos como concluídos.
 
 ## Stack
 
@@ -26,11 +26,15 @@ Documentação de produto: [`docs/PRODUCT_SPEC.md`](./docs/PRODUCT_SPEC.md), mod
 
 ## Configuração Supabase (obrigatória para uso real)
 
+Guia passo a passo (pt-BR): [`docs/SETUP_SUPABASE.md`](./docs/SETUP_SUPABASE.md).
+
 1. Crie um projeto no [Supabase](https://supabase.com).
 2. **SQL:** no SQL Editor, execute na ordem:
    - `supabase/migrations/00001_init.sql`
    - `supabase/migrations/00002_rls.sql`
    - `supabase/migrations/00003_storage.sql`
+   - `supabase/migrations/00004_immutability.sql` (Etapa C — triggers)
+   - `supabase/migrations/00005_etapa_d.sql` (Etapa D — anotações, presença, ai_suggestions)
 3. **Auth:** Authentication → Providers → Email habilitado. Em URL Configuration, adicione `http://localhost:3000/auth/callback` (e a URL de produção quando houver).
 4. **API keys:** Project Settings → API → copie URL, `anon` e `service_role`.
 5. Confirme buckets privados `library`, `evidence`, `reports` (criados pela migration 00003).
@@ -75,16 +79,18 @@ Admin → **Marca** (`/admin/branding`): upload do logotipo oficial. Slot placeh
 | `npm run typecheck` | TypeScript |
 | `npm run seed` | Seed demo (precisa service role) |
 
-## O que o MVP cobre
+## O que o MVP + Etapa C cobrem
 
 - Login / sessão / papéis (admin, coordenador, desenhista, conferente, consulta)
 - Projetos, pranchas, revisões e workflow
-- Templates editáveis com seções/itens/mídia; publicar versão; nova versão sem alterar runs antigos
+- Templates editáveis com seções/itens/mídia; publicar versão; nova versão sem alterar runs antigos; **diff v1/v2**; **reordenação**
 - Runs de produção e conferência com snapshot; respostas + evidências; NC gera pendência
 - Pendências com histórico; reconferência; aprovação interna (**bloqueio de auto-aprovação**)
 - Relatórios PDF (produção, conferência, pendências, resumo)
 - Seed didático Forma/Vigas/Lajes (não normativo)
 - Identidade visual com tokens CSS e estados com **texto + ícone**
+- **C:** triggers de imutabilidade; audit append-only; validações de upload; dashboard `/indicators`; filtros; nav fluido do checklist; testes de aprovação/RLS-matriz/condicionais; [LGPD](./docs/LGPD_RETENTION.md)
+- **D:** comparação de revisões; export/import CSV (Excel); marcações coordenadas MVP; presença colaborativa leve; stubs IA com revisão humana; [integrações](./docs/integrations/README.md) PRUMO/DWG/IFC
 
 ## Critérios de aceite — como validar
 
@@ -109,6 +115,6 @@ Admin → **Marca** (`/admin/branding`): upload do logotipo oficial. Slot placeh
 | Etapa | Status |
 |-------|--------|
 | A — Planejamento | Concluída |
-| B — MVP funcional | Este branch |
-| C — Robustez | Próxima |
-| D — Evolução | Backlog |
+| B — MVP funcional | Concluída (código) |
+| C — Robustez | Concluída (código) |
+| D — Evolução | Este branch (fundações + stubs) |

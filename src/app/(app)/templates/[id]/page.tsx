@@ -6,11 +6,18 @@ import {
   createNewTemplateVersionAction,
   publishTemplateVersionAction,
 } from "@/actions/templates";
+import {
+  reorderItemsAction,
+  reorderSectionsAction,
+} from "@/actions/reorder";
+import { importChecklistCsvAction } from "@/actions/import-checklist";
 import { requireSession, canManageTemplates } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Select, TextArea } from "@/components/ui/input";
 import { StatusChip } from "@/components/ui/status-chip";
+import { compareTemplateVersions } from "@/lib/template-version";
+import type { TemplateItemMeta } from "@/lib/template-version";
 
 export default async function TemplateDetailPage({
   params,
@@ -51,6 +58,52 @@ export default async function TemplateDetailPage({
         .order("sort_order")
     : { data: [] };
 
+  const { data: allVersions } = await supabase
+    .from("checklist_template_versions")
+    .select("id, version_number, status, published_at")
+    .eq("template_id", id)
+    .order("version_number", { ascending: false });
+
+  const previousPublished = (allVersions || []).find(
+    (v) =>
+      v.id !== versionId &&
+      (v.status === "published" || v.status === "superseded"),
+  );
+
+  let versionDiff: ReturnType<typeof compareTemplateVersions> | null = null;
+  if (previousPublished && version) {
+    const { data: prevSections } = await supabase
+      .from("checklist_sections")
+      .select("checklist_items(code, title, priority, is_blocking, verifiable_parameter)")
+      .eq("template_version_id", previousPublished.id);
+
+    const flatten = (
+      secs: Array<{ checklist_items: TemplateItemMeta[] | null }> | null,
+    ): TemplateItemMeta[] =>
+      (secs || []).flatMap((s) => s.checklist_items || []);
+
+    const currentItems: TemplateItemMeta[] = (sections || []).flatMap(
+      (s: { checklist_items?: TemplateItemMeta[] }) => s.checklist_items || [],
+    );
+
+    versionDiff = compareTemplateVersions(
+      {
+        version_number: previousPublished.version_number,
+        status: previousPublished.status,
+        items: flatten(
+          prevSections as Array<{
+            checklist_items: TemplateItemMeta[] | null;
+          }> | null,
+        ),
+      },
+      {
+        version_number: version.version_number,
+        status: version.status,
+        items: currentItems,
+      },
+    );
+  }
+
   const type = template.drawing_types as
     | { name: string }
     | { name: string }[]
@@ -70,6 +123,30 @@ export default async function TemplateDetailPage({
           {version ? ` · v${version.version_number} (${version.status})` : ""}
         </p>
       </div>
+
+      {versionDiff && previousPublished && (
+        <div className="rounded-lg border border-border bg-surface p-4 text-sm">
+          <h3 className="font-semibold">
+            Diff vs v{previousPublished.version_number} (
+            {previousPublished.status})
+          </h3>
+          <ul className="mt-2 space-y-1 text-ink-muted">
+            <li>+ adicionados: {versionDiff.added.join(", ") || "—"}</li>
+            <li>− removidos: {versionDiff.removed.join(", ") || "—"}</li>
+            <li>
+              ~ alterados:{" "}
+              {versionDiff.changed
+                .map((c) => `${c.code} (${c.fields.join(", ")})`)
+                .join("; ") || "—"}
+            </li>
+            <li>= inalterados: {versionDiff.unchanged.length}</li>
+          </ul>
+          <p className="mt-2 text-xs text-ink-muted">
+            Runs antigos mantêm snapshot da versão usada — publicar v2 não
+            reescreve conferências da v1.
+          </p>
+        </div>
+      )}
 
       {q.error && (
         <p className="rounded-md bg-[var(--color-status-danger-bg)] p-3 text-sm text-[var(--color-status-danger)]">
@@ -102,7 +179,43 @@ export default async function TemplateDetailPage({
               </Button>
             </form>
           )}
+          <a href={`/api/export/checklist/${id}`}>
+            <Button type="button" variant="secondary">
+              Exportar CSV (Excel)
+            </Button>
+          </a>
+          <a href="/api/export/template-csv-template">
+            <Button type="button" variant="ghost">
+              Modelo CSV
+            </Button>
+          </a>
         </div>
+      )}
+
+      {canManage && isDraft && version && (
+        <form
+          action={importChecklistCsvAction}
+          encType="multipart/form-data"
+          className="space-y-2 rounded-lg border border-border bg-surface p-4"
+        >
+          <h3 className="font-semibold">Importar itens (CSV / Excel)</h3>
+          <p className="text-xs text-ink-muted">
+            Somente versão em rascunho. Use o modelo CSV. Conteúdo didático —
+            não normativo.
+          </p>
+          <input type="hidden" name="template_id" value={id} />
+          <input type="hidden" name="version_id" value={version.id} />
+          <input
+            type="file"
+            name="file"
+            accept=".csv,text/csv"
+            required
+            className="block w-full text-sm"
+          />
+          <Button type="submit" variant="secondary">
+            Importar planilha
+          </Button>
+        </form>
       )}
 
       <section className="space-y-4">
@@ -111,7 +224,31 @@ export default async function TemplateDetailPage({
             key={section.id}
             className="rounded-lg border border-border bg-surface p-4"
           >
-            <h3 className="font-semibold">{section.title}</h3>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h3 className="font-semibold">{section.title}</h3>
+              {canManage && isDraft && version && (
+                <div className="flex gap-1">
+                  <form action={reorderSectionsAction}>
+                    <input type="hidden" name="template_id" value={id} />
+                    <input type="hidden" name="version_id" value={version.id} />
+                    <input type="hidden" name="section_id" value={section.id} />
+                    <input type="hidden" name="direction" value="up" />
+                    <Button type="submit" size="sm" variant="ghost">
+                      ↑ seção
+                    </Button>
+                  </form>
+                  <form action={reorderSectionsAction}>
+                    <input type="hidden" name="template_id" value={id} />
+                    <input type="hidden" name="version_id" value={version.id} />
+                    <input type="hidden" name="section_id" value={section.id} />
+                    <input type="hidden" name="direction" value="down" />
+                    <Button type="submit" size="sm" variant="ghost">
+                      ↓ seção
+                    </Button>
+                  </form>
+                </div>
+              )}
+            </div>
             <ul className="mt-3 divide-y divide-divider text-sm">
               {(section.checklist_items || []).map(
                 (item: {
@@ -137,6 +274,36 @@ export default async function TemplateDetailPage({
                           label={`${item.checklist_item_media.length} mídia(s)`}
                           tone="info"
                         />
+                      )}
+                      {canManage && isDraft && version && (
+                        <>
+                          <form action={reorderItemsAction}>
+                            <input type="hidden" name="template_id" value={id} />
+                            <input
+                              type="hidden"
+                              name="version_id"
+                              value={version.id}
+                            />
+                            <input type="hidden" name="item_id" value={item.id} />
+                            <input type="hidden" name="direction" value="up" />
+                            <Button type="submit" size="sm" variant="ghost">
+                              ↑
+                            </Button>
+                          </form>
+                          <form action={reorderItemsAction}>
+                            <input type="hidden" name="template_id" value={id} />
+                            <input
+                              type="hidden"
+                              name="version_id"
+                              value={version.id}
+                            />
+                            <input type="hidden" name="item_id" value={item.id} />
+                            <input type="hidden" name="direction" value="down" />
+                            <Button type="submit" size="sm" variant="ghost">
+                              ↓
+                            </Button>
+                          </form>
+                        </>
                       )}
                     </div>
                     {item.verifiable_parameter && (

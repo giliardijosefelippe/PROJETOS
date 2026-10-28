@@ -129,5 +129,5 @@ A (docs) → B1–B2 (app+auth) → B3–B4 (dados+templates)
 |-------|--------|
 | A | Concluída |
 | B | MVP no código (requer Supabase configurado para E2E) |
-| C | Não iniciada |
-| D | Backlog |
+| C | Robustez no código (triggers, testes, indicadores, filtros) |
+| D | Fundações no código (compare, CSV, anotações, stubs PRUMO/DWG/IA) |

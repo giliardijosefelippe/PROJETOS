@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "seed": "node scripts/seed.mjs",
-    "test": "tsx --test src/lib/workflow.test.ts",
+    "test": "tsx --test src/lib/workflow.test.ts src/lib/approval.test.ts src/lib/conditionals.test.ts src/lib/rls-matrix.test.ts src/lib/template-version.test.ts src/lib/validation/upload.test.ts src/lib/spreadsheet.test.ts src/lib/revision-compare.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
