@@ -4,6 +4,9 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireSession } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { canTransitionIssue } from "@/lib/approval";
+import { writeAudit } from "@/lib/audit/log";
+import { AppErrors, redirectWithError } from "@/lib/validation/errors";
 import type { IssueStatus } from "@/lib/types/domain";
 
 export async function updateIssueStatusAction(formData: FormData) {
@@ -26,6 +29,15 @@ export async function updateIssueStatusAction(formData: FormData) {
 
   if (!issue) redirect("/issues?error=Pendência não encontrada");
 
+  if (!canTransitionIssue(issue.status as IssueStatus, to)) {
+    redirect(
+      redirectWithError(
+        `/issues/${issueId}`,
+        `${AppErrors.INVALID_TRANSITION} (${issue.status} → ${to})`,
+      ),
+    );
+  }
+
   const patch: Record<string, unknown> = { status: to };
   if (to === "resolvida") {
     patch.resolved_at = new Date().toISOString();
@@ -38,6 +50,15 @@ export async function updateIssueStatusAction(formData: FormData) {
     event_type: "status_change",
     payload: { from: issue.status, to, comment },
     actor_id: session.userId,
+  });
+
+  await writeAudit({
+    organizationId: session.organizationId,
+    actorId: session.userId,
+    action: "issue.status_change",
+    entityType: "issues",
+    entityId: issueId,
+    payload: { from: issue.status, to },
   });
 
   // Sync revision workflow for common transitions
