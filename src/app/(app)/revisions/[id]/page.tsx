@@ -10,6 +10,10 @@ import {
   rejectRevisionAction,
 } from "@/actions/approvals";
 import { returnWithPendenciasAction } from "@/actions/issues";
+import {
+  generateAiStubHintsAction,
+  reviewAiSuggestionAction,
+} from "@/actions/ai-assist";
 import { requireSession, canApprove } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { WORKFLOW_LABELS } from "@/lib/types/domain";
@@ -17,6 +21,7 @@ import { StatusChip, workflowTone } from "@/components/ui/status-chip";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Select, TextArea } from "@/components/ui/input";
 import { ReportButtons } from "@/components/checklist/report-buttons";
+import { PresenceBar } from "@/components/presence/presence-bar";
 
 export default async function RevisionPage({
   params,
@@ -79,6 +84,13 @@ export default async function RevisionPage({
     .eq("revision_id", id)
     .order("opened_at", { ascending: false });
 
+  const { data: aiSuggestions } = await supabase
+    .from("ai_suggestions")
+    .select("id, title, detail, status, confidence, source")
+    .eq("revision_id", id)
+    .order("created_at", { ascending: false })
+    .limit(10);
+
   const isOwner = revision.production_owner_id === session.userId;
   const canDecide = canApprove(session.role) && !isOwner && !revision.immutable;
 
@@ -128,6 +140,97 @@ export default async function RevisionPage({
           revisão.
         </p>
       )}
+
+      <PresenceBar revisionId={id} />
+
+      <section className="flex flex-wrap gap-2 rounded-lg border border-border bg-surface p-3">
+        <Link href={`/revisions/${id}/annotations`}>
+          <Button type="button" size="sm" variant="secondary">
+            Marcações PDF
+          </Button>
+        </Link>
+        <Link
+          href={`/revisions/compare?drawing_id=${drawing?.id || ""}&left=${id}`}
+        >
+          <Button type="button" size="sm" variant="secondary">
+            Comparar revisões
+          </Button>
+        </Link>
+        <a href={`/api/export/revision/${id}?activity=conferencia`}>
+          <Button type="button" size="sm" variant="secondary">
+            Exportar CSV (conferência)
+          </Button>
+        </a>
+        <a href={`/api/export/revision/${id}?activity=producao`}>
+          <Button type="button" size="sm" variant="secondary">
+            Exportar CSV (produção)
+          </Button>
+        </a>
+        <Link href="/integrations">
+          <Button type="button" size="sm" variant="ghost">
+            Stubs PRUMO / DWG / IA
+          </Button>
+        </Link>
+      </section>
+
+      <section className="rounded-lg border border-border bg-surface p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 className="font-semibold">Sugestões de IA (revisão humana)</h3>
+            <p className="text-xs text-ink-muted">
+              Stub — não é interpretação estrutural automática validada. Sem
+              provider externo configurado.
+            </p>
+          </div>
+          <form action={generateAiStubHintsAction}>
+            <input type="hidden" name="revision_id" value={id} />
+            <Button type="submit" size="sm" variant="secondary">
+              Gerar dicas stub
+            </Button>
+          </form>
+        </div>
+        <ul className="mt-3 divide-y divide-divider text-sm">
+          {(aiSuggestions || []).map((s) => (
+            <li key={s.id} className="space-y-2 py-2">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <p className="font-medium">{s.title}</p>
+                  <p className="text-ink-muted">{s.detail}</p>
+                  <p className="text-xs text-ink-muted">
+                    fonte={s.source} · confiança={s.confidence ?? "—"} ·{" "}
+                    {s.status}
+                  </p>
+                </div>
+                {s.status === "pending_human_review" && (
+                  <div className="flex gap-1">
+                    {(
+                      [
+                        ["accepted", "Aceitar"],
+                        ["rejected", "Rejeitar"],
+                        ["dismissed", "Dispensar"],
+                      ] as const
+                    ).map(([decision, label]) => (
+                      <form key={decision} action={reviewAiSuggestionAction}>
+                        <input type="hidden" name="suggestion_id" value={s.id} />
+                        <input type="hidden" name="revision_id" value={id} />
+                        <input type="hidden" name="decision" value={decision} />
+                        <Button type="submit" size="sm" variant="ghost">
+                          {label}
+                        </Button>
+                      </form>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </li>
+          ))}
+          {!aiSuggestions?.length && (
+            <li className="py-2 text-ink-muted">
+              Nenhuma sugestão. Tabela `ai_suggestions` requer migration 00005.
+            </li>
+          )}
+        </ul>
+      </section>
 
       <section className="grid gap-4 lg:grid-cols-2">
         <div className="rounded-lg border border-border bg-surface p-4">

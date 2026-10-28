@@ -11,7 +11,9 @@ const NAV = [
   { href: "/templates", label: "Templates" },
   { href: "/issues", label: "Pendências" },
   { href: "/indicators", label: "Indicadores" },
+  { href: "/revisions/compare", label: "Comparar" },
   { href: "/reports", label: "Relatórios" },
+  { href: "/integrations", label: "Integrações" },
   { href: "/admin/members", label: "Equipe" },
   { href: "/admin/branding", label: "Marca" },
 ];
