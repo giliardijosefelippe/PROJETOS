@@ -5,7 +5,7 @@ Nome curto na navegação: **Lunardeli | Qualidade**
 
 Aplicativo web (pt-BR) para padronizar, executar, conferir, corrigir e rastrear pranchas de projetos estruturais (Forma, Vigas, Lajes e categorias expansíveis).
 
-> **Estado:** Etapas A–C no código (planejamento + MVP + robustez). Persistência real via Supabase — **requer chaves e migrations aplicadas** para login e dados. Sem credenciais, o código/testes unitários e as instruções estão prontos; integrações não são fingidas como concluídas.
+> **Estado:** Etapas A–D no código (planejamento + MVP + robustez + evolução com stubs honestos). Persistência real via Supabase — **requer chaves e migrations aplicadas** para login e dados. Sem credenciais, o código/testes unitários e as instruções estão prontos; PRUMO/DWG/IFC/IA externa **não** são fingidos como concluídos.
 
 ## Stack
 
@@ -32,6 +32,7 @@ Documentação de produto: [`docs/PRODUCT_SPEC.md`](./docs/PRODUCT_SPEC.md), mod
    - `supabase/migrations/00002_rls.sql`
    - `supabase/migrations/00003_storage.sql`
    - `supabase/migrations/00004_immutability.sql` (Etapa C — triggers)
+   - `supabase/migrations/00005_etapa_d.sql` (Etapa D — anotações, presença, ai_suggestions)
 3. **Auth:** Authentication → Providers → Email habilitado. Em URL Configuration, adicione `http://localhost:3000/auth/callback` (e a URL de produção quando houver).
 4. **API keys:** Project Settings → API → copie URL, `anon` e `service_role`.
 5. Confirme buckets privados `library`, `evidence`, `reports` (criados pela migration 00003).
@@ -87,6 +88,7 @@ Admin → **Marca** (`/admin/branding`): upload do logotipo oficial. Slot placeh
 - Seed didático Forma/Vigas/Lajes (não normativo)
 - Identidade visual com tokens CSS e estados com **texto + ícone**
 - **C:** triggers de imutabilidade; audit append-only; validações de upload; dashboard `/indicators`; filtros; nav fluido do checklist; testes de aprovação/RLS-matriz/condicionais; [LGPD](./docs/LGPD_RETENTION.md)
+- **D:** comparação de revisões; export/import CSV (Excel); marcações coordenadas MVP; presença colaborativa leve; stubs IA com revisão humana; [integrações](./docs/integrations/README.md) PRUMO/DWG/IFC
 
 ## Critérios de aceite — como validar
 
@@ -112,5 +114,5 @@ Admin → **Marca** (`/admin/branding`): upload do logotipo oficial. Slot placeh
 |-------|--------|
 | A — Planejamento | Concluída |
 | B — MVP funcional | Concluída (código) |
-| C — Robustez | Este branch |
-| D — Evolução | Backlog |
+| C — Robustez | Concluída (código) |
+| D — Evolução | Este branch (fundações + stubs) |

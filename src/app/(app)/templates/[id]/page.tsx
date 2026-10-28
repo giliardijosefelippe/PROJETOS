@@ -10,6 +10,7 @@ import {
   reorderItemsAction,
   reorderSectionsAction,
 } from "@/actions/reorder";
+import { importChecklistCsvAction } from "@/actions/import-checklist";
 import { requireSession, canManageTemplates } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { Button } from "@/components/ui/button";
@@ -178,7 +179,43 @@ export default async function TemplateDetailPage({
               </Button>
             </form>
           )}
+          <a href={`/api/export/checklist/${id}`}>
+            <Button type="button" variant="secondary">
+              Exportar CSV (Excel)
+            </Button>
+          </a>
+          <a href="/api/export/template-csv-template">
+            <Button type="button" variant="ghost">
+              Modelo CSV
+            </Button>
+          </a>
         </div>
+      )}
+
+      {canManage && isDraft && version && (
+        <form
+          action={importChecklistCsvAction}
+          encType="multipart/form-data"
+          className="space-y-2 rounded-lg border border-border bg-surface p-4"
+        >
+          <h3 className="font-semibold">Importar itens (CSV / Excel)</h3>
+          <p className="text-xs text-ink-muted">
+            Somente versão em rascunho. Use o modelo CSV. Conteúdo didático —
+            não normativo.
+          </p>
+          <input type="hidden" name="template_id" value={id} />
+          <input type="hidden" name="version_id" value={version.id} />
+          <input
+            type="file"
+            name="file"
+            accept=".csv,text/csv"
+            required
+            className="block w-full text-sm"
+          />
+          <Button type="submit" variant="secondary">
+            Importar planilha
+          </Button>
+        </form>
       )}
 
       <section className="space-y-4">
