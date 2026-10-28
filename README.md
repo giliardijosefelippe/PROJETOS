@@ -26,6 +26,8 @@ Documentação de produto: [`docs/PRODUCT_SPEC.md`](./docs/PRODUCT_SPEC.md), mod
 
 ## Configuração Supabase (obrigatória para uso real)
 
+Guia passo a passo (pt-BR): [`docs/SETUP_SUPABASE.md`](./docs/SETUP_SUPABASE.md).
+
 1. Crie um projeto no [Supabase](https://supabase.com).
 2. **SQL:** no SQL Editor, execute na ordem:
    - `supabase/migrations/00001_init.sql`
