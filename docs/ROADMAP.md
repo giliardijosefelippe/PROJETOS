@@ -127,7 +127,7 @@ A (docs) → B1–B2 (app+auth) → B3–B4 (dados+templates)
 
 | Etapa | Status |
 |-------|--------|
-| A | Concluída neste PR |
-| B | Não iniciada |
+| A | Concluída |
+| B | MVP no código (requer Supabase configurado para E2E) |
 | C | Não iniciada |
 | D | Backlog |
