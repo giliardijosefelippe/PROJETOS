@@ -19,10 +19,14 @@ export function AnnotationBoard({
   revisionId,
   annotations,
   immutable,
+  previewUrl,
+  previewMime,
 }: {
   revisionId: string;
   annotations: Annotation[];
   immutable: boolean;
+  previewUrl?: string | null;
+  previewMime?: string | null;
 }) {
   const [pending, setPending] = useState<{ x: number; y: number } | null>(
     null,
@@ -36,22 +40,54 @@ export function AnnotationBoard({
     setPending({ x: Number(x.toFixed(4)), y: Number(y.toFixed(4)) });
   }
 
+  const isPdf = previewMime === "application/pdf" || previewUrl?.endsWith(".pdf");
+  const isImage =
+    Boolean(previewUrl) &&
+    (previewMime?.startsWith("image/") ||
+      /\.(png|jpe?g|webp|gif)$/i.test(previewUrl || ""));
+
   return (
     <div className="space-y-4">
       <div
         role="application"
         aria-label="Área de marcação da prancha"
         onClick={onClick}
-        className="relative aspect-[4/3] w-full cursor-crosshair overflow-hidden rounded-lg border border-border bg-[linear-gradient(45deg,#f5f5f5_25%,transparent_25%),linear-gradient(-45deg,#f5f5f5_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#f5f5f5_75%),linear-gradient(-45deg,transparent_75%,#f5f5f5_75%)] bg-[length:20px_20px] bg-[position:0_0,0_10px,10px_-10px,-10px_0] bg-surface"
+        className="relative aspect-[4/3] w-full cursor-crosshair overflow-hidden rounded-lg border border-border bg-surface"
       >
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-          <p className="max-w-sm rounded bg-surface/90 px-3 py-2 text-center text-xs text-ink-muted shadow-sm">
-            Clique para marcar (coordenadas normalizadas 0–1).
-            Substitua este plano por visualização PDF.js / arquivo da revisão
-            quando o storage estiver configurado. DWG/IFC: ver stubs de
-            integração.
-          </p>
-        </div>
+        {isImage && previewUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={previewUrl}
+            alt="Preview da prancha"
+            className="absolute inset-0 h-full w-full object-contain bg-white"
+            draggable={false}
+          />
+        ) : isPdf && previewUrl ? (
+          <object
+            data={`${previewUrl}#toolbar=0`}
+            type="application/pdf"
+            className="pointer-events-none absolute inset-0 h-full w-full bg-white"
+            aria-label="Preview PDF da prancha"
+          >
+            <p className="p-4 text-center text-xs text-ink-muted">
+              Preview PDF disponível —{" "}
+              <a href={previewUrl} className="text-brand underline" target="_blank" rel="noreferrer">
+                abrir em nova aba
+              </a>
+            </p>
+          </object>
+        ) : (
+          <div className="absolute inset-0 bg-[linear-gradient(45deg,#f5f5f5_25%,transparent_25%),linear-gradient(-45deg,#f5f5f5_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#f5f5f5_75%),linear-gradient(-45deg,transparent_75%,#f5f5f5_75%)] bg-[length:20px_20px] bg-[position:0_0,0_10px,10px_-10px,-10px_0]">
+            <div className="flex h-full items-center justify-center p-4">
+              <p className="max-w-sm rounded bg-surface/90 px-3 py-2 text-center text-xs text-ink-muted shadow-sm">
+                Clique para marcar (coordenadas 0–1). Envie PDF/DXF/DWG na
+                revisão para carregar o preview (DXF via ezdxf; DWG via ODA +
+                ezdxf).
+              </p>
+            </div>
+          </div>
+        )}
+
         {annotations.map((a) => (
           <div
             key={a.id}

@@ -5,7 +5,7 @@ Nome curto na navegação: **Lunardeli | Qualidade**
 
 Aplicativo web (pt-BR) para padronizar, executar, conferir, corrigir e rastrear pranchas de projetos estruturais (Forma, Vigas, Lajes e categorias expansíveis).
 
-> **Estado:** Etapas A–D no código (planejamento + MVP + robustez + evolução com stubs honestos). Persistência real via Supabase — **requer chaves e migrations aplicadas** para login e dados. Sem credenciais, o código/testes unitários e as instruções estão prontos; PRUMO/DWG/IFC/IA externa **não** são fingidos como concluídos.
+> **Estado:** Etapas A–D no código + leitura **DXF/DWG via Python (ezdxf)**. Persistência real via Supabase — **requer chaves e migrations** para login e dados. CAD convert roda como microserviço local (`services/cad-convert`). PRUMO / IFC / IA externa / Forge **não** são fingidos como concluídos.
 
 ## Stack
 
@@ -13,7 +13,8 @@ Aplicativo web (pt-BR) para padronizar, executar, conferir, corrigir e rastrear 
 |--------|------------|
 | App | Next.js 15 (App Router) + TypeScript + Tailwind CSS |
 | Auth / DB / Storage | Supabase (Auth, Postgres, Storage privado) + RLS |
-| PDF | PDFKit no servidor |
+| PDF | PDFKit no servidor; preview de prancha + anotações |
+| CAD | Python `ezdxf` (+ ODA File Converter opcional para DWG→DXF) — ver `services/cad-convert` |
 | Identidade | Tokens CSS em `src/app/globals.css` (vermelho `#E00024`, grafite, branco, cinza claro) |
 
 Documentação de produto: [`docs/PRODUCT_SPEC.md`](./docs/PRODUCT_SPEC.md), modelo [`docs/DATA_MODEL.md`](./docs/DATA_MODEL.md), roadmap [`docs/ROADMAP.md`](./docs/ROADMAP.md), marca [`docs/identidade-visual.md`](./docs/identidade-visual.md).
@@ -21,6 +22,7 @@ Documentação de produto: [`docs/PRODUCT_SPEC.md`](./docs/PRODUCT_SPEC.md), mod
 ## Pré-requisitos
 
 - Node.js 20+ e npm
+- Python 3.10+ (somente para conversão DXF/DWG)
 - Projeto Supabase (Auth + Postgres + Storage)
 - Variáveis conforme [`.env.example`](./.env.example)
 
@@ -35,9 +37,10 @@ Guia passo a passo (pt-BR): [`docs/SETUP_SUPABASE.md`](./docs/SETUP_SUPABASE.md)
    - `supabase/migrations/00003_storage.sql`
    - `supabase/migrations/00004_immutability.sql` (Etapa C — triggers)
    - `supabase/migrations/00005_etapa_d.sql` (Etapa D — anotações, presença, ai_suggestions)
+   - `supabase/migrations/00006_dwg_support.sql` (kind/preview de prancha + MIME CAD)
 3. **Auth:** Authentication → Providers → Email habilitado. Em URL Configuration, adicione `http://localhost:3000/auth/callback` (e a URL de produção quando houver).
 4. **API keys:** Project Settings → API → copie URL, `anon` e `service_role`.
-5. Confirme buckets privados `library`, `evidence`, `reports` (criados pela migration 00003).
+5. Confirme buckets privados `library`, `evidence`, `reports` (criados pela migration 00003; 00006 amplia MIME CAD).
 
 ## Como rodar localmente
 
@@ -49,6 +52,20 @@ cp .env.example .env.local
 npm install
 npm run dev
 ```
+
+### Conversão DXF/DWG (Python)
+
+Em outro terminal:
+
+```bash
+cd services/cad-convert
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn app.main:app --host 127.0.0.1 --port 8091
+```
+
+Defina `CAD_CONVERT_URL=http://127.0.0.1:8091` no `.env.local`.  
+**DXF** funciona só com ezdxf. **DWG** exige [ODA File Converter](https://www.opendesign.com/guestfiles/oda_file_converter) no PATH (registro gratuito; sem paid key no código). Detalhes: [`services/cad-convert/README.md`](./services/cad-convert/README.md) e [`docs/integrations/README.md`](./docs/integrations/README.md).
 
 Abra [http://localhost:3000](http://localhost:3000).
 
@@ -90,7 +107,7 @@ Admin → **Marca** (`/admin/branding`): upload do logotipo oficial. Slot placeh
 - Seed didático Forma/Vigas/Lajes (não normativo)
 - Identidade visual com tokens CSS e estados com **texto + ícone**
 - **C:** triggers de imutabilidade; audit append-only; validações de upload; dashboard `/indicators`; filtros; nav fluido do checklist; testes de aprovação/RLS-matriz/condicionais; [LGPD](./docs/LGPD_RETENTION.md)
-- **D:** comparação de revisões; export/import CSV (Excel); marcações coordenadas MVP; presença colaborativa leve; stubs IA com revisão humana; [integrações](./docs/integrations/README.md) PRUMO/DWG/IFC
+- **D:** comparação de revisões; export/import CSV (Excel); marcações coordenadas MVP; presença colaborativa leve; stubs IA com revisão humana; [integrações](./docs/integrations/README.md) PRUMO/IFC; **CAD DXF/DWG via Python (ezdxf)**
 
 ## Critérios de aceite — como validar
 

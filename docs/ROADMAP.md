@@ -109,7 +109,7 @@ Priorizar sob demanda:
 4. Revisão colaborativa (presença / locks).  
 5. Exportação Excel.  
 6. Integração PRUMO (contrato a definir).  
-7. Visualização DWG/IFC via serviços especializados.  
+7. Visualização DWG/DXF via Python (ezdxf + ODA opcional) — **implementado**; IFC ainda stub.  
 8. Apoio de IA para localizar inconsistências — **sempre** com revisão humana; sem interpretação estrutural automática “já validada”.
 
 Cada item D = PR próprio com spec curta antes de codificar.
@@ -130,4 +130,4 @@ A (docs) → B1–B2 (app+auth) → B3–B4 (dados+templates)
 | A | Concluída |
 | B | MVP no código (requer Supabase configurado para E2E) |
 | C | Robustez no código (triggers, testes, indicadores, filtros) |
-| D | Fundações no código (compare, CSV, anotações, stubs PRUMO/DWG/IA) |
+| D | Fundações no código (compare, CSV, anotações, CAD Python, stubs PRUMO/IFC/IA) |

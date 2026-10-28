@@ -36,6 +36,31 @@ export default async function AnnotationsPage({
     .eq("revision_id", id)
     .order("created_at");
 
+  const { data: previewFiles } = await supabase
+    .from("drawing_files")
+    .select("id, kind, mime_type, storage_path, file_name")
+    .eq("revision_id", id)
+    .in("kind", ["preview_png", "preview_pdf", "original"])
+    .order("created_at", { ascending: false });
+
+  const libraryBucket = process.env.STORAGE_BUCKET_LIBRARY || "library";
+  const preferred =
+    (previewFiles || []).find((f) => f.kind === "preview_png") ||
+    (previewFiles || []).find((f) => f.kind === "preview_pdf") ||
+    (previewFiles || []).find(
+      (f) => f.kind === "original" && f.mime_type === "application/pdf",
+    );
+
+  let previewUrl: string | null = null;
+  let previewMime: string | null = null;
+  if (preferred) {
+    const { data: signed } = await supabase.storage
+      .from(libraryBucket)
+      .createSignedUrl(preferred.storage_path, 3600);
+    previewUrl = signed?.signedUrl || null;
+    previewMime = preferred.mime_type;
+  }
+
   const drawing = revision.drawings as unknown as {
     number?: string;
     title?: string;
@@ -55,8 +80,8 @@ export default async function AnnotationsPage({
         </Link>
         <h2 className="mt-2 text-2xl font-semibold">Marcações na prancha</h2>
         <p className="text-sm text-ink-muted">
-          {projectCode} · {drawing?.number} — {drawing?.title}.
-          Coordenadas normalizadas; overlay MVP (PDF.js pleno = evolução).
+          {projectCode} · {drawing?.number} — {drawing?.title}. Coordenadas
+          normalizadas sobre preview PDF/PNG (DXF/DWG convertidos via Python).
         </p>
       </div>
 
@@ -81,10 +106,23 @@ export default async function AnnotationsPage({
           <code>supabase/migrations/00005_etapa_d.sql</code>. ({error.message})
         </p>
       )}
+      {!previewUrl && (
+        <p className="rounded-md border border-border bg-muted p-3 text-sm">
+          Sem preview ainda. Anexe PDF/DXF/DWG em{" "}
+          <Link href={`/revisions/${id}`} className="text-brand underline">
+            Arquivo da prancha
+          </Link>
+          . Migration{" "}
+          <code className="text-xs">00006_dwg_support.sql</code> necessária
+          para metadados kind/preview.
+        </p>
+      )}
 
       <AnnotationBoard
         revisionId={id}
         immutable={revision.immutable}
+        previewUrl={previewUrl}
+        previewMime={previewMime}
         annotations={(annotations || []).map((a) => ({
           id: a.id,
           x: Number(a.x),

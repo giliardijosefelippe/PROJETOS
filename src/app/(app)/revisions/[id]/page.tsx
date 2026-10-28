@@ -22,6 +22,9 @@ import { Button } from "@/components/ui/button";
 import { Input, Label, Select, TextArea } from "@/components/ui/input";
 import { ReportButtons } from "@/components/checklist/report-buttons";
 import { PresenceBar } from "@/components/presence/presence-bar";
+import { DrawingUploadForm } from "@/components/drawings/drawing-upload-form";
+import { DrawingFilesList } from "@/components/drawings/drawing-files-list";
+import { cadConvertHealth } from "@/lib/cad/client";
 
 export default async function RevisionPage({
   params,
@@ -91,6 +94,26 @@ export default async function RevisionPage({
     .order("created_at", { ascending: false })
     .limit(10);
 
+  const { data: drawingFiles } = await supabase
+    .from("drawing_files")
+    .select(
+      "id, file_name, mime_type, size_bytes, kind, source_format, converter_path, storage_path, created_at",
+    )
+    .eq("revision_id", id)
+    .order("created_at", { ascending: false });
+
+  const libraryBucket = process.env.STORAGE_BUCKET_LIBRARY || "library";
+  const filesWithUrls = await Promise.all(
+    (drawingFiles || []).map(async (f) => {
+      const { data: signed } = await supabase.storage
+        .from(libraryBucket)
+        .createSignedUrl(f.storage_path, 3600);
+      return { ...f, signed_url: signed?.signedUrl || null };
+    }),
+  );
+
+  const cadHealth = await cadConvertHealth();
+
   const isOwner = revision.production_owner_id === session.userId;
   const canDecide = canApprove(session.role) && !isOwner && !revision.immutable;
 
@@ -143,10 +166,43 @@ export default async function RevisionPage({
 
       <PresenceBar revisionId={id} />
 
+      <section className="rounded-lg border border-border bg-surface p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h3 className="font-semibold">Arquivo da prancha</h3>
+            <p className="text-xs text-ink-muted">
+              PDF, DXF ou DWG. DXF/DWG são convertidos pelo serviço Python
+              (ezdxf; DWG via ODA opcional) para preview PDF/PNG usado nas
+              marcações.
+            </p>
+          </div>
+          <p className="text-xs text-ink-muted">
+            CAD convert:{" "}
+            {cadHealth.ok ? (
+              <span className="text-[var(--color-status-ok)]">
+                online
+                {cadHealth.dwg_supported ? " · DWG OK" : " · DXF (DWG sem ODA)"}
+              </span>
+            ) : (
+              <span className="text-[var(--color-status-warn)]">
+                offline ({cadHealth.error || "suba services/cad-convert"})
+              </span>
+            )}
+          </p>
+        </div>
+        <div className="mt-3 grid gap-4 lg:grid-cols-2">
+          <DrawingUploadForm
+            revisionId={id}
+            immutable={Boolean(revision.immutable)}
+          />
+          <DrawingFilesList files={filesWithUrls} />
+        </div>
+      </section>
+
       <section className="flex flex-wrap gap-2 rounded-lg border border-border bg-surface p-3">
         <Link href={`/revisions/${id}/annotations`}>
           <Button type="button" size="sm" variant="secondary">
-            Marcações PDF
+            Marcações na prancha
           </Button>
         </Link>
         <Link

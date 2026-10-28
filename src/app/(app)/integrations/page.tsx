@@ -8,9 +8,14 @@ const ITEMS = [
     body: "Sem cliente HTTP nem credenciais. Defina o contrato de API antes de implementar. Ver docs/integrations/README.md.",
   },
   {
-    title: "DWG / IFC",
+    title: "DXF / DWG (Python)",
+    status: "Disponível (serviço local)",
+    body: "Upload na revisão → services/cad-convert (ezdxf). DXF nativo; DWG via ODA File Converter opcional. Preview PDF/PNG nas marcações. IFC ainda stub. Sem Forge.",
+  },
+  {
+    title: "IFC",
     status: "Stub de visualização",
-    body: "Viewer especializado fora do escopo MVP. Use marcações com coordenadas normalizadas na revisão; plugar conversor/serviço depois.",
+    body: "Viewer IFC especializado ainda fora de escopo. Não confundir com o pipeline DXF/DWG Python.",
   },
   {
     title: "IA — inconsistências",
