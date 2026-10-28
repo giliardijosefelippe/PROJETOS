@@ -92,7 +92,18 @@ Seed cria org demo, templates Forma/Vigas/Lajes, projeto `DEMO-001`, prancha `VI
 7. Admin publica v2 do template; run v1 mantém snapshot.
 8. Sem membership / outra org não vê dados (RLS).
 
-Extras: `/indicators`, `/revisions/compare`, anotações, CSV, `/integrations` (stubs).
+Extras: `/indicators`, `/revisions/compare`, anotações, CSV, upload PDF/DXF/DWG, `/integrations`.
+
+Migrations extras após 00005: `00006_dwg_support.sql` (kind/preview + MIME CAD).
+
+CAD local:
+
+```bash
+cd services/cad-convert && python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn app.main:app --host 127.0.0.1 --port 8091
+# .env.local: CAD_CONVERT_URL=http://127.0.0.1:8091
+```
 
 ```bash
 npm test && npm run build
@@ -106,7 +117,9 @@ npm test && npm run build
 |---------|-------|
 | Login não autentica | Keys / reiniciar `dev` após `.env.local` |
 | Tabelas/buckets faltando | Migration pulada ou fora de ordem |
-| Upload falha | Buckets/policies da 00003 |
+| Upload falha | Buckets/policies da 00003 / 00006 |
 | Seed aborta | Falta service role ou URL placeholder |
 | Telas D vazias | Falta 00005 |
+| DXF/DWG não converte | Serviço Python offline ou falta ODA para DWG |
+| Colunas kind/preview faltam | Falta 00006 |
 )

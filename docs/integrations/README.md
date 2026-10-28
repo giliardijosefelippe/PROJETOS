@@ -1,6 +1,6 @@
-# Integrações futuras (Etapa D) — stubs honestos
+# Integrações futuras (Etapa D) — stubs honestos + CAD Python
 
-Nenhuma destas integrações está “pronta” sem serviço/credencial externa. O app expõe **contratos, UI de stub e documentação** para não bloquear o restante do produto.
+Nenhuma integração externa “mágica” sem serviço/credencial. O app expõe **contratos, UI e documentação** — e, para CAD, um serviço Python real.
 
 ## PRUMO
 
@@ -10,11 +10,22 @@ Nenhuma destas integrações está “pronta” sem serviço/credencial externa.
 - **Próximo passo:** definir contrato (auth, IDs externos, webhooks) em PR dedicado antes de codificar cliente HTTP.
 - Código de referência: página `/integrations` + este doc.
 
-## DWG / IFC
+## DWG / DXF (Python — implementado)
 
-- **Status:** stub — visualização via componentes/serviços especializados **não** embutidos.
-- **UI atual:** plano de marcação com coordenadas normalizadas (`drawing_annotations`); placeholder no lugar do viewer.
-- **Caminho sugerido:** microserviço ou lib (ex. conversor → SVG/PDF) + URL assinada no Storage; nunca interpretar estrutura estrutural no browser como “validada”.
+- **Status:** utilizável localmente com o microserviço `services/cad-convert`.
+- **Caminho primário:** **ezdxf** (Python) — **não** Autodesk Forge.
+- **DXF:** leitura + render (matplotlib) → PDF + PNG; upload na revisão; preview nas marcações.
+- **DWG:** ezdxf não lê DWG binário de forma confiável. Pipeline: **ODA File Converter** (gratuito com registro ODA, sem paid key no repo) DWG→DXF → mesmo render. Sem ODA, DXF/PDF seguem ok; DWG retorna erro explícito.
+- **Alternativas documentadas (não embutidas):** LibreCAD/QCAD CLI; Aspose e similares pagos **não** são inventados como “já configurados”.
+- **IFC:** ainda stub (viewer especializado futuro).
+- **App:**
+  - UI: seção **Arquivo da prancha** em `/revisions/[id]` (aceita PDF/DXF/DWG)
+  - Action: `uploadDrawingFileAction`
+  - Proxy: `GET /api/cad/health`, `POST /api/cad/convert`
+  - Storage: bucket `library` sob `{org}/drawings/{revision_id}/…`
+  - Migration: `supabase/migrations/00006_dwg_support.sql`
+  - Env: `CAD_CONVERT_URL=http://127.0.0.1:8091`
+- Guia do serviço: [`services/cad-convert/README.md`](../../services/cad-convert/README.md)
 
 ## IA (localizar inconsistências)
 
@@ -28,7 +39,8 @@ Nenhuma destas integrações está “pronta” sem serviço/credencial externa.
 - **Implementado:** CSV com BOM (abre no Excel) — export de template/run e import de itens em versão **draft**.
 - Modelo: `GET /api/export/template-csv-template`.
 
-## Marcações PDF
+## Marcações PDF / preview CAD
 
-- **MVP:** clique → coordenadas 0–1 → persistência.
-- **Evolução:** PDF.js + arquivo da revisão no Storage; link opcional a `issues`.
+- **MVP:** clique → coordenadas 0–1 → persistência sobre preview PNG/PDF da revisão.
+- Preview vem de PDF direto ou conversão DXF/DWG via Python.
+- **Evolução:** PDF.js pleno multipágina; link opcional a `issues`.

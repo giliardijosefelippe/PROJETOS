@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { validateUpload } from "./upload";
+import { detectDrawingFormat, validateUpload } from "./upload";
 
 describe("upload validation", () => {
   it("rejects empty", () => {
@@ -34,5 +34,34 @@ describe("upload validation", () => {
       name: "foto.jpg",
     });
     assert.equal(r.ok, true);
+  });
+
+  it("accepts drawing pdf/dxf/dwg by extension", () => {
+    for (const name of ["prancha.pdf", "forma.dxf", "vigas.DWG"]) {
+      const r = validateUpload("drawing", {
+        type: "",
+        size: 2048,
+        name,
+      });
+      assert.equal(r.ok, true, name);
+    }
+  });
+
+  it("rejects drawing zip", () => {
+    const r = validateUpload("drawing", {
+      type: "application/zip",
+      size: 100,
+      name: "x.zip",
+    });
+    assert.equal(r.ok, false);
+  });
+
+  it("detects drawing formats", () => {
+    assert.equal(detectDrawingFormat({ name: "a.dxf" }), "dxf");
+    assert.equal(detectDrawingFormat({ name: "a.dwg" }), "dwg");
+    assert.equal(
+      detectDrawingFormat({ name: "a.pdf", type: "application/pdf" }),
+      "pdf",
+    );
   });
 });

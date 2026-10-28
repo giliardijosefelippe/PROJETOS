@@ -153,19 +153,23 @@ Forma, Vigas, Lajes, … expansível por organização.
 **Check de negócio (app + opcional constraint/trigger):** `approved_by <> production_owner_id`.
 
 #### `drawing_files`
-Arquivos da revisão (PDF/imagem da prancha).
+Arquivos da revisão (PDF/DXF/DWG da prancha + previews).
 
 | Coluna | Tipo | Notas |
 |--------|------|-------|
 | id | uuid PK | |
 | revision_id | uuid FK | |
 | organization_id | uuid FK | |
-| storage_path | text | bucket evidence/library conforme uso |
+| storage_path | text | bucket `library` (`{org}/drawings/...`) |
 | file_name | text | |
 | mime_type | text | |
 | size_bytes | bigint | |
 | uploaded_by | uuid | |
 | created_at | timestamptz | |
+| kind | text | `original` \| `preview_pdf` \| `preview_png` (migration 00006) |
+| source_format | text null | `pdf` \| `dxf` \| `dwg` \| … |
+| parent_file_id | uuid null FK | preview → original |
+| converter_path | text null | `ezdxf` \| `oda+ezdxf` \| `passthrough-pdf` |
 
 ### 3.3 Biblioteca e parâmetros
 
