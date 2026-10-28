@@ -22,7 +22,12 @@ export default async function ChecklistRunPage({
   searchParams,
 }: {
   params: Promise<{ id: string; runId: string }>;
-  searchParams: Promise<{ item?: string; error?: string; ok?: string }>;
+  searchParams: Promise<{
+    item?: string;
+    error?: string;
+    ok?: string;
+    filter?: string;
+  }>;
 }) {
   const { id: revisionId, runId } = await params;
   const q = await searchParams;
@@ -130,6 +135,7 @@ export default async function ChecklistRunPage({
             revisionId={revisionId}
             runId={runId}
             selectedId={selected?.id}
+            filterStatus={q.filter || undefined}
             items={(items || []).map((i) => {
               const resp = Array.isArray(i.checklist_item_responses)
                 ? i.checklist_item_responses[0]
