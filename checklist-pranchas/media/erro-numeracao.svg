@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="400" viewBox="0 0 640 400" role="img">
+  <rect width="640" height="400" fill="#ffffff"/>
+  <rect x="16" y="16" width="608" height="368" fill="#fff6f6" stroke="#E00024" stroke-width="2"/>
+  <text x="36" y="48" fill="#E00024" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="14" font-weight="700">ERRO COMUM - EXEMPLO DIDÁTICO</text>
+  <text x="36" y="74" fill="#222222" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="18" font-weight="700">Dois trechos com o mesmo código</text>
+  <rect x="70" y="140" width="220" height="28" fill="#E00024"/>
+  <rect x="340" y="220" width="220" height="28" fill="#E00024"/>
+  <g fill="#222222" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="16" font-weight="700">
+    <text x="160" y="132">V1</text>
+    <text x="430" y="212">V1</text>
+  </g>
+  <text x="36" y="320" fill="#222222" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="15">Os dois trechos saíram com o código V1. Descreva a repetição no comentário.</text>
+  <text x="36" y="348" fill="#5c5c5c" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="13">A equipe define a numeração. Esta figura não é prescrição de norma.</text>
+</svg>

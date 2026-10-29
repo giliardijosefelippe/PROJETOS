@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#E00024">
+  <title>Lunardeli | Qualidade — Checklist de pranchas</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath fill='%23E00024' d='M4 6h8v40h28v8H4z'/%3E%3Cpath fill='%23E00024' d='M16 6h8v26h24v8H16z'/%3E%3Cpath fill='%23E00024' d='M28 6h8v14h16v8H28z'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700&family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <a class="skip" href="#main">Ir para o conteúdo</a>
+  <header class="topbar">
+    <a class="brand" href="#/">
+      <svg class="brand-mark" viewBox="0 0 86 72" role="img" aria-label="Marca Lunardeli">
+        <path fill="#E00024" d="M0 0h10v58h72v10H0z"/>
+        <path fill="#E00024" d="M17 0h10v40h51v10H17z"/>
+        <path fill="#E00024" d="M34 0h10v18h30v10H34z"/>
+      </svg>
+      <span class="brand-text">
+        <span class="brand-name">Lunardeli</span>
+        <span class="brand-sub">Engenharia</span>
+      </span>
+    </a>
+    <p class="product-name">Qualidade</p>
+    <button type="button" class="btn nav-toggle" id="nav-toggle" aria-expanded="false" aria-controls="nav">Menu</button>
+    <nav id="nav" class="nav">
+      <a href="#/" data-nav="home">Início</a>
+      <a href="#/projetos" data-nav="projetos">Projetos</a>
+      <a href="#/geral" data-nav="geral">Checklist geral</a>
+      <a href="#/tipos" data-nav="tipos">Mini-checklists</a>
+      <a href="#/modelos" data-nav="modelos">Modelos</a>
+      <a href="#/pendencias" data-nav="pendencias">Pendências <span id="pending-count" class="count" hidden>0</span></a>
+    </nav>
+    <label class="who">
+      <span>Quem está usando</span>
+      <select id="current-user" aria-label="Quem está usando"></select>
+    </label>
+  </header>
+  <div id="toast" class="toast" role="status" aria-live="assertive" hidden></div>
+  <main id="main" tabindex="-1">
+    <p class="page">Carregando o checklist…</p>
+  </main>
+  <footer class="footer">
+    <p>Lunardeli Engenharia — Gestão e Qualidade de Projetos Estruturais. Este protótipo abre em HTML, guarda os checklists no localStorage e os arquivos no IndexedDB deste navegador. Não usa Supabase, não analisa a estrutura por conta própria e não emite assinatura digital.</p>
+  </footer>
+  <div id="lightbox" class="lightbox" hidden>
+    <div class="lightbox-backdrop" data-action="close-lightbox"></div>
+    <div class="lightbox-dialog" role="dialog" aria-modal="true" aria-labelledby="lightbox-title">
+      <button type="button" class="btn icon-btn" id="lightbox-close" data-action="close-lightbox">Fechar</button>
+      <h2 id="lightbox-title">Como é feito</h2>
+      <div id="lightbox-body"></div>
+    </div>
+  </div>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="js/domain.js"></script>
+  <script src="js/seed.js"></script>
+  <script src="js/store.js"></script>
+  <script src="js/pdf.js"></script>
+  <script src="js/ui.js"></script>
+</body>
+</html>

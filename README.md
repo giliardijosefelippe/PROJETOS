@@ -69,6 +69,17 @@ Defina `CAD_CONVERT_URL=http://127.0.0.1:8091` no `.env.local`.
 
 Abra [http://localhost:3000](http://localhost:3000).
 
+## Protótipo HTML (`checklist-pranchas/`)
+
+Versão estática para abrir no navegador, sem build e sem Supabase. Não substitui o aplicativo Next.js.
+
+```bash
+# na pasta do repositório
+python3 -m http.server 8765 --directory checklist-pranchas
+```
+
+Abra `http://127.0.0.1:8765/` (ou dê duplo clique em `checklist-pranchas/index.html`). Os checklists ficam no `localStorage`. PDF, imagem e vídeo enviados ficam no IndexedDB deste navegador. O conteúdo inicial é exemplo didático e pode ser editado na própria tela. Detalhes em [`checklist-pranchas/README.md`](./checklist-pranchas/README.md).
+
 ### Seed (demo Forma / Vigas / Lajes)
 
 Com `.env.local` e migrations aplicadas:
