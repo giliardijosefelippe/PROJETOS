@@ -1,0 +1,1023 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#1a1f24" />
+  <meta name="description" content="Conferência de armadura in loco — marcar PDF, relatório OK/risco." />
+  <title>Conf. Armadura</title>
+  <style>
+    :root {
+      --bg: #12161a;
+      --surface: #1a1f24;
+      --surface-2: #242b33;
+      --border: #3a4550;
+      --text: #f2f4f6;
+      --muted: #a8b2bc;
+      --accent: #e00024;
+      --ok: #1f9d55;
+      --risk: #e8a317;
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+      --safe-top: env(safe-area-inset-top, 0px);
+      --toolbar-h: 132px;
+      --top-h: 56px;
+      --touch: 48px;
+      font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body {
+      margin: 0; height: 100%; background: var(--bg); color: var(--text);
+      overflow: hidden; touch-action: none;
+    }
+    #app {
+      display: grid;
+      grid-template-rows: calc(var(--top-h) + var(--safe-top)) 1fr calc(var(--toolbar-h) + var(--safe-bottom));
+      height: 100%; height: 100dvh;
+    }
+    .top-bar {
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
+      padding: calc(8px + var(--safe-top)) 12px 8px;
+      background: linear-gradient(180deg, #1c232b 0%, #151a1f 100%);
+      border-bottom: 1px solid var(--border); z-index: 5;
+    }
+    .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .brand-mark {
+      width: 28px; height: 28px; border-radius: 6px; flex-shrink: 0;
+      background: linear-gradient(135deg, var(--accent), #8a0016);
+    }
+    .brand-text { display: flex; flex-direction: column; min-width: 0; }
+    .brand-text strong { font-size: 15px; line-height: 1.1; }
+    .brand-text span {
+      font-size: 11px; color: var(--muted); white-space: nowrap;
+      overflow: hidden; text-overflow: ellipsis; max-width: 42vw;
+    }
+    .top-actions { display: flex; align-items: center; gap: 8px; }
+    .chip, .icon-btn, .tool, .action, .primary, .secondary, .file-btn {
+      border: 1px solid var(--border); background: var(--surface-2); color: var(--text);
+      font-weight: 700; cursor: pointer;
+    }
+    .chip {
+      min-height: 40px; padding: 0 12px; border-radius: 999px;
+      font-size: 12px; color: var(--muted);
+    }
+    .chip.on { color: #102016; background: #7ddea8; border-color: #4caf78; }
+    .chip.accent-chip { color: #fff; background: var(--accent); border-color: #ff3b57; }
+    .icon-btn {
+      width: var(--touch); height: var(--touch); border-radius: 12px; font-size: 22px;
+    }
+    .stage {
+      position: relative; overflow: hidden;
+      background:
+        radial-gradient(circle at 20% 10%, rgba(224, 0, 36, 0.08), transparent 40%),
+        linear-gradient(180deg, #0e1216, #171c22 55%, #101418);
+    }
+    .viewport { width: 100%; height: 100%; overflow: hidden; position: relative; touch-action: none; }
+    .scene { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; }
+    #pdf-canvas, #anno-canvas { position: absolute; left: 0; top: 0; display: block; }
+    #anno-canvas { z-index: 2; }
+    .hint {
+      position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+      background: rgba(18, 22, 26, 0.85); border: 1px solid var(--border);
+      padding: 12px 16px; border-radius: 10px; color: var(--muted);
+      font-size: 14px; pointer-events: none; z-index: 3; max-width: 80vw; text-align: center;
+    }
+    .hint[hidden] { display: none !important; }
+    .toolbar {
+      background: #151a1f; border-top: 1px solid var(--border);
+      padding: 8px 8px calc(8px + var(--safe-bottom));
+      display: flex; flex-direction: column; gap: 8px; z-index: 5;
+    }
+    .tool-row { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+    .tool-row::-webkit-scrollbar { display: none; }
+    .tool, .action {
+      flex: 0 0 auto; min-height: var(--touch); min-width: 64px; border-radius: 12px;
+      font-size: 12px; display: inline-flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 2px; padding: 6px 10px;
+    }
+    .secondary-row .action, .file-btn {
+      flex-direction: row; min-width: auto; padding: 0 14px; font-size: 13px;
+    }
+    .tool[aria-pressed="true"] {
+      background: #2c3640; border-color: #7f93a8;
+    }
+    .tool[data-tool="ok"][aria-pressed="true"] { background: #184a2d; border-color: var(--ok); }
+    .tool[data-tool="risk"][aria-pressed="true"] { background: #4a3810; border-color: var(--risk); }
+    .tool-icon { font-size: 18px; line-height: 1; }
+    .tool-icon.ok { color: #7ddea8; }
+    .tool-icon.risk { color: #ffcc66; font-weight: 900; }
+    .action.accent { background: var(--accent); border-color: #ff3b57; color: #fff; }
+    .action.danger { color: #ffc9c9; border-color: #7a3030; }
+    .file-btn { display: inline-flex; align-items: center; justify-content: center; }
+    .report-panel {
+      position: fixed; left: 0; right: 0; bottom: 0; max-height: min(72vh, 640px);
+      background: var(--surface); border-top: 1px solid var(--border); z-index: 40;
+      display: flex; flex-direction: column; padding-bottom: var(--safe-bottom);
+      box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.45);
+    }
+    .report-panel[hidden] { display: none !important; }
+    .report-head {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 14px; border-bottom: 1px solid var(--border);
+    }
+    .report-head h2 { margin: 0; font-size: 18px; }
+    .report-body {
+      overflow: auto; padding: 12px 14px 8px; font-size: 14px;
+      line-height: 1.45; min-height: 140px; flex: 1;
+    }
+    .report-body .summary {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px;
+    }
+    .report-body .stat {
+      background: var(--surface-2); border: 1px solid var(--border);
+      border-radius: 10px; padding: 10px; text-align: center;
+    }
+    .report-body .stat strong { display: block; font-size: 22px; }
+    .report-body .stat span { color: var(--muted); font-size: 12px; }
+    .report-body .stat.ok strong { color: #7ddea8; }
+    .report-body .stat.risk strong { color: #ffcc66; }
+    .report-body h3 {
+      margin: 12px 0 6px; font-size: 13px; text-transform: uppercase;
+      letter-spacing: 0.06em; color: var(--muted);
+    }
+    .report-body ul { margin: 0; padding-left: 18px; }
+    .report-body li { margin-bottom: 6px; }
+    .report-actions { display: flex; gap: 8px; padding: 10px 14px 14px; }
+    .primary, .secondary {
+      min-height: 44px; border-radius: 10px; padding: 0 14px; font-size: 14px;
+    }
+    .primary { background: var(--accent); border-color: #ff3b57; color: #fff; flex: 1; }
+    .modal {
+      position: fixed; inset: 0; background: rgba(0, 0, 0, 0.55);
+      display: grid; place-items: end center; z-index: 50; padding: 16px;
+    }
+    .modal[hidden] { display: none !important; }
+    .modal-card {
+      width: min(480px, 100%); background: var(--surface); border: 1px solid var(--border);
+      border-radius: 14px; padding: 14px; margin-bottom: calc(var(--toolbar-h) + var(--safe-bottom));
+    }
+    .modal-card h3 { margin: 0 0 10px; font-size: 16px; }
+    .modal-card textarea {
+      width: 100%; border-radius: 10px; border: 1px solid var(--border);
+      background: #0f1317; color: var(--text); padding: 12px; font-size: 16px; resize: vertical;
+    }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <header class="top-bar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <div class="brand-text">
+          <strong>Conf. Armadura</strong>
+          <span id="doc-label">Abra um PDF</span>
+        </div>
+      </div>
+      <div class="top-actions">
+        <button type="button" id="btn-wake" class="chip on" aria-pressed="true">Tela ligada</button>
+        <button type="button" id="btn-rotate" class="icon-btn" title="Girar 90°">⟳</button>
+        <button type="button" id="btn-report-top" class="chip accent-chip" onclick="window.__openConfReport && window.__openConfReport(event)">Relatório</button>
+      </div>
+    </header>
+
+    <main class="stage">
+      <div id="viewport" class="viewport">
+        <div id="scene" class="scene">
+          <canvas id="pdf-canvas"></canvas>
+          <canvas id="anno-canvas"></canvas>
+        </div>
+      </div>
+      <div id="hint" class="hint">Carregando…</div>
+    </main>
+
+    <aside id="report-panel" class="report-panel" hidden>
+      <div class="report-head">
+        <h2>Relatório</h2>
+        <button type="button" id="btn-close-report" class="icon-btn" onclick="window.__closeConfReport && window.__closeConfReport()">✕</button>
+      </div>
+      <div id="report-body" class="report-body"></div>
+      <div class="report-actions">
+        <button type="button" id="btn-export-html" class="primary">Exportar HTML</button>
+        <button type="button" id="btn-export-text" class="secondary">Copiar texto</button>
+        <button type="button" id="btn-share" class="secondary">Compartilhar</button>
+      </div>
+    </aside>
+
+    <div id="text-modal" class="modal" hidden>
+      <div class="modal-card">
+        <h3 id="text-modal-title">Nota no PDF</h3>
+        <textarea id="text-input" rows="3" placeholder="Descreva o trecho ou o risco…" maxlength="500"></textarea>
+        <div class="modal-actions">
+          <button type="button" id="btn-text-cancel" class="secondary">Cancelar</button>
+          <button type="button" id="btn-text-ok" class="primary">Salvar</button>
+        </div>
+      </div>
+    </div>
+
+    <nav class="toolbar" aria-label="Ferramentas">
+      <div class="tool-row primary-row">
+        <button type="button" class="tool" data-tool="pan" aria-pressed="true"><span class="tool-icon">✥</span><span>Mover</span></button>
+        <button type="button" class="tool" data-tool="stroke"><span class="tool-icon">╱</span><span>Riscar</span></button>
+        <button type="button" class="tool" data-tool="ok"><span class="tool-icon ok">✓</span><span>OK</span></button>
+        <button type="button" class="tool" data-tool="risk"><span class="tool-icon risk">!</span><span>Risco</span></button>
+        <button type="button" class="tool" data-tool="arrow"><span class="tool-icon">➜</span><span>Seta</span></button>
+        <button type="button" class="tool" data-tool="note"><span class="tool-icon">T</span><span>Nota</span></button>
+      </div>
+      <div class="tool-row secondary-row">
+        <button type="button" id="btn-undo" class="action">Desfazer</button>
+        <button type="button" id="btn-clear" class="action danger">Limpar</button>
+        <label class="action file-btn">Abrir PDF<input type="file" id="file-input" accept="application/pdf,.pdf" hidden /></label>
+        <button type="button" id="btn-demo" class="action">Demo</button>
+        <button type="button" id="btn-report" class="action accent" onclick="window.__openConfReport && window.__openConfReport(event)">Relatório</button>
+      </div>
+    </nav>
+  </div>
+
+  <!-- PDF.js (CDN). Precisa de internet na 1ª abertura; depois o navegador costuma cachear. -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script>
+(function () {
+  "use strict";
+
+  var DEMO_PDF = "demo-pilares-vigas.pdf";
+  var DEMO_LABEL = "2330_GAR PILARES E VIGAS — Sanluzzi Selenza Rev01";
+  var PDFJS_VER = "3.11.174";
+
+  if (window.pdfjsLib) {
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/" + PDFJS_VER + "/pdf.worker.min.js";
+  }
+
+  function uid() {
+    if (crypto && crypto.randomUUID) return crypto.randomUUID();
+    return "id-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 9);
+  }
+
+  function createAnnotationStore() {
+    var items = [];
+    var draft = null;
+    return {
+      list: function () { return items.slice(); },
+      clear: function () { items = []; draft = null; },
+      undo: function () {
+        if (draft) { draft = null; return true; }
+        if (!items.length) return false;
+        items.pop();
+        return true;
+      },
+      getDraft: function () { return draft; },
+      setDraft: function (v) { draft = v; },
+      commitDraft: function () {
+        if (!draft) return null;
+        var item = Object.assign({}, draft, { id: uid(), createdAt: new Date().toISOString() });
+        items.push(item);
+        draft = null;
+        return item;
+      },
+      add: function (item) {
+        var full = Object.assign({}, item, { id: uid(), createdAt: new Date().toISOString() });
+        items.push(full);
+        return full;
+      },
+      summarize: function () {
+        return {
+          ok: items.filter(function (i) { return i.kind === "ok"; }),
+          risk: items.filter(function (i) { return i.kind === "risk"; }),
+          notes: items.filter(function (i) { return i.kind === "note"; }),
+          arrows: items.filter(function (i) { return i.kind === "arrow"; }),
+          strokes: items.filter(function (i) { return i.kind === "stroke"; }),
+          total: items.length
+        };
+      }
+    };
+  }
+
+  function paintAnnotations(ctx, items, draft) {
+    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    var all = draft ? items.concat([draft]) : items;
+    for (var i = 0; i < all.length; i++) paintOne(ctx, all[i]);
+  }
+
+  function paintOne(ctx, item) {
+    var kind = item.kind;
+    ctx.save();
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    if (kind === "stroke") {
+      var points = item.points || [];
+      if (points.length < 2) { ctx.restore(); return; }
+      ctx.strokeStyle = item.mode === "risk" ? "#e8a317" : item.mode === "ok" ? "#1f9d55" : "#2f80ed";
+      ctx.lineWidth = Math.max(2, item.width || 3);
+      ctx.beginPath();
+      ctx.moveTo(points[0].x, points[0].y);
+      for (var p = 1; p < points.length; p++) ctx.lineTo(points[p].x, points[p].y);
+      ctx.stroke();
+    } else if (kind === "ok") {
+      var x = item.x, y = item.y, s = 14;
+      ctx.strokeStyle = "#1f9d55";
+      ctx.fillStyle = "rgba(31,157,85,0.18)";
+      ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(x, y, s, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(x - 6, y); ctx.lineTo(x - 1, y + 6); ctx.lineTo(x + 8, y - 7);
+      ctx.stroke();
+    } else if (kind === "risk") {
+      x = item.x; y = item.y; s = 16;
+      ctx.fillStyle = "rgba(232,163,23,0.22)";
+      ctx.strokeStyle = "#e8a317";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(x, y - s);
+      ctx.lineTo(x + s * 0.9, y + s * 0.75);
+      ctx.lineTo(x - s * 0.9, y + s * 0.75);
+      ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = "#2a1f05";
+      ctx.font = "bold 14px sans-serif";
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText("!", x, y + 2);
+    } else if (kind === "arrow") {
+      var x1 = item.x1, y1 = item.y1, x2 = item.x2, y2 = item.y2;
+      var color = item.mode === "ok" ? "#1f9d55" : "#e8a317";
+      ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 3.5;
+      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+      var angle = Math.atan2(y2 - y1, x2 - x1), head = 12;
+      ctx.beginPath();
+      ctx.moveTo(x2, y2);
+      ctx.lineTo(x2 - head * Math.cos(angle - 0.4), y2 - head * Math.sin(angle - 0.4));
+      ctx.lineTo(x2 - head * Math.cos(angle + 0.4), y2 - head * Math.sin(angle + 0.4));
+      ctx.closePath(); ctx.fill();
+    } else if (kind === "note") {
+      x = item.x; y = item.y;
+      var text = String(item.text || "");
+      var bg = item.mode === "ok" ? "rgba(31,157,85,0.92)" : "rgba(232,163,23,0.95)";
+      var fg = item.mode === "ok" ? "#d8ffe8" : "#2a1f05";
+      ctx.font = "bold 12px sans-serif";
+      var pad = 6;
+      var w = Math.max(40, ctx.measureText(text || " ").width + pad * 2);
+      var h = 22;
+      ctx.fillStyle = bg;
+      roundRect(ctx, x, y - h, w, h, 4); ctx.fill();
+      ctx.fillStyle = fg; ctx.textBaseline = "middle";
+      ctx.fillText(text, x + pad, y - h / 2);
+    }
+    ctx.restore();
+  }
+
+  function roundRect(ctx, x, y, w, h, r) {
+    var radius = Math.min(r, w / 2, h / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + radius, y);
+    ctx.arcTo(x + w, y, x + w, y + h, radius);
+    ctx.arcTo(x + w, y + h, x, y + h, radius);
+    ctx.arcTo(x, y + h, x, y, radius);
+    ctx.arcTo(x, y, x + w, y, radius);
+    ctx.closePath();
+  }
+
+  function fmtTime(iso) {
+    try { return new Date(iso).toLocaleString("pt-BR"); } catch (e) { return iso || "—"; }
+  }
+
+  function labelFor(item) {
+    if (item.kind === "ok") return "Trecho OK";
+    if (item.kind === "risk") return "Risco / problema";
+    if (item.kind === "note") return item.mode === "ok" ? "Nota OK" : "Nota de risco";
+    if (item.kind === "arrow") return item.mode === "ok" ? "Seta OK" : "Seta risco";
+    if (item.kind === "stroke") {
+      if (item.mode === "ok") return "Traço OK";
+      if (item.mode === "risk") return "Traço problema";
+      return "Traço / risco no desenho";
+    }
+    return item.kind;
+  }
+
+  function escapeHtml(value) {
+    return String(value)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+
+  function buildReportModel(docName, annotations) {
+    var summary = annotations.summarize();
+    var items = annotations.list();
+    return {
+      title: "Relatório de conferência de armadura",
+      docName: docName || "PDF sem nome",
+      generatedAt: new Date().toISOString(),
+      counts: {
+        ok: summary.ok.length,
+        risk: summary.risk.length
+          + summary.notes.filter(function (n) { return n.mode !== "ok"; }).length
+          + summary.arrows.filter(function (a) { return a.mode !== "ok"; }).length
+          + summary.strokes.filter(function (s) { return s.mode === "risk"; }).length,
+        notes: summary.notes.length,
+        arrows: summary.arrows.length,
+        strokes: summary.strokes.length,
+        total: summary.total
+      },
+      risks: items.filter(function (i) {
+        return i.kind === "risk"
+          || (i.kind === "note" && i.mode !== "ok")
+          || (i.kind === "arrow" && i.mode !== "ok")
+          || (i.kind === "stroke" && i.mode === "risk");
+      }),
+      oks: items.filter(function (i) {
+        return i.kind === "ok"
+          || (i.kind === "note" && i.mode === "ok")
+          || (i.kind === "arrow" && i.mode === "ok")
+          || (i.kind === "stroke" && i.mode === "ok");
+      }),
+      notes: summary.notes,
+      arrows: summary.arrows
+    };
+  }
+
+  function renderReportHtmlFragment(model) {
+    var riskLis = model.risks.map(function (r, idx) {
+      var detail = r.text ? " — " + escapeHtml(String(r.text)) : "";
+      return "<li><strong>#" + (idx + 1) + "</strong> " + escapeHtml(labelFor(r)) + detail
+        + " <em>(" + escapeHtml(fmtTime(r.createdAt)) + ")</em></li>";
+    }).join("");
+    var okLis = model.oks.map(function (r, idx) {
+      var detail = r.text ? " — " + escapeHtml(String(r.text)) : "";
+      return "<li><strong>#" + (idx + 1) + "</strong> " + escapeHtml(labelFor(r)) + detail + "</li>";
+    }).join("");
+    var noteLis = model.notes.map(function (r) {
+      return "<li>" + escapeHtml(String(r.text || "(vazia)")) + " <em>(" + escapeHtml(labelFor(r)) + ")</em></li>";
+    }).join("");
+    return ''
+      + '<div class="summary">'
+      + '<div class="stat ok"><strong>' + model.counts.ok + '</strong><span>Trechos OK</span></div>'
+      + '<div class="stat risk"><strong>' + model.counts.risk + '</strong><span>Riscos</span></div>'
+      + '<div class="stat"><strong>' + model.counts.total + '</strong><span>Marcações</span></div>'
+      + '</div>'
+      + '<p><strong>Documento:</strong> ' + escapeHtml(model.docName) + '<br/>'
+      + '<strong>Gerado em:</strong> ' + escapeHtml(fmtTime(model.generatedAt)) + '</p>'
+      + '<h3>Riscos / problemas</h3>'
+      + (riskLis ? '<ul>' + riskLis + '</ul>' : '<p>Nenhum risco marcado.</p>')
+      + '<h3>Trechos OK</h3>'
+      + (okLis ? '<ul>' + okLis + '</ul>' : '<p>Nenhum trecho OK marcado.</p>')
+      + '<h3>Notas de texto</h3>'
+      + (noteLis ? '<ul>' + noteLis + '</ul>' : '<p>Sem notas.</p>')
+      + '<h3>Setas</h3>'
+      + '<p>' + model.counts.arrows + ' seta(s) · ' + model.counts.strokes + ' traço(s)</p>';
+  }
+
+  function buildPlainTextReport(model) {
+    var lines = [
+      model.title,
+      "Documento: " + model.docName,
+      "Gerado em: " + fmtTime(model.generatedAt),
+      "",
+      "Resumo: " + model.counts.ok + " OK · " + model.counts.risk + " riscos · " + model.counts.total + " marcações",
+      "",
+      "RISCOS / PROBLEMAS"
+    ];
+    if (!model.risks.length) lines.push("- Nenhum");
+    model.risks.forEach(function (r, i) {
+      lines.push((i + 1) + ". " + labelFor(r) + (r.text ? " — " + r.text : "") + " (" + fmtTime(r.createdAt) + ")");
+    });
+    lines.push("", "TRECHOS OK");
+    if (!model.oks.length) lines.push("- Nenhum");
+    model.oks.forEach(function (r, i) {
+      lines.push((i + 1) + ". " + labelFor(r) + (r.text ? " — " + r.text : ""));
+    });
+    lines.push("", "NOTAS");
+    if (!model.notes.length) lines.push("- Nenhuma");
+    model.notes.forEach(function (r) {
+      lines.push("- " + (r.text || "(vazia)") + " [" + labelFor(r) + "]");
+    });
+    lines.push("", "Setas: " + model.counts.arrows + " · Traços: " + model.counts.strokes);
+    return lines.join("\n");
+  }
+
+  function buildExportableHtmlDocument(model) {
+    return "<!DOCTYPE html><html lang=\"pt-BR\"><head><meta charset=\"UTF-8\" /><title>"
+      + escapeHtml(model.title) + "</title>"
+      + "<style>body{font-family:system-ui,sans-serif;margin:24px}h1{font-size:1.4rem}"
+      + ".cards{display:flex;gap:12px;flex-wrap:wrap}.card{border:1px solid #ccc;border-radius:8px;padding:12px 16px}"
+      + ".ok{color:#147a3d}.risk{color:#9a6b00}</style></head><body>"
+      + "<h1>" + escapeHtml(model.title) + "</h1>"
+      + "<p><strong>Documento:</strong> " + escapeHtml(model.docName) + "<br/>"
+      + "<strong>Gerado em:</strong> " + escapeHtml(fmtTime(model.generatedAt)) + "</p>"
+      + '<div class="cards">'
+      + '<div class="card ok"><strong>' + model.counts.ok + '</strong><br/>Trechos OK</div>'
+      + '<div class="card risk"><strong>' + model.counts.risk + '</strong><br/>Riscos</div>'
+      + '<div class="card"><strong>' + model.counts.total + '</strong><br/>Marcações</div>'
+      + "</div>"
+      + renderReportHtmlFragment(model).replace(/<div class="summary">[\s\S]*?<\/div>\s*<p><strong>Documento:[\s\S]*?<\/p>/, "")
+      + "</body></html>";
+  }
+
+  /* ---- Wake lock ---- */
+  var wakeEnabled = true;
+  var wakeLock = null;
+
+  function isWakeEnabled() { return wakeEnabled; }
+
+  function setWakeEnabled(on) {
+    wakeEnabled = !!on;
+    if (!wakeEnabled) {
+      if (wakeLock) {
+        try { wakeLock.release(); } catch (e) {}
+        wakeLock = null;
+      }
+      return Promise.resolve({ ok: true, mode: "off" });
+    }
+    if (!("wakeLock" in navigator)) {
+      return Promise.resolve({ ok: false, mode: "unsupported" });
+    }
+    return navigator.wakeLock.request("screen").then(function (lock) {
+      wakeLock = lock;
+      wakeLock.addEventListener("release", function () { wakeLock = null; });
+      return { ok: true, mode: "wake-lock" };
+    }).catch(function (err) {
+      return { ok: false, mode: "error", error: err };
+    });
+  }
+
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "visible" && wakeEnabled) setWakeEnabled(true);
+  });
+
+  /* ---- App state / UI ---- */
+  var els = {
+    viewport: document.getElementById("viewport"),
+    scene: document.getElementById("scene"),
+    pdfCanvas: document.getElementById("pdf-canvas"),
+    annoCanvas: document.getElementById("anno-canvas"),
+    hint: document.getElementById("hint"),
+    docLabel: document.getElementById("doc-label"),
+    btnWake: document.getElementById("btn-wake"),
+    btnRotate: document.getElementById("btn-rotate"),
+    btnUndo: document.getElementById("btn-undo"),
+    btnClear: document.getElementById("btn-clear"),
+    btnDemo: document.getElementById("btn-demo"),
+    fileInput: document.getElementById("file-input"),
+    reportPanel: document.getElementById("report-panel"),
+    reportBody: document.getElementById("report-body"),
+    btnExportHtml: document.getElementById("btn-export-html"),
+    btnExportText: document.getElementById("btn-export-text"),
+    btnShare: document.getElementById("btn-share"),
+    textModal: document.getElementById("text-modal"),
+    textInput: document.getElementById("text-input"),
+    textModalTitle: document.getElementById("text-modal-title"),
+    btnTextCancel: document.getElementById("btn-text-cancel"),
+    btnTextOk: document.getElementById("btn-text-ok"),
+    tools: Array.prototype.slice.call(document.querySelectorAll(".tool[data-tool]"))
+  };
+
+  var state = {
+    tool: "pan",
+    contentMode: "risk",
+    pdf: null,
+    docName: DEMO_LABEL,
+    pageInfo: null,
+    viewRotation: 0,
+    scale: 1,
+    tx: 0,
+    ty: 0,
+    pointers: new Map(),
+    pinching: false,
+    drawing: false,
+    panStart: null,
+    pinch: null,
+    notePending: null,
+    lastReportModel: null
+  };
+
+  var annotations = createAnnotationStore();
+
+  function setHint(text) {
+    if (!text) { els.hint.hidden = true; els.hint.textContent = ""; return; }
+    els.hint.hidden = false;
+    els.hint.textContent = text;
+  }
+
+  function applySceneTransform() {
+    var rot = state.viewRotation || 0;
+    var pw = (state.pageInfo && state.pageInfo.cssWidth) || 0;
+    var ph = (state.pageInfo && state.pageInfo.cssHeight) || 0;
+    var cx = pw / 2, cy = ph / 2;
+    els.scene.style.transformOrigin = "0 0";
+    els.scene.style.transform =
+      "translate(" + state.tx + "px, " + state.ty + "px) scale(" + state.scale + ") "
+      + "translate(" + cx + "px, " + cy + "px) rotate(" + rot + "deg) "
+      + "translate(" + (-cx) + "px, " + (-cy) + "px)";
+  }
+
+  function redrawAnnotations() {
+    var ctx = els.annoCanvas.getContext("2d");
+    if (!ctx || !state.pageInfo) return;
+    paintAnnotations(ctx, annotations.list(), annotations.getDraft());
+  }
+
+  function syncAnnoCanvas() {
+    if (!state.pageInfo) return;
+    var cssWidth = state.pageInfo.cssWidth, cssHeight = state.pageInfo.cssHeight;
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    els.annoCanvas.width = Math.floor(cssWidth * dpr);
+    els.annoCanvas.height = Math.floor(cssHeight * dpr);
+    els.annoCanvas.style.width = cssWidth + "px";
+    els.annoCanvas.style.height = cssHeight + "px";
+    var ctx = els.annoCanvas.getContext("2d");
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    redrawAnnotations();
+  }
+
+  function setTool(tool) {
+    state.tool = tool;
+    if (tool === "ok") state.contentMode = "ok";
+    if (tool === "risk") state.contentMode = "risk";
+    els.tools.forEach(function (btn) {
+      btn.setAttribute("aria-pressed", String(btn.getAttribute("data-tool") === tool));
+    });
+  }
+
+  function clientToPage(clientX, clientY) {
+    var rect = els.viewport.getBoundingClientRect();
+    var vx = clientX - rect.left, vy = clientY - rect.top;
+    var pw = (state.pageInfo && state.pageInfo.cssWidth) || 0;
+    var ph = (state.pageInfo && state.pageInfo.cssHeight) || 1;
+    var cx = pw / 2, cy = ph / 2;
+    var lx = (vx - state.tx) / state.scale;
+    var ly = (vy - state.ty) / state.scale;
+    var dx = lx - cx, dy = ly - cy;
+    var rad = (-(state.viewRotation || 0) * Math.PI) / 180;
+    return {
+      x: cx + dx * Math.cos(rad) - dy * Math.sin(rad),
+      y: cy + dx * Math.sin(rad) + dy * Math.cos(rad)
+    };
+  }
+
+  function centerPage() {
+    if (!state.pageInfo) return;
+    var vw = els.viewport.clientWidth, vh = els.viewport.clientHeight;
+    var pw = state.pageInfo.cssWidth, ph = state.pageInfo.cssHeight;
+    var rotated = Math.abs(state.viewRotation % 180) === 90;
+    var visualW = rotated ? ph : pw;
+    var visualH = rotated ? pw : ph;
+    state.scale = Math.min(vw / visualW, vh / visualH) * 0.96;
+    state.tx = vw / 2 - (pw / 2) * state.scale;
+    state.ty = vh / 2 - (ph / 2) * state.scale;
+    applySceneTransform();
+  }
+
+  function clamp(n, min, max) { return Math.max(min, Math.min(max, n)); }
+
+  async function renderPage(pdf) {
+    var page = await pdf.getPage(1);
+    var baseScale = 1.75;
+    var viewport = page.getViewport({ scale: baseScale, rotation: 0 });
+    var outputScale = Math.min(window.devicePixelRatio || 1, 2);
+    els.pdfCanvas.width = Math.floor(viewport.width * outputScale);
+    els.pdfCanvas.height = Math.floor(viewport.height * outputScale);
+    els.pdfCanvas.style.width = Math.floor(viewport.width) + "px";
+    els.pdfCanvas.style.height = Math.floor(viewport.height) + "px";
+    var ctx = els.pdfCanvas.getContext("2d", { alpha: false });
+    var transform = outputScale !== 1 ? [outputScale, 0, 0, outputScale, 0, 0] : null;
+    await page.render({ canvasContext: ctx, viewport: viewport, transform: transform }).promise;
+    state.pageInfo = {
+      cssWidth: viewport.width,
+      cssHeight: viewport.height
+    };
+    els.scene.style.width = viewport.width + "px";
+    els.scene.style.height = viewport.height + "px";
+    syncAnnoCanvas();
+  }
+
+  async function openPdfBytes(bytes, label) {
+    if (!window.pdfjsLib) {
+      setHint("PDF.js não carregou. Verifique a internet (CDN) e recarregue.");
+      return;
+    }
+    setHint("Carregando prancha…");
+    try {
+      state.pdf = await pdfjsLib.getDocument({ data: bytes, useSystemFonts: true, isEvalSupported: false }).promise;
+      state.docName = label;
+      els.docLabel.textContent = label;
+      annotations.clear();
+      state.viewRotation = 0;
+      await renderPage(state.pdf);
+      centerPage();
+      setHint("Toque: marque OK / risco. Dois dedos: zoom.");
+      setTimeout(function () { setHint(""); }, 2800);
+    } catch (err) {
+      console.error(err);
+      setHint("Falha ao abrir o PDF. Tente outro arquivo.");
+    }
+  }
+
+  async function tryLoadDemo() {
+    setHint("Carregando PDF demo…");
+    try {
+      var res = await fetch(DEMO_PDF);
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      var buf = await res.arrayBuffer();
+      await openPdfBytes(new Uint8Array(buf), DEMO_LABEL);
+    } catch (err) {
+      console.warn(err);
+      setHint("Abra o arquivo demo-pilares-vigas.pdf (ao lado deste HTML) pelo botão Abrir PDF, ou use Demo se estiver em servidor local.");
+    }
+  }
+
+  function startStroke(point) {
+    annotations.setDraft({ kind: "stroke", mode: state.contentMode, width: 3, points: [point] });
+    state.drawing = true;
+    redrawAnnotations();
+  }
+  function extendStroke(point) {
+    var draft = annotations.getDraft();
+    if (!draft || draft.kind !== "stroke") return;
+    var pts = draft.points, last = pts[pts.length - 1];
+    if (!last || Math.hypot(point.x - last.x, point.y - last.y) < 1.2) return;
+    pts.push(point);
+    redrawAnnotations();
+  }
+  function endStroke() {
+    var draft = annotations.getDraft();
+    if (draft && draft.kind === "stroke" && draft.points && draft.points.length > 1) annotations.commitDraft();
+    else annotations.setDraft(null);
+    state.drawing = false;
+    redrawAnnotations();
+  }
+  function placeStamp(kind, point) {
+    annotations.add({ kind: kind, x: point.x, y: point.y });
+    redrawAnnotations();
+  }
+  function startArrow(point) {
+    annotations.setDraft({ kind: "arrow", mode: state.contentMode, x1: point.x, y1: point.y, x2: point.x, y2: point.y });
+    state.drawing = true;
+    redrawAnnotations();
+  }
+  function updateArrow(point) {
+    var draft = annotations.getDraft();
+    if (!draft || draft.kind !== "arrow") return;
+    draft.x2 = point.x; draft.y2 = point.y;
+    redrawAnnotations();
+  }
+  function endArrow() {
+    var draft = annotations.getDraft();
+    if (draft && draft.kind === "arrow") {
+      if (Math.hypot(draft.x2 - draft.x1, draft.y2 - draft.y1) > 8) annotations.commitDraft();
+      else annotations.setDraft(null);
+    }
+    state.drawing = false;
+    redrawAnnotations();
+  }
+  function openNoteModal(point) {
+    state.notePending = point;
+    els.textModalTitle.textContent = state.contentMode === "ok" ? "Nota OK no PDF" : "Nota de risco no PDF";
+    els.textInput.value = "";
+    els.textModal.hidden = false;
+    setTimeout(function () { els.textInput.focus(); }, 50);
+  }
+  function closeNoteModal() {
+    els.textModal.hidden = true;
+    state.notePending = null;
+  }
+  function saveNote() {
+    var text = els.textInput.value.trim();
+    if (!text || !state.notePending) { closeNoteModal(); return; }
+    annotations.add({ kind: "note", mode: state.contentMode, x: state.notePending.x, y: state.notePending.y, text: text });
+    closeNoteModal();
+    redrawAnnotations();
+  }
+
+  function onPointerDown(e) {
+    try { els.viewport.setPointerCapture(e.pointerId); } catch (err) {}
+    state.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (state.pointers.size === 2) {
+      state.pinching = true;
+      state.drawing = false;
+      annotations.setDraft(null);
+      var pts = Array.from(state.pointers.values());
+      var a = pts[0], b = pts[1];
+      state.pinch = {
+        dist: Math.hypot(a.x - b.x, a.y - b.y),
+        scale: state.scale,
+        tx: state.tx,
+        ty: state.ty
+      };
+      return;
+    }
+    if (state.tool === "pan" || e.button === 1) {
+      state.panStart = { x: e.clientX, y: e.clientY, tx: state.tx, ty: state.ty };
+      return;
+    }
+    var point = clientToPage(e.clientX, e.clientY);
+    if (state.tool === "stroke") startStroke(point);
+    else if (state.tool === "arrow") startArrow(point);
+    else if (state.tool === "ok") placeStamp("ok", point);
+    else if (state.tool === "risk") placeStamp("risk", point);
+    else if (state.tool === "note") openNoteModal(point);
+  }
+
+  function onPointerMove(e) {
+    if (!state.pointers.has(e.pointerId)) return;
+    state.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (state.pinching && state.pointers.size >= 2) {
+      var pts = Array.from(state.pointers.values());
+      var a = pts[0], b = pts[1];
+      var dist = Math.hypot(a.x - b.x, a.y - b.y);
+      var midX = (a.x + b.x) / 2, midY = (a.y + b.y) / 2;
+      var ratio = dist / Math.max(1, state.pinch.dist);
+      var nextScale = clamp(state.pinch.scale * ratio, 0.35, 8);
+      var rect = els.viewport.getBoundingClientRect();
+      var localMidX = midX - rect.left, localMidY = midY - rect.top;
+      var worldX = (localMidX - state.pinch.tx) / state.pinch.scale;
+      var worldY = (localMidY - state.pinch.ty) / state.pinch.scale;
+      state.scale = nextScale;
+      state.tx = localMidX - worldX * nextScale;
+      state.ty = localMidY - worldY * nextScale;
+      applySceneTransform();
+      return;
+    }
+    if (state.panStart && state.tool === "pan") {
+      state.tx = state.panStart.tx + (e.clientX - state.panStart.x);
+      state.ty = state.panStart.ty + (e.clientY - state.panStart.y);
+      applySceneTransform();
+      return;
+    }
+    if (!state.drawing) return;
+    var point = clientToPage(e.clientX, e.clientY);
+    if (state.tool === "stroke") extendStroke(point);
+    if (state.tool === "arrow") updateArrow(point);
+  }
+
+  function onPointerUp(e) {
+    state.pointers.delete(e.pointerId);
+    if (state.pointers.size < 2) state.pinching = false;
+    if (state.pointers.size === 0) state.panStart = null;
+    if (state.drawing) {
+      if (state.tool === "stroke") endStroke();
+      if (state.tool === "arrow") endArrow();
+    }
+    try {
+      if (els.viewport.hasPointerCapture && els.viewport.hasPointerCapture(e.pointerId)) {
+        els.viewport.releasePointerCapture(e.pointerId);
+      }
+    } catch (err) {}
+  }
+
+  function onWheel(e) {
+    e.preventDefault();
+    var rect = els.viewport.getBoundingClientRect();
+    var localX = e.clientX - rect.left, localY = e.clientY - rect.top;
+    var worldX = (localX - state.tx) / state.scale;
+    var worldY = (localY - state.ty) / state.scale;
+    var factor = e.deltaY < 0 ? 1.12 : 0.9;
+    state.scale = clamp(state.scale * factor, 0.35, 8);
+    state.tx = localX - worldX * state.scale;
+    state.ty = localY - worldY * state.scale;
+    applySceneTransform();
+  }
+
+  function updateWakeUi() {
+    var on = isWakeEnabled();
+    els.btnWake.classList.toggle("on", on);
+    els.btnWake.setAttribute("aria-pressed", String(on));
+    els.btnWake.textContent = on ? "Tela ligada" : "Tela pode apagar";
+  }
+
+  function toggleWake() {
+    setWakeEnabled(!isWakeEnabled()).then(function (result) {
+      updateWakeUi();
+      if (isWakeEnabled() && !result.ok) {
+        setHint("Wake Lock indisponível neste contexto (tente http://localhost).");
+        setTimeout(function () { setHint(""); }, 3200);
+      }
+    });
+  }
+
+  function rotateView() {
+    state.viewRotation = (state.viewRotation + 90) % 360;
+    centerPage();
+    setHint("Visualização " + state.viewRotation + "°");
+    setTimeout(function () { setHint(""); }, 1200);
+  }
+
+  function openReport(event) {
+    try { if (event && event.preventDefault) event.preventDefault(); } catch (e) {}
+    try {
+      var panel = document.getElementById("report-panel");
+      var body = document.getElementById("report-body");
+      var model = buildReportModel(state.docName, annotations);
+      state.lastReportModel = model;
+      if (body) body.innerHTML = renderReportHtmlFragment(model);
+      if (panel) {
+        panel.hidden = false;
+        panel.removeAttribute("hidden");
+        panel.style.display = "flex";
+      }
+      setHint("");
+    } catch (err) {
+      console.error(err);
+      setHint("Não foi possível montar o relatório.");
+      setTimeout(function () { setHint(""); }, 2500);
+    }
+  }
+
+  function closeReport() {
+    var panel = document.getElementById("report-panel");
+    if (!panel) return;
+    panel.hidden = true;
+    panel.setAttribute("hidden", "");
+    panel.style.display = "none";
+  }
+
+  window.__openConfReport = openReport;
+  window.__closeConfReport = closeReport;
+
+  function downloadBlob(filename, blob) {
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function exportHtml() {
+    if (!state.lastReportModel) openReport();
+    downloadBlob(
+      "relatorio-conferencia-armadura-" + Date.now() + ".html",
+      new Blob([buildExportableHtmlDocument(state.lastReportModel)], { type: "text/html;charset=utf-8" })
+    );
+  }
+
+  function copyText() {
+    if (!state.lastReportModel) openReport();
+    var text = buildPlainTextReport(state.lastReportModel);
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () {
+        setHint("Relatório copiado.");
+        setTimeout(function () { setHint(""); }, 1800);
+      }).catch(function () { window.prompt("Copie o relatório:", text); });
+    } else {
+      window.prompt("Copie o relatório:", text);
+    }
+  }
+
+  function shareReport() {
+    if (!state.lastReportModel) openReport();
+    var text = buildPlainTextReport(state.lastReportModel);
+    if (navigator.share) {
+      navigator.share({ title: "Relatório Conf. Armadura", text: text }).catch(function () { copyText(); });
+    } else {
+      copyText();
+    }
+  }
+
+  function bindUi() {
+    els.tools.forEach(function (btn) {
+      btn.addEventListener("click", function () { setTool(btn.getAttribute("data-tool")); });
+    });
+    els.btnWake.addEventListener("click", toggleWake);
+    els.btnRotate.addEventListener("click", rotateView);
+    els.btnUndo.addEventListener("click", function () { annotations.undo(); redrawAnnotations(); });
+    els.btnClear.addEventListener("click", function () {
+      if (!annotations.list().length) return;
+      if (window.confirm("Limpar todas as marcações desta conferência?")) {
+        annotations.clear();
+        redrawAnnotations();
+      }
+    });
+    els.btnDemo.addEventListener("click", tryLoadDemo);
+    els.btnExportHtml.addEventListener("click", exportHtml);
+    els.btnExportText.addEventListener("click", copyText);
+    els.btnShare.addEventListener("click", shareReport);
+    els.btnTextCancel.addEventListener("click", closeNoteModal);
+    els.btnTextOk.addEventListener("click", saveNote);
+    els.fileInput.addEventListener("change", function () {
+      var file = els.fileInput.files && els.fileInput.files[0];
+      if (!file) return;
+      var reader = new FileReader();
+      reader.onload = function () {
+        openPdfBytes(new Uint8Array(reader.result), file.name);
+      };
+      reader.readAsArrayBuffer(file);
+      els.fileInput.value = "";
+    });
+    els.viewport.addEventListener("pointerdown", onPointerDown);
+    els.viewport.addEventListener("pointermove", onPointerMove);
+    els.viewport.addEventListener("pointerup", onPointerUp);
+    els.viewport.addEventListener("pointercancel", onPointerUp);
+    els.viewport.addEventListener("wheel", onWheel, { passive: false });
+    window.addEventListener("resize", function () { if (state.pageInfo) centerPage(); });
+  }
+
+  function boot() {
+    bindUi();
+    setTool("pan");
+    setWakeEnabled(true).then(updateWakeUi);
+    if (!window.pdfjsLib) {
+      setHint("Falha ao carregar PDF.js do CDN. Conecte-se à internet e recarregue, ou use Abrir PDF depois.");
+      return;
+    }
+    tryLoadDemo();
+  }
+
+  boot();
+})();
+  </script>
+</body>
+</html>

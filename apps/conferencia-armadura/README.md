@@ -1,72 +1,55 @@
 # Conf. Armadura — conferência in loco
 
-App HTML/mobile (pt-BR) para abrir a prancha PDF de armadura (pilares/vigas), marcar trechos **OK** e **risco** no desenho, manter a tela ligada, girar a visualização sem virar o celular e exportar relatório.
+App de campo (pt-BR) para marcar a prancha PDF de armadura (pilares/vigas): OK, risco, seta, nota, tela ligada, giro da vista e relatório.
 
-Independente do app Next.js na raiz do monorepo.
+## Uso principal — abra este HTML
 
-## Rodar no navegador (preview)
+Arquivo:
 
-```bash
-cd apps/conferencia-armadura
-npm install
-npm run dev
-```
+**`apps/conferencia-armadura/conferencia-armadura.html`**
 
-Abra `http://localhost:5173` (ou o host da máquina na rede).
+1. Dê **duplo clique** no arquivo, ou arraste-o para o Chrome/Edge.
+2. O PDF demo fica **ao lado**: `demo-pilares-vigas.pdf`.
+3. Se a página abrir via `file://` e o demo não carregar sozinho (limitação do navegador), use **Abrir PDF** e escolha `demo-pilares-vigas.pdf`.
+4. PDF.js vem de CDN na 1ª abertura (precisa de internet uma vez).
 
-Build estático:
+Não é necessário `npm` nem Vite para o dia a dia.
 
-```bash
-npm run build
-npm run preview
-```
+### Atalho opcional (servidor local)
 
-Artefatos em `dist/` (adequado a hospedagem estática / Capacitor `webDir`).
-
-## Uso em campo
-
-1. O PDF demo (Sanluzzi Selenza — pilares e vigas) carrega automaticamente.
-2. **Mover** / pinça = pan e zoom; **Riscar**, **OK**, **Risco**, **Seta**, **Nota** = marcar na prancha.
-3. **Tela ligada** (topo) usa Wake Lock; no APK também `@capacitor-community/keep-awake`.
-4. **⟳** gira a visualização 90° (marcações permanecem alinhadas).
-5. **Relatório** lista riscos, OKs e notas; exporta HTML, copia texto ou compartilha.
-6. **Abrir PDF** troca o arquivo (mesmo estilo de prancha); **Demo** recarrega o sample.
-
-Offline: após o primeiro carregamento, o service worker cacheia o shell e o PDF demo.
-
-## Gerar APK (Capacitor / Android)
-
-Pré-requisitos: Node 20+, [Android Studio](https://developer.android.com/studio), JDK 17, variáveis Android SDK.
+Se quiser auto-carregar o demo sem escolher o arquivo:
 
 ```bash
 cd apps/conferencia-armadura
-npm install
-npm run build
-
-# primeira vez
-npx cap add android
-npx cap sync
-
-# abre o projeto nativo
-npx cap open android
+python3 -m http.server 8080
+# abra http://localhost:8080/conferencia-armadura.html
 ```
 
-No Android Studio: **Build > Build Bundle(s) / APK(s) > Build APK(s)**.
+## Funções
 
-Atalhos npm:
+- Abrir PDF (demo ou outro do mesmo estilo)
+- Mover / zoom (pinça ou scroll), riscar, OK, risco, seta, nota
+- **Tela ligada** (Wake Lock — melhor em http/https)
+- **⟳** gira a visualização 90°
+- **Relatório** com contagens; exportar HTML, copiar texto, compartilhar
 
-- `npm run cap:sync` — build web + `cap sync`
-- `npm run cap:android` — sync e abre o Android Studio
-- `npm run cap:add:android` — adiciona a plataforma Android
+## APK / Capacitor (caminho futuro, opcional)
 
-`appId`: `br.lunardeli.conferenciaarmadura` · `webDir`: `dist` · config em `capacitor.config.ts`.
+Há também um esqueleto Vite + Capacitor nesta pasta (`package.json`, `capacitor.config.ts`) para quem for empacotar Android depois. **Não é necessário para usar o HTML.**
 
-Keep-awake nativo: o app tenta `@capacitor-community/keep-awake` quando roda no Capacitor; no browser usa a API Wake Lock.
+Resumo futuro:
 
-## PDF demo
+```bash
+npm install && npm run build
+npx cap add android && npx cap sync && npx cap open android
+```
 
-`public/pdfs/demo-pilares-vigas.pdf` — cópia de  
-`2330_GAR_PILARES E VIGAS TUDO JUNTO_2025029_SANLUZZI_SELENZA_REV01.pdf`.
+## Arquivos importantes
+
+| Arquivo | Função |
+|---------|--------|
+| `conferencia-armadura.html` | App completo (abrir este) |
+| `demo-pilares-vigas.pdf` | Prancha demo (Sanluzzi Selenza) |
 
 ## Fora do escopo (v1)
 
