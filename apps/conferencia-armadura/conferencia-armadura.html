@@ -380,12 +380,7 @@
         ctx.fillRect(x, y, rw, rh);
         ctx.strokeRect(x, y, rw, rh);
         ctx.setLineDash([]);
-        if (!isSelect && item.label) {
-          ctx.fillStyle = isOk ? "#0d3d22" : "#5a000c";
-          ctx.font = "bold 11px sans-serif";
-          ctx.textBaseline = "top";
-          ctx.fillText(String(item.label).slice(0, 28), x + 3, y + 3);
-        }
+        // Keep overlay on the glyph bbox; original PDF text remains visible underneath.
       } else if (kind === "ok") {
         var s = 14;
         ctx.strokeStyle = "#1f9d55";
@@ -810,6 +805,25 @@
       || /^\d{2,3}\s*[xX×]\s*\d{2,3}$/.test(s);
   }
 
+  function unionTextBounds(items, pad) {
+    if (!items || !items.length) return null;
+    var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (var i = 0; i < items.length; i++) {
+      var it = items[i];
+      minX = Math.min(minX, it.x);
+      minY = Math.min(minY, it.y);
+      maxX = Math.max(maxX, it.x + it.w);
+      maxY = Math.max(maxY, it.y + it.h);
+    }
+    var p = pad == null ? 2 : pad;
+    return {
+      x: minX - p,
+      y: minY - p,
+      w: Math.max(4, maxX - minX + p * 2),
+      h: Math.max(4, maxY - minY + p * 2)
+    };
+  }
+
   function extractPdfTextInRect(sel) {
     var items = state.textItems || [];
     var hits = [];
@@ -829,7 +843,11 @@
       var s = String(use[j].str).trim();
       if (s) parts.push(s);
     }
-    return parts.join(" ").replace(/\s+/g, " ").trim();
+    return {
+      label: parts.join(" ").replace(/\s+/g, " ").trim(),
+      bbox: unionTextBounds(use, 3),
+      items: use
+    };
   }
 
   function cropSelectionToCanvas(sel) {
@@ -860,17 +878,44 @@
   }
 
   async function ocrSelection(sel) {
-    if (!window.Tesseract) return "";
+    if (!window.Tesseract) return { label: "", bbox: null };
     var crop = cropSelectionToCanvas(sel);
-    if (!crop) return "";
+    if (!crop) return { label: "", bbox: null };
     try {
       var result = await Tesseract.recognize(crop, "eng", {
         logger: function () {}
       });
-      return cleanOcrText(result && result.data && result.data.text);
+      var label = cleanOcrText(result && result.data && result.data.text);
+      var bbox = null;
+      var words = (result && result.data && result.data.words) || [];
+      var useful = words.filter(function (w) {
+        var t = cleanOcrText(w.text);
+        return t && (isStructuralToken(t) || /[A-Za-z0-9]/.test(t));
+      });
+      if (!useful.length) useful = words.filter(function (w) { return cleanOcrText(w.text); });
+      if (useful.length && crop.width > 0 && crop.height > 0) {
+        var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        for (var i = 0; i < useful.length; i++) {
+          var b = useful[i].bbox;
+          if (!b) continue;
+          minX = Math.min(minX, b.x0);
+          minY = Math.min(minY, b.y0);
+          maxX = Math.max(maxX, b.x1);
+          maxY = Math.max(maxY, b.y1);
+        }
+        if (isFinite(minX)) {
+          bbox = {
+            x: sel.x + (minX / crop.width) * sel.w,
+            y: sel.y + (minY / crop.height) * sel.h,
+            w: ((maxX - minX) / crop.width) * sel.w,
+            h: ((maxY - minY) / crop.height) * sel.h
+          };
+        }
+      }
+      return { label: label, bbox: bbox };
     } catch (err) {
       console.warn("OCR falhou", err);
-      return "";
+      return { label: "", bbox: null };
     }
   }
 
@@ -882,17 +927,34 @@
       h: sel.h + 12
     };
     var fromPdf = extractPdfTextInRect(padded);
-    if (fromPdf && (isStructuralToken(fromPdf) || /[A-Za-z].*\d|\d.*[xX×]\d/.test(fromPdf))) {
-      return { label: fromPdf, source: "pdf-text" };
+    if (fromPdf.label && (isStructuralToken(fromPdf.label) || /[A-Za-z].*\d|\d.*[xX×]\d/.test(fromPdf.label))) {
+      return { label: fromPdf.label, source: "pdf-text", bbox: fromPdf.bbox || null };
     }
-    if (fromPdf && fromPdf.length >= 3 && !/^\W+$/.test(fromPdf)) {
+    if (fromPdf.label && fromPdf.label.length >= 3 && !/^\W+$/.test(fromPdf.label)) {
       // Prefer PDF text over OCR when available (CAD exports often have a text layer).
-      return { label: fromPdf, source: "pdf-text" };
+      return { label: fromPdf.label, source: "pdf-text", bbox: fromPdf.bbox || null };
     }
     setHint("Lendo texto (OCR)…");
     var fromOcr = await ocrSelection(padded);
-    if (fromOcr) return { label: fromOcr, source: "ocr" };
-    return { label: fromPdf || "", source: fromPdf ? "pdf-text" : "none" };
+    if (fromOcr.label) {
+      return { label: fromOcr.label, source: "ocr", bbox: fromOcr.bbox || null };
+    }
+    return {
+      label: fromPdf.label || "",
+      source: fromPdf.label ? "pdf-text" : "none",
+      bbox: fromPdf.bbox || null
+    };
+  }
+
+  function highlightBoxFromRecognition(sel, rec) {
+    if (rec && rec.bbox && rec.bbox.w > 2 && rec.bbox.h > 2) {
+      return { x: rec.bbox.x, y: rec.bbox.y, w: rec.bbox.w, h: rec.bbox.h };
+    }
+    return { x: sel.x, y: sel.y, w: sel.w, h: sel.h };
+  }
+
+  function finishToMove() {
+    setTool("pan");
   }
 
   async function renderPage(pdf) {
@@ -982,6 +1044,7 @@
     else annotations.setDraft(null);
     state.drawing = false;
     redrawAnnotations();
+    finishToMove();
   }
   function startSelect(point) {
     annotations.setDraft({
@@ -1010,6 +1073,7 @@
     if (!draft || draft.kind !== "select") {
       annotations.setDraft(null);
       redrawAnnotations();
+      finishToMove();
       return;
     }
     var sel = { x: draft.x, y: draft.y, w: draft.w, h: draft.h, mode: draft.mode };
@@ -1018,6 +1082,7 @@
     if (sel.w < 8 || sel.h < 8) {
       setHint("Arraste sobre o rótulo (ex.: VG-114x90).");
       setTimeout(function () { setHint(""); }, 2200);
+      finishToMove();
       return;
     }
     if (state.recognizing) return;
@@ -1027,10 +1092,11 @@
       var rec = await recognizeSelectionLabel(sel);
       var label = rec.label || "(sem texto)";
       var elementType = classifyLabel(label);
+      var box = highlightBoxFromRecognition(sel, rec);
       if (sel.mode === "ok") {
         annotations.add({
           kind: "ok",
-          x: sel.x, y: sel.y, w: sel.w, h: sel.h,
+          x: box.x, y: box.y, w: box.w, h: box.h,
           label: label,
           text: label,
           elementType: elementType,
@@ -1039,20 +1105,23 @@
         redrawAnnotations();
         setHint((elementTypeLabel(elementType) + " conferido: " + label).slice(0, 80));
         setTimeout(function () { setHint(""); }, 2200);
+        finishToMove();
       } else {
         state.riskPending = {
-          x: sel.x, y: sel.y, w: sel.w, h: sel.h,
+          x: box.x, y: box.y, w: box.w, h: box.h,
           label: label,
           text: label,
           elementType: elementType,
           source: rec.source
         };
         openRiskReasonModal();
+        // Stay on risk until reason is saved/cancelled; then finishToMove.
       }
     } catch (err) {
       console.error(err);
       setHint("Falha ao reconhecer o texto da seleção.");
       setTimeout(function () { setHint(""); }, 2500);
+      finishToMove();
     } finally {
       state.recognizing = false;
     }
@@ -1076,6 +1145,7 @@
     }
     state.drawing = false;
     redrawAnnotations();
+    finishToMove();
   }
   function openNoteModal(point) {
     state.modalMode = "note";
@@ -1113,6 +1183,7 @@
       redrawAnnotations();
     }
     state.modalMode = "note";
+    finishToMove();
   }
   function saveNote() {
     var text = els.textInput.value.trim();
@@ -1139,6 +1210,7 @@
       redrawAnnotations();
       setHint("Não conforme registrado.");
       setTimeout(function () { setHint(""); }, 1800);
+      finishToMove();
       return;
     }
     if (!text || !state.notePending) { closeNoteModal(); return; }
