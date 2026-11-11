@@ -105,20 +105,22 @@ A diferença NF − teórico **não** é classificada automaticamente como despe
 - **DXF (Fase 2):** importa layers/geometrias; **não** inventa lajes/pilares — use CSV/manual. Fixture: `fixtures/mapas/demo-laje-40m2.dxf`.
 - **Booleanas / regras (Fase 2B):** vazios, união acumulada, conflitos sem dupla contagem; vigas (seção×comp. executado), pilares (altura) e fundações simples com memória de cálculo.
 - **Revisões assistidas (Fase 2C):** nova revisão **não** move mapeamentos; `/reconciliar` classifica órfãs/deslocadas e registra aceitar/reassociar/arquivar com auditoria.
-- DWG/IFC e SDK pagos **fora** deste incremento (alternativa: exportar DXF/PDF/CSV).
+- **DWG/IFC (Fase 3):** DWG via ODA→DXF intermediário (sem nativo/SDK pago); IFC STEP com GUID/Qto (volumes só se no arquivo); sem viewer 3D.
 - Relatório PDF consolida quantitativos; mapa vetorial completo da planta é evolução.
 
-### DXF — como testar
+### DXF / DWG / IFC — como testar
 
 ```bash
-npm run test   # inclui parser DXF (laje demo 40 m²) + reconcile
-# Migrations 00008–00010
-npm run dev    # Obra → Importar DXF → layers no visualizador
-# Planta → Criar revisão → /reconciliar → Aceitar / Reassociar / Arquivar
+npm run test   # DXF + IFC fixture + reconcile
+# Migrations 00008–00011
+npm run dev    # Obra → Importar DXF / DWG / IFC
+# Planta → Criar revisão → /reconciliar
 
-# Opcional (ezdxf):
-cd services/cad-convert && uvicorn app.main:app --port 8091
-# POST /parse com multipart file
+# Serviço CAD (DWG precisa ODA no PATH):
+cd services/cad-convert && pip install -r requirements.txt
+# opcional: pip install ifcopenshell
+uvicorn app.main:app --port 8091
+# CAD_CONVERT_URL=http://127.0.0.1:8091
 ```
 
 ## Critérios de aceite — MapaConcreto Fase 1

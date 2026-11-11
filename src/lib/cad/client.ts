@@ -20,8 +20,10 @@ export type CadHealth = {
   service?: string;
   ezdxf?: boolean;
   oda_file_converter?: boolean;
+  ifcopenshell?: boolean;
   dwg_supported?: boolean;
   dxf_supported?: boolean;
+  ifc_supported?: boolean;
   notes?: string[];
   error?: string;
 };
@@ -61,19 +63,28 @@ export type CadParseResult = {
   layers?: unknown[];
   entities?: unknown[];
   warnings?: string[];
+  notes?: string[];
+  intermediateFormat?: string;
+  intermediate_dxf_base64?: string;
+  converter_path?: string;
   error?: string;
+  errorCode?: string;
 };
 
-/** Optional ezdxf parse when CAD_CONVERT_URL is up (MapaConcreto Fase 2). */
+/** DXF nativo ou DWG (ODA→DXF) via CAD_CONVERT_URL. */
 export async function parseDxfViaService(
   filename: string,
   bytes: Buffer,
 ): Promise<CadParseResult> {
   const base = getCadConvertUrl();
   const form = new FormData();
+  const lower = filename.toLowerCase();
+  const mime = lower.endsWith(".dwg")
+    ? "image/vnd.dwg"
+    : "application/dxf";
   form.append(
     "file",
-    new Blob([new Uint8Array(bytes)], { type: "application/dxf" }),
+    new Blob([new Uint8Array(bytes)], { type: mime }),
     filename,
   );
   try {
@@ -81,17 +92,28 @@ export async function parseDxfViaService(
       method: "POST",
       body: form,
       signal: AbortSignal.timeout(
-        Number(process.env.CAD_CONVERT_TIMEOUT_MS || 60_000),
+        Number(process.env.CAD_CONVERT_TIMEOUT_MS || 120_000),
       ),
     });
-    const payload = (await res.json().catch(() => null)) as CadParseResult | null;
+    const payload = (await res.json().catch(() => null)) as
+      | (CadParseResult & {
+          detail?: { code?: string; message?: string } | string;
+        })
+      | null;
     if (!res.ok || !payload) {
+      const detail =
+        typeof payload?.detail === "string"
+          ? payload.detail
+          : payload?.detail?.message || `HTTP ${res.status}`;
+      const code =
+        typeof payload?.detail === "object" ? payload?.detail?.code : undefined;
       return {
         ok: false,
-        error: `HTTP ${res.status}`,
+        error: String(detail),
+        errorCode: code,
       };
     }
-    return { ...payload, ok: Boolean(payload.ok) };
+    return { ...payload, ok: Boolean(payload.ok ?? true) };
   } catch (err) {
     return {
       ok: false,
