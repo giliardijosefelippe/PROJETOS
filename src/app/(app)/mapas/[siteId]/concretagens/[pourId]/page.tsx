@@ -292,30 +292,34 @@ export default async function PourDetailPage({
               />
             </div>
           </div>
-          <div>
-            <Label htmlFor="region_id">Alocar em região</Label>
-            <select
-              id="region_id"
-              name="region_id"
-              className="mt-1 w-full rounded border border-divider px-2 py-2 text-sm"
-            >
-              <option value="">—</option>
-              {(allRegions || []).map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <Label htmlFor="volume_allocated_m3">Volume alocado (m³)</Label>
-            <Input
-              id="volume_allocated_m3"
-              name="volume_allocated_m3"
-              type="number"
-              step="0.01"
-            />
-          </div>
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-medium">
+              Alocações por região (N:N)
+            </legend>
+            <p className="text-xs text-ink-muted">
+              Uma NF pode atender várias regiões. Informe volume em cada linha;
+              a soma não pode exceder NF − devolvido − outros.
+            </p>
+            {(allRegions || []).length === 0 && (
+              <p className="text-sm text-ink-muted">Nenhuma região na obra.</p>
+            )}
+            {(allRegions || []).map((r) => (
+              <div
+                key={r.id}
+                className="grid grid-cols-[1fr_7rem] items-center gap-2 text-sm"
+              >
+                <span>{r.name}</span>
+                <Input
+                  name={`alloc_volume_${r.id}`}
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="m³"
+                  aria-label={`Volume para ${r.name}`}
+                />
+              </div>
+            ))}
+          </fieldset>
           <Button type="submit">Registrar NF</Button>
         </form>
 

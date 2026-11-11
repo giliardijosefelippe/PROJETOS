@@ -8,6 +8,11 @@ import { PlantViewer } from "@/components/mapas/plant-viewer";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import {
+  detectRegionOverlaps,
+  polygonFromGeoJson,
+  type GeoJsonPolygon,
+} from "@/lib/mapas/geometry";
 
 const BUCKET = process.env.STORAGE_BUCKET_LIBRARY || "library";
 
@@ -51,6 +56,19 @@ export default async function PlantaPage({
       "region_id",
       (regions || []).map((r) => r.id).concat(["00000000-0000-0000-0000-000000000000"]),
     );
+
+  const regionName = new Map((regions || []).map((r) => [r.id, r.name]));
+  const overlaps = detectRegionOverlaps(
+    (regions || [])
+      .map((r) => {
+        const poly = polygonFromGeoJson(r.geometry as GeoJsonPolygon);
+        return poly ? { id: r.id, polygon: poly } : null;
+      })
+      .filter(Boolean) as Array<{
+      id: string;
+      polygon: NonNullable<ReturnType<typeof polygonFromGeoJson>>;
+    }>,
+  );
 
   return (
     <div className="space-y-4">
@@ -139,6 +157,20 @@ export default async function PlantaPage({
             },
           }))}
         />
+      )}
+
+      {overlaps.length > 0 && (
+        <p className="rounded-md border border-[var(--color-status-warn)] bg-[var(--color-status-warn-bg)] px-3 py-2 text-sm text-[var(--color-status-warn)]">
+          Sobreposição detectada entre regiões (
+          {overlaps
+            .map(
+              (o) =>
+                `${regionName.get(o.aId) || o.aId} ∩ ${regionName.get(o.bId) || o.bId}: ${o.overlapAreaM2.toFixed(3)} m²`,
+            )
+            .join("; ")}
+          ). Percentuais acumulados usam <strong>união</strong> — sem soma
+          duplicada por padrão.
+        </p>
       )}
 
       <div className="grid gap-4 lg:grid-cols-2">

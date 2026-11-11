@@ -4,6 +4,7 @@ import { requireSession } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { uploadPlantPdfAction } from "@/actions/mapas/drawings";
 import { createElementAction } from "@/actions/mapas/elements";
+import { importElementsCsvAction } from "@/actions/mapas/import-elements";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input, Label, Select } from "@/components/ui/input";
@@ -135,6 +136,11 @@ export default async function SiteDetailPage({
               Concretagens / NFs
             </Button>
           </Link>
+          <Link href={`/mapas/${siteId}/rastreio`}>
+            <Button variant="secondary" size="sm">
+              Rastreio NF ↔ regiões
+            </Button>
+          </Link>
         </div>
       </div>
 
@@ -190,6 +196,31 @@ export default async function SiteDetailPage({
       </section>
 
       <section className="grid gap-4 lg:grid-cols-2">
+        <form
+          action={importElementsCsvAction}
+          className="space-y-3 rounded-lg border border-border bg-surface p-4 lg:col-span-2"
+          encType="multipart/form-data"
+        >
+          <h3 className="font-semibold">Importar elementos (CSV)</h3>
+          <p className="text-xs text-ink-muted">
+            Quando o PDF não fornece geometria confiável, cadastre via planilha.
+            Modelo:{" "}
+            <a
+              className="text-[var(--color-brand)] hover:underline"
+              href="/api/mapas/elements-csv-template"
+            >
+              baixar template
+            </a>
+            .
+          </p>
+          <input type="hidden" name="site_id" value={siteId} />
+          <input type="hidden" name="floor_id" value={floors[0]?.id || ""} />
+          <Input id="csv" name="file" type="file" accept=".csv,text/csv" required />
+          <Button type="submit" variant="secondary">
+            Importar CSV
+          </Button>
+        </form>
+
         <form
           action={uploadPlantPdfAction}
           className="space-y-3 rounded-lg border border-border bg-surface p-4"

@@ -234,6 +234,39 @@ export function unionPolygons(polygons: Polygon[]): {
   }
 }
 
+export type RegionOverlap = {
+  aId: string;
+  bId: string;
+  overlapAreaM2: number;
+};
+
+/**
+ * Detect pairwise overlaps. By default mapped volumes must use UNION
+ * (not sum) so overlaps are not double-counted.
+ */
+export function detectRegionOverlaps(
+  regions: Array<{ id: string; polygon: Polygon }>,
+  minAreaM2 = 1e-6,
+): RegionOverlap[] {
+  const out: RegionOverlap[] = [];
+  for (let i = 0; i < regions.length; i++) {
+    for (let j = i + 1; j < regions.length; j++) {
+      const { area } = intersectPolygons(
+        regions[i].polygon,
+        regions[j].polygon,
+      );
+      if (area > minAreaM2) {
+        out.push({
+          aId: regions[i].id,
+          bId: regions[j].id,
+          overlapAreaM2: area,
+        });
+      }
+    }
+  }
+  return out;
+}
+
 export type ScaleCalibration = {
   /** Two points in page/PDF pixel space */
   p1: Point;

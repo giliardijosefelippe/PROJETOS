@@ -221,18 +221,52 @@ async function main() {
       ],
     ],
   };
+  // Clear previous demo regions/deliveries for idempotent re-seed of geometry cases
+  await admin.from("mc_mapped_regions").delete().eq("site_id", site.id).eq("is_demo", true);
+
   const { data: region } = await admin
     .from("mc_mapped_regions")
     .insert({
       site_id: site.id,
       drawing_revision_id: drawing.id,
       organization_id: org.id,
-      name: "Região demo 25 m²",
+      name: "Região demo A 25 m²",
       tool: "rectangle",
       geometry: regionGeom,
       area_m2: 25,
       color: "#E00024",
-      notes: "Demonstração — interseção esperada 62,5% / 3,75 m³",
+      notes: "Demonstração — interseção 25 m² → 62,5% / 3,75 m³",
+      is_demo: true,
+      created_by: userId,
+    })
+    .select("id")
+    .single();
+
+  // Segunda região sobreposta (3–8 × 0–5 = 25 m²) → união com A = 40 m² (100%)
+  const region2Geom = {
+    type: "Polygon",
+    coordinates: [
+      [
+        [3, 0],
+        [8, 0],
+        [8, 5],
+        [3, 5],
+        [3, 0],
+      ],
+    ],
+  };
+  const { data: region2 } = await admin
+    .from("mc_mapped_regions")
+    .insert({
+      site_id: site.id,
+      drawing_revision_id: drawing.id,
+      organization_id: org.id,
+      name: "Região demo B (sobrepõe A)",
+      tool: "rectangle",
+      geometry: region2Geom,
+      area_m2: 25,
+      color: "#175cd3",
+      notes: "Demonstração — sobreposição; acumulado por união = 40 m²",
       is_demo: true,
       created_by: userId,
     })
@@ -250,6 +284,22 @@ async function main() {
       method: "slab_constant_thickness",
       data_origin: "demo_seed",
       precision_note: "Caso de aceite da especificação",
+      warnings: [],
+      indeterminate: false,
+    },
+    { onConflict: "region_id,element_id" },
+  );
+  await admin.from("mc_region_element_intersections").upsert(
+    {
+      organization_id: org.id,
+      region_id: region2.id,
+      element_id: element.id,
+      intersection_area_m2: 25,
+      percent: 62.5,
+      volume_estimado_m3: 3.75,
+      method: "slab_constant_thickness",
+      data_origin: "demo_seed",
+      precision_note: "2ª etapa — não somar %; usar união",
       warnings: [],
       indeterminate: false,
     },
@@ -279,6 +329,29 @@ async function main() {
     .select("id")
     .single();
 
+  const { data: pour2 } = await admin
+    .from("mc_concrete_pours")
+    .upsert(
+      {
+        site_id: site.id,
+        floor_id: floor.id,
+        organization_id: org.id,
+        code: "C-DEMO-02",
+        title: "Concretagem demonstração — 2ª etapa (união)",
+        status: "em_execucao",
+        pour_date: new Date().toISOString().slice(0, 10),
+        fck_mpa: 30,
+        slump_spec_mm: 100,
+        volume_planned_m3: 3,
+        notes: "Demonstração — percentual acumulado por união das regiões",
+        is_demo: true,
+        created_by: userId,
+      },
+      { onConflict: "site_id,code" },
+    )
+    .select("id")
+    .single();
+
   await admin.from("mc_pour_regions").upsert({
     pour_id: pour.id,
     region_id: region.id,
@@ -289,6 +362,21 @@ async function main() {
     element_id: element.id,
     organization_id: org.id,
   });
+  await admin.from("mc_pour_regions").upsert([
+    { pour_id: pour2.id, region_id: region.id, organization_id: org.id },
+    { pour_id: pour2.id, region_id: region2.id, organization_id: org.id },
+  ]);
+  await admin.from("mc_pour_elements").upsert({
+    pour_id: pour2.id,
+    element_id: element.id,
+    organization_id: org.id,
+  });
+
+  await admin
+    .from("mc_truck_deliveries")
+    .delete()
+    .eq("site_id", site.id)
+    .eq("is_demo", true);
 
   const { data: delivery } = await admin
     .from("mc_truck_deliveries")
@@ -301,20 +389,54 @@ async function main() {
       volume_nf_m3: 4.0,
       volume_returned_m3: 0.2,
       volume_other_dest_m3: 0,
-      notes: "Demonstração — diferença NF≠desperdício",
+      notes: "Demonstração — 1 NF → 2 regiões",
       is_demo: true,
       created_by: userId,
     })
     .select("id")
     .single();
 
-  await admin.from("mc_delivery_region_allocations").insert({
-    organization_id: org.id,
-    delivery_id: delivery.id,
-    region_id: region.id,
-    volume_allocated_m3: 3.8,
-    volume_discharged_m3: 3.8,
-  });
+  const { data: delivery2 } = await admin
+    .from("mc_truck_deliveries")
+    .insert({
+      organization_id: org.id,
+      site_id: site.id,
+      pour_id: pour2.id,
+      plate: "DEM0B00",
+      nf_number: "NF-DEMO-1002",
+      volume_nf_m3: 2.0,
+      volume_returned_m3: 0,
+      volume_other_dest_m3: 0,
+      notes: "Demonstração — 2ª NF na mesma região A",
+      is_demo: true,
+      created_by: userId,
+    })
+    .select("id")
+    .single();
+
+  await admin.from("mc_delivery_region_allocations").insert([
+    {
+      organization_id: org.id,
+      delivery_id: delivery.id,
+      region_id: region.id,
+      volume_allocated_m3: 2.0,
+      volume_discharged_m3: 2.0,
+    },
+    {
+      organization_id: org.id,
+      delivery_id: delivery.id,
+      region_id: region2.id,
+      volume_allocated_m3: 1.8,
+      volume_discharged_m3: 1.8,
+    },
+    {
+      organization_id: org.id,
+      delivery_id: delivery2.id,
+      region_id: region.id,
+      volume_allocated_m3: 2.0,
+      volume_discharged_m3: 2.0,
+    },
+  ]);
 
   await admin.from("mc_slump_tests").insert({
     organization_id: org.id,
@@ -334,7 +456,7 @@ async function main() {
   console.log(`  Obra: DEMO-MC-001 (${site.id})`);
   console.log(`  Planta: ${drawing.id}`);
   console.log(`  PDF local: public/demo/mapaconcreto-demo.pdf`);
-  console.log("  Aceite geométrico: 40 m² ∩ 25 m² × 0,15 m → 62,5% / 3,75 m³");
+  console.log("  Aceite: 40∩25×0,15 → 62,5%/3,75 m³; união A∪B=40 m²; NF↔regiões N:N");
 }
 
 main().catch((e) => {

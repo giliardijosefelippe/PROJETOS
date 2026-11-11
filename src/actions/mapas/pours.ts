@@ -95,8 +95,16 @@ export async function createDeliveryAction(formData: FormData) {
   const supplierName =
     String(formData.get("supplier_name") || "Concreteira Demo").trim() ||
     "Concreteira Demo";
-  const regionId = String(formData.get("region_id") || "") || null;
-  const allocVolume = Number(formData.get("volume_allocated_m3") || 0);
+
+  // N:N — campos alloc_volume_<regionId> (só entram se volume > 0)
+  const allocations: Array<{ regionId: string; volume: number }> = [];
+  for (const [key, value] of formData.entries()) {
+    if (!key.startsWith("alloc_volume_") || typeof value !== "string") continue;
+    const regionId = key.slice("alloc_volume_".length);
+    const volume = Number(value);
+    if (!regionId || !Number.isFinite(volume) || volume <= 0) continue;
+    allocations.push({ regionId, volume });
+  }
 
   if (!siteId || !nf || !(volumeNf > 0)) {
     redirect(
@@ -141,24 +149,32 @@ export async function createDeliveryAction(formData: FormData) {
     );
   }
 
-  if (regionId && allocVolume > 0) {
-    const available =
-      volumeNf - volumeReturned - volumeOther;
-    if (allocVolume > available + 1e-9) {
+  if (allocations.length) {
+    const available = volumeNf - volumeReturned - volumeOther;
+    const totalAlloc = allocations.reduce((s, a) => s + a.volume, 0);
+    if (totalAlloc > available + 1e-9) {
       redirect(
-        `/mapas/${siteId}/concretagens/${pourId}?error=Alocação acima do volume disponível da carga (requer justificativa/permissão especial — bloqueado no MVP)`,
+        `/mapas/${siteId}/concretagens/${pourId}?error=Soma das alocações acima do volume disponível da carga (requer justificativa/permissão especial — bloqueado no MVP)`,
       );
     }
-    await supabase.from("mc_delivery_region_allocations").insert({
-      organization_id: session.organizationId,
-      delivery_id: delivery.id,
-      region_id: regionId,
-      volume_allocated_m3: allocVolume,
-      volume_discharged_m3: allocVolume,
-    });
+    // Deduplicate by region (sum volumes)
+    const byRegion = new Map<string, number>();
+    for (const a of allocations) {
+      byRegion.set(a.regionId, (byRegion.get(a.regionId) || 0) + a.volume);
+    }
+    await supabase.from("mc_delivery_region_allocations").insert(
+      [...byRegion.entries()].map(([region_id, volume_allocated_m3]) => ({
+        organization_id: session.organizationId,
+        delivery_id: delivery.id,
+        region_id,
+        volume_allocated_m3,
+        volume_discharged_m3: volume_allocated_m3,
+      })),
+    );
   }
 
   revalidatePath(`/mapas/${siteId}/concretagens/${pourId}`);
+  revalidatePath(`/mapas/${siteId}/rastreio`);
   redirect(`/mapas/${siteId}/concretagens/${pourId}?ok=nf`);
 }
 

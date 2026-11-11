@@ -5,6 +5,7 @@ import {
   compareVolumes,
   computeSlabMappedQuantity,
   computeVerticalMappedQuantity,
+  detectRegionOverlaps,
   freehandToPolygon,
   intersectPolygons,
   metersPerPdfUnit,
@@ -97,5 +98,14 @@ describe("MapaConcreto geometry", () => {
     assert.ok(polygon);
     assert.ok(polygonArea(polygon!) > 0);
     assert.ok(warnings.some((w) => w.code === "freehand_auto_closed"));
+  });
+
+  it("detects overlapping regions", () => {
+    const overlaps = detectRegionOverlaps([
+      { id: "a", polygon: rectanglePolygon(0, 0, 5, 5) },
+      { id: "b", polygon: rectanglePolygon(3, 0, 5, 5) },
+    ]);
+    assert.equal(overlaps.length, 1);
+    assert.ok(Math.abs(overlaps[0].overlapAreaM2 - 10) < 1e-6);
   });
 });
