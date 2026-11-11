@@ -175,13 +175,36 @@
     .tool-icon.risk { color: #ff6b6b; font-weight: 900; }
     .dock-btn.accent { background: var(--accent); border-color: #ff3b57; color: #fff; }
     .dock-btn.danger { color: #ffc9c9; border-color: #7a3030; }
-    .report-panel {
+    .autosave-chip {
+      position: fixed; right: 12px; bottom: calc(12px + var(--safe-bottom));
+      z-index: 30; font-size: 11px; color: var(--muted);
+      background: rgba(18, 22, 26, 0.82); border: 1px solid var(--border);
+      border-radius: 999px; padding: 6px 10px; pointer-events: none;
+      opacity: 0; transition: opacity 0.25s ease;
+    }
+    .autosave-chip.on { opacity: 1; }
+    .report-panel, .library-panel {
       position: fixed; left: 0; right: 0; bottom: 0; max-height: min(72vh, 640px);
       background: var(--surface); border-top: 1px solid var(--border); z-index: 40;
       display: flex; flex-direction: column; padding-bottom: var(--safe-bottom);
       box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.45);
     }
-    .report-panel[hidden] { display: none !important; }
+    .report-panel[hidden], .library-panel[hidden] { display: none !important; }
+    .library-panel .lib-item {
+      display: flex; gap: 10px; align-items: flex-start; justify-content: space-between;
+      padding: 10px 0; border-bottom: 1px solid var(--border);
+    }
+    .library-panel .lib-item button {
+      min-height: 40px; padding: 0 12px; border-radius: 10px;
+      border: 1px solid var(--border); background: var(--surface-2); color: var(--text);
+      font-weight: 700; cursor: pointer;
+    }
+    .library-panel .lib-meta { min-width: 0; flex: 1; }
+    .library-panel .lib-meta strong {
+      display: block; font-size: 14px; word-break: break-word;
+    }
+    .library-panel .lib-meta span { color: var(--muted); font-size: 12px; }
+    .library-panel .lib-actions { display: flex; gap: 6px; flex-shrink: 0; }
     .report-head {
       display: flex; align-items: center; justify-content: space-between;
       padding: 12px 14px; border-bottom: 1px solid var(--border);
@@ -277,16 +300,35 @@
       </div>
     </aside>
 
+    <aside id="library-panel" class="library-panel" hidden>
+      <div class="report-head">
+        <h2>Biblioteca de PDFs</h2>
+        <button type="button" id="btn-close-library" class="icon-btn" title="Fechar">✕</button>
+      </div>
+      <div id="library-body" class="report-body">
+        <p class="group-empty">Nenhum PDF importado ainda.</p>
+      </div>
+      <div class="report-actions">
+        <label class="primary" style="display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 14px;border-radius:12px;cursor:pointer;">
+          Importar PDF
+          <input type="file" id="file-input-library" accept="application/pdf,.pdf" hidden />
+        </label>
+        <button type="button" id="btn-library-demo" class="secondary">Demo</button>
+      </div>
+    </aside>
+
     <div id="text-modal" class="modal" hidden>
       <div class="modal-card">
         <h3 id="text-modal-title">Nota no PDF</h3>
         <textarea id="text-input" rows="3" placeholder="Descreva o trecho ou o risco…" maxlength="500"></textarea>
         <div class="modal-actions">
           <button type="button" id="btn-text-cancel" class="secondary">Cancelar</button>
-          <button type="button" id="btn-text-ok" class="primary">Salvar</button>
+          <button type="button" id="btn-text-ok" class="primary">Confirmar</button>
         </div>
       </div>
     </div>
+
+    <div id="autosave-chip" class="autosave-chip" aria-live="polite">Autosalvo</div>
 
     <div id="tool-dock" aria-label="Ferramentas flutuantes">
       <div class="dock-handle" id="dock-handle" role="button" tabindex="0" title="Recolher (clique) · Arrastar para mover">⋮⋮</div>
@@ -300,7 +342,8 @@
         <div class="dock-sep" aria-hidden="true"></div>
         <button type="button" id="btn-undo" class="dock-btn" title="Desfazer">↶</button>
         <button type="button" id="btn-clear" class="dock-btn danger" title="Limpar">⌫</button>
-        <label class="dock-btn" title="Abrir PDF">📄<input type="file" id="file-input" accept="application/pdf,.pdf" hidden /></label>
+        <label class="dock-btn" title="Importar PDF">📄<input type="file" id="file-input" accept="application/pdf,.pdf" hidden /></label>
+        <button type="button" id="btn-library" class="dock-btn" title="Biblioteca de PDFs">📚</button>
         <button type="button" id="btn-demo" class="dock-btn" title="Demo">▣</button>
         <button type="button" id="btn-report" class="dock-btn accent" title="Relatório" onclick="window.__openConfReport && window.__openConfReport(event)">☰</button>
       </div>
@@ -327,16 +370,324 @@
     return "id-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 9);
   }
 
+  var LIB_INDEX_KEY = "conf-armadura-library-v1";
+  var LIB_FOLDER = "Download/ConfArmadura";
+  var IDB_NAME = "conf-armadura-db";
+  var IDB_STORE = "pdfs";
+
+  function isNativeCapacitor() {
+    try {
+      return !!(window.Capacitor && Capacitor.isNativePlatform && Capacitor.isNativePlatform());
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function capFilesystem() {
+    try {
+      return (window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.Filesystem) || null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function bytesToBase64(bytes) {
+    var u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+    var chunk = 0x8000;
+    var parts = [];
+    for (var i = 0; i < u8.length; i += chunk) {
+      parts.push(String.fromCharCode.apply(null, u8.subarray(i, i + chunk)));
+    }
+    return btoa(parts.join(""));
+  }
+
+  function base64ToBytes(b64) {
+    var bin = atob(b64);
+    var out = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  }
+
+  function openIdb() {
+    return new Promise(function (resolve, reject) {
+      if (!window.indexedDB) {
+        reject(new Error("IndexedDB indisponível"));
+        return;
+      }
+      var req = indexedDB.open(IDB_NAME, 1);
+      req.onupgradeneeded = function () {
+        var db = req.result;
+        if (!db.objectStoreNames.contains(IDB_STORE)) db.createObjectStore(IDB_STORE);
+      };
+      req.onsuccess = function () { resolve(req.result); };
+      req.onerror = function () { reject(req.error || new Error("IDB open failed")); };
+    });
+  }
+
+  function idbPut(key, value) {
+    return openIdb().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var tx = db.transaction(IDB_STORE, "readwrite");
+        tx.objectStore(IDB_STORE).put(value, key);
+        tx.oncomplete = function () { resolve(); };
+        tx.onerror = function () { reject(tx.error); };
+      });
+    });
+  }
+
+  function idbGet(key) {
+    return openIdb().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var tx = db.transaction(IDB_STORE, "readonly");
+        var req = tx.objectStore(IDB_STORE).get(key);
+        req.onsuccess = function () { resolve(req.result || null); };
+        req.onerror = function () { reject(req.error); };
+      });
+    });
+  }
+
+  function idbDelete(key) {
+    return openIdb().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var tx = db.transaction(IDB_STORE, "readwrite");
+        tx.objectStore(IDB_STORE).delete(key);
+        tx.oncomplete = function () { resolve(); };
+        tx.onerror = function () { reject(tx.error); };
+      });
+    }).catch(function () {});
+  }
+
+  function readLibraryIndex() {
+    try {
+      var raw = localStorage.getItem(LIB_INDEX_KEY);
+      var parsed = raw ? JSON.parse(raw) : { pdfs: [] };
+      if (!parsed || !Array.isArray(parsed.pdfs)) return { pdfs: [] };
+      return parsed;
+    } catch (e) {
+      return { pdfs: [] };
+    }
+  }
+
+  function writeLibraryIndex(index) {
+    localStorage.setItem(LIB_INDEX_KEY, JSON.stringify(index));
+  }
+
+  function annotsKeyFor(docId) {
+    return "conf-armadura-annots:" + docId;
+  }
+
+  function makeDocId(name, bytes) {
+    var u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+    var sample = (u8[0] || 0) + "-" + (u8[100] || 0) + "-" + (u8[Math.min(1000, u8.length - 1)] || 0);
+    return String(name || "pdf") + "|" + u8.byteLength + "|" + sample;
+  }
+
+  function safeFileStem(name) {
+    return String(name || "prancha")
+      .replace(/\.pdf$/i, "")
+      .replace(/[^A-Za-z0-9._\-À-ÿ]+/g, "_")
+      .slice(0, 80) || "prancha";
+  }
+
+  var NATIVE_DIRS = [
+    { directory: "EXTERNAL_STORAGE", folder: LIB_FOLDER },
+    { directory: "DOCUMENTS", folder: "ConfArmadura" },
+    { directory: "DATA", folder: "ConfArmadura" }
+  ];
+
+  async function ensureNativeFs() {
+    var fs = capFilesystem();
+    if (!fs || !isNativeCapacitor()) return null;
+    try {
+      if (typeof fs.requestPermissions === "function") await fs.requestPermissions();
+    } catch (e) {}
+    return fs;
+  }
+
+  async function writeNativePdfAndAnnots(entry, bytes, annotsJson) {
+    var fs = await ensureNativeFs();
+    if (!fs) return;
+    var stem = safeFileStem(entry.name);
+    var pdfData = bytesToBase64(bytes);
+    var jsonData = bytesToBase64(new TextEncoder().encode(annotsJson || "[]"));
+    var lastErr = null;
+    for (var d = 0; d < NATIVE_DIRS.length; d++) {
+      var dir = NATIVE_DIRS[d];
+      var pdfPath = dir.folder + "/" + stem + ".pdf";
+      var jsonPath = dir.folder + "/" + stem + ".annots.json";
+      try {
+        try {
+          await fs.mkdir({ path: dir.folder, directory: dir.directory, recursive: true });
+        } catch (e) {}
+        await fs.writeFile({
+          path: pdfPath,
+          data: pdfData,
+          directory: dir.directory,
+          recursive: true
+        });
+        await fs.writeFile({
+          path: jsonPath,
+          data: jsonData,
+          directory: dir.directory,
+          recursive: true
+        });
+        entry.nativePdfPath = pdfPath;
+        entry.nativeAnnotsPath = jsonPath;
+        entry.nativeDirectory = dir.directory;
+        entry.nativeFolder = dir.folder;
+        return;
+      } catch (err) {
+        lastErr = err;
+      }
+    }
+    if (lastErr) console.warn("Falha ao gravar PDF/annots nativo", lastErr);
+  }
+
+  async function savePdfToLibrary(bytes, name, opts) {
+    opts = opts || {};
+    var u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+    var docId = opts.docId || makeDocId(name, u8);
+    var index = readLibraryIndex();
+    var existing = null;
+    for (var i = 0; i < index.pdfs.length; i++) {
+      if (index.pdfs[i].id === docId) { existing = index.pdfs[i]; break; }
+    }
+    var entry = existing || {
+      id: docId,
+      name: name || "prancha.pdf",
+      size: u8.byteLength,
+      importedAt: new Date().toISOString()
+    };
+    entry.name = name || entry.name;
+    entry.size = u8.byteLength;
+    entry.updatedAt = new Date().toISOString();
+    try {
+      await idbPut(docId, { id: docId, name: entry.name, bytes: u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength) });
+      entry.storedIn = "idb";
+    } catch (err) {
+      console.warn("IndexedDB falhou; tentando só storage nativo", err);
+    }
+    var annots = localStorage.getItem(annotsKeyFor(docId)) || "[]";
+    await writeNativePdfAndAnnots(entry, u8, annots);
+    if (!existing) index.pdfs.unshift(entry);
+    else {
+      for (var j = 0; j < index.pdfs.length; j++) {
+        if (index.pdfs[j].id === docId) { index.pdfs[j] = entry; break; }
+      }
+    }
+    writeLibraryIndex(index);
+    return entry;
+  }
+
+  function loadAnnotsForDoc(docId) {
+    try {
+      var raw = localStorage.getItem(annotsKeyFor(docId));
+      var list = raw ? JSON.parse(raw) : [];
+      return Array.isArray(list) ? list : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function persistAnnotsNow() {
+    if (!state.docId) return;
+    var payload = JSON.stringify(annotations.list());
+    try {
+      localStorage.setItem(annotsKeyFor(state.docId), payload);
+    } catch (e) {
+      console.warn(e);
+    }
+    // Mirror JSON next to PDF when native FS is available (async, best-effort).
+    var index = readLibraryIndex();
+    var entry = null;
+    for (var i = 0; i < index.pdfs.length; i++) {
+      if (index.pdfs[i].id === state.docId) { entry = index.pdfs[i]; break; }
+    }
+    if (entry && state.pdfBytes) {
+      writeNativePdfAndAnnots(entry, state.pdfBytes, payload).then(function () {
+        writeLibraryIndex(index);
+      }).catch(function () {});
+    }
+    flashAutosave();
+  }
+
+  var autosaveTimer = 0;
+  function scheduleAutosave() {
+    clearTimeout(autosaveTimer);
+    autosaveTimer = setTimeout(persistAnnotsNow, 280);
+  }
+
+  function flashAutosave() {
+    var chip = document.getElementById("autosave-chip");
+    if (!chip) return;
+    chip.classList.add("on");
+    chip.textContent = "Autosalvo";
+    clearTimeout(flashAutosave._t);
+    flashAutosave._t = setTimeout(function () { chip.classList.remove("on"); }, 1400);
+  }
+
+  async function loadPdfFromLibrary(docId) {
+    var fromIdb = null;
+    try { fromIdb = await idbGet(docId); } catch (e) {}
+    if (fromIdb && fromIdb.bytes) {
+      return { bytes: new Uint8Array(fromIdb.bytes), name: fromIdb.name };
+    }
+    var index = readLibraryIndex();
+    var entry = null;
+    for (var i = 0; i < index.pdfs.length; i++) {
+      if (index.pdfs[i].id === docId) { entry = index.pdfs[i]; break; }
+    }
+    if (entry && entry.nativePdfPath && capFilesystem()) {
+      try {
+        var res = await capFilesystem().readFile({
+          path: entry.nativePdfPath,
+          directory: entry.nativeDirectory || "EXTERNAL_STORAGE"
+        });
+        return { bytes: base64ToBytes(res.data), name: entry.name };
+      } catch (err) {
+        console.warn(err);
+      }
+    }
+    throw new Error("PDF não encontrado na biblioteca");
+  }
+
+  async function removeFromLibrary(docId) {
+    var index = readLibraryIndex();
+    var entry = null;
+    index.pdfs = index.pdfs.filter(function (p) {
+      if (p.id === docId) { entry = p; return false; }
+      return true;
+    });
+    writeLibraryIndex(index);
+    try { localStorage.removeItem(annotsKeyFor(docId)); } catch (e) {}
+    await idbDelete(docId);
+    if (entry && entry.nativePdfPath && capFilesystem()) {
+      try {
+        var dir = entry.nativeDirectory || "EXTERNAL_STORAGE";
+        await capFilesystem().deleteFile({ path: entry.nativePdfPath, directory: dir });
+        if (entry.nativeAnnotsPath) {
+          await capFilesystem().deleteFile({ path: entry.nativeAnnotsPath, directory: dir });
+        }
+      } catch (e) {}
+    }
+  }
+
   function createAnnotationStore() {
     var items = [];
     var draft = null;
+    function notify() { scheduleAutosave(); }
     return {
       list: function () { return items.slice(); },
-      clear: function () { items = []; draft = null; },
+      clear: function () { items = []; draft = null; notify(); },
+      replaceAll: function (list) {
+        items = Array.isArray(list) ? list.slice() : [];
+        draft = null;
+      },
       undo: function () {
         if (draft) { draft = null; return true; }
         if (!items.length) return false;
         items.pop();
+        notify();
         return true;
       },
       getDraft: function () { return draft; },
@@ -346,11 +697,13 @@
         var item = Object.assign({}, draft, { id: uid(), createdAt: new Date().toISOString() });
         items.push(item);
         draft = null;
+        notify();
         return item;
       },
       add: function (item) {
         var full = Object.assign({}, item, { id: uid(), createdAt: new Date().toISOString() });
         items.push(full);
+        notify();
         return full;
       },
       summarize: function () {
@@ -871,9 +1224,15 @@
     btnUndo: document.getElementById("btn-undo"),
     btnClear: document.getElementById("btn-clear"),
     btnDemo: document.getElementById("btn-demo"),
+    btnLibrary: document.getElementById("btn-library"),
     fileInput: document.getElementById("file-input"),
+    fileInputLibrary: document.getElementById("file-input-library"),
     reportPanel: document.getElementById("report-panel"),
     reportBody: document.getElementById("report-body"),
+    libraryPanel: document.getElementById("library-panel"),
+    libraryBody: document.getElementById("library-body"),
+    btnCloseLibrary: document.getElementById("btn-close-library"),
+    btnLibraryDemo: document.getElementById("btn-library-demo"),
     btnExportHtml: document.getElementById("btn-export-html"),
     btnExportText: document.getElementById("btn-export-text"),
     btnShare: document.getElementById("btn-share"),
@@ -893,6 +1252,9 @@
     pdfViewport: null,
     textItems: [],
     docName: DEMO_LABEL,
+    docId: "",
+    pdfBytes: null,
+    skipLibrarySave: false,
     pageInfo: null,
     viewRotation: 0,
     scale: 1,
@@ -1368,24 +1730,43 @@
     applyRasterToPdfCanvas(state.pageRasterCache);
   }
 
-  async function openPdfBytes(bytes, label) {
+  async function openPdfBytes(bytes, label, opts) {
+    opts = opts || {};
     if (!window.pdfjsLib) {
       setHint("PDF.js não carregou. Verifique a internet (CDN) e recarregue.");
       return;
     }
     setHint("Carregando prancha…");
     try {
-      state.pdfDocKey = String(label || "pdf") + ":" + bytes.byteLength + ":" + (bytes[0] || 0) + (bytes[100] || 0);
+      var u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+      var docId = opts.docId || makeDocId(label, u8);
+      state.pdfDocKey = docId;
       state.pageRasterCache = null;
-      state.pdf = await pdfjsLib.getDocument({ data: bytes, useSystemFonts: true, isEvalSupported: false }).promise;
+      state.pdf = await pdfjsLib.getDocument({ data: u8, useSystemFonts: true, isEvalSupported: false }).promise;
       state.docName = label;
+      state.docId = docId;
+      state.pdfBytes = u8;
       els.docLabel.textContent = label;
-      annotations.clear();
+      // Load autosaved marks before notify hooks fire on clear/replace.
+      var saved = loadAnnotsForDoc(docId);
+      annotations.replaceAll(saved);
       state.viewRotation = 0;
       await renderPage(state.pdf, { force: true });
       centerPage();
-      setHint("✓/✕: arraste sobre o rótulo. Dois dedos: zoom.");
-      setTimeout(function () { setHint(""); }, 3200);
+      if (!opts.skipLibrarySave) {
+        try {
+          await savePdfToLibrary(u8, label, { docId: docId });
+        } catch (err) {
+          console.warn("Não foi possível guardar na biblioteca", err);
+        }
+      }
+      setHint(
+        saved.length
+          ? ("Marcações restauradas (" + saved.length + "). ✓/✕ sobre o rótulo.")
+          : "✓/✕: arraste sobre o rótulo. Dois dedos: zoom."
+      );
+      setTimeout(function () { setHint(""); }, 2800);
+      renderLibraryList();
     } catch (err) {
       console.error(err);
       setHint("Falha ao abrir o PDF. Tente outro arquivo.");
@@ -1403,6 +1784,68 @@
       console.warn(err);
       setHint("Abra o arquivo demo-pilares-vigas.pdf (ao lado deste HTML) pelo botão Abrir PDF, ou use Demo se estiver em servidor local.");
     }
+  }
+
+  function fmtBytes(n) {
+    if (!n && n !== 0) return "";
+    if (n < 1024) return n + " B";
+    if (n < 1024 * 1024) return (n / 1024).toFixed(1) + " KB";
+    return (n / (1024 * 1024)).toFixed(1) + " MB";
+  }
+
+  function renderLibraryList() {
+    if (!els.libraryBody) return;
+    var index = readLibraryIndex();
+    if (!index.pdfs.length) {
+      els.libraryBody.innerHTML = "<p class=\"group-empty\">Nenhum PDF importado ainda. Use Importar PDF — arquivos vão para <strong>Download/ConfArmadura</strong> no app.</p>";
+      return;
+    }
+    els.libraryBody.innerHTML = index.pdfs.map(function (p) {
+      var when = p.updatedAt || p.importedAt || "";
+      var annotCount = loadAnnotsForDoc(p.id).length;
+      return ""
+        + "<div class=\"lib-item\" data-id=\"" + escapeHtml(p.id) + "\">"
+        + "<div class=\"lib-meta\">"
+        + "<strong>" + escapeHtml(p.name) + "</strong>"
+        + "<span>" + escapeHtml(fmtBytes(p.size))
+        + (when ? " · " + escapeHtml(fmtTime(when)) : "")
+        + " · " + annotCount + " marcação(ões)</span>"
+        + "</div>"
+        + "<div class=\"lib-actions\">"
+        + "<button type=\"button\" data-act=\"open\">Abrir</button>"
+        + "<button type=\"button\" data-act=\"del\" title=\"Remover\">⌫</button>"
+        + "</div></div>";
+    }).join("");
+  }
+
+  function openLibrary() {
+    try { closeReport(); } catch (e) {}
+    renderLibraryList();
+    if (els.libraryPanel) {
+      els.libraryPanel.hidden = false;
+      els.libraryPanel.removeAttribute("hidden");
+      els.libraryPanel.style.display = "flex";
+    }
+  }
+
+  function closeLibrary() {
+    if (!els.libraryPanel) return;
+    els.libraryPanel.hidden = true;
+    els.libraryPanel.setAttribute("hidden", "");
+    els.libraryPanel.style.display = "none";
+  }
+
+  window.__openConfLibrary = openLibrary;
+  window.__closeConfLibrary = closeLibrary;
+
+  async function importPdfFile(file) {
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function () {
+      openPdfBytes(new Uint8Array(reader.result), file.name || "prancha.pdf");
+      closeLibrary();
+    };
+    reader.readAsArrayBuffer(file);
   }
 
   function startStroke(point) {
@@ -2034,21 +2477,60 @@
       }
     });
     els.btnDemo.addEventListener("click", tryLoadDemo);
+    if (els.btnLibrary) els.btnLibrary.addEventListener("click", openLibrary);
+    if (els.btnCloseLibrary) els.btnCloseLibrary.addEventListener("click", closeLibrary);
+    if (els.btnLibraryDemo) {
+      els.btnLibraryDemo.addEventListener("click", function () {
+        closeLibrary();
+        tryLoadDemo();
+      });
+    }
+    if (els.libraryBody) {
+      els.libraryBody.addEventListener("click", function (e) {
+        var btn = e.target && e.target.closest ? e.target.closest("button[data-act]") : null;
+        if (!btn) return;
+        var row = btn.closest(".lib-item");
+        if (!row) return;
+        var id = row.getAttribute("data-id");
+        var act = btn.getAttribute("data-act");
+        if (act === "open") {
+          setHint("Abrindo da biblioteca…");
+          loadPdfFromLibrary(id).then(function (doc) {
+            return openPdfBytes(doc.bytes, doc.name, { docId: id, skipLibrarySave: true });
+          }).then(function () {
+            closeLibrary();
+          }).catch(function (err) {
+            console.warn(err);
+            setHint("Não foi possível reabrir este PDF.");
+            setTimeout(function () { setHint(""); }, 2200);
+          });
+        } else if (act === "del") {
+          if (!window.confirm("Remover este PDF da biblioteca? As marcações também serão apagadas.")) return;
+          removeFromLibrary(id).then(function () {
+            if (state.docId === id) {
+              state.docId = "";
+              state.pdfBytes = null;
+            }
+            renderLibraryList();
+          });
+        }
+      });
+    }
     els.btnExportHtml.addEventListener("click", exportHtml);
     els.btnExportText.addEventListener("click", copyText);
     els.btnShare.addEventListener("click", shareReport);
     els.btnTextCancel.addEventListener("click", closeNoteModal);
     els.btnTextOk.addEventListener("click", saveNote);
-    els.fileInput.addEventListener("change", function () {
-      var file = els.fileInput.files && els.fileInput.files[0];
+    function onPickPdf(input) {
+      var file = input.files && input.files[0];
       if (!file) return;
-      var reader = new FileReader();
-      reader.onload = function () {
-        openPdfBytes(new Uint8Array(reader.result), file.name);
-      };
-      reader.readAsArrayBuffer(file);
-      els.fileInput.value = "";
-    });
+      importPdfFile(file);
+      input.value = "";
+    }
+    els.fileInput.addEventListener("change", function () { onPickPdf(els.fileInput); });
+    if (els.fileInputLibrary) {
+      els.fileInputLibrary.addEventListener("change", function () { onPickPdf(els.fileInputLibrary); });
+    }
     els.viewport.addEventListener("pointerdown", onPointerDown);
     els.viewport.addEventListener("pointermove", onPointerMove);
     els.viewport.addEventListener("pointerup", onPointerUp);
@@ -2070,6 +2552,7 @@
     bindUi();
     setTool("pan");
     setWakeEnabled(true).then(updateWakeUi);
+    ensureNativeFs().catch(function () {});
     if (!window.pdfjsLib) {
       setHint("Falha ao carregar PDF.js do CDN. Conecte-se à internet e recarregue, ou use Abrir PDF depois.");
       return;

@@ -1,10 +1,19 @@
 node_modules/
 dist/
+www/
 .DS_Store
-android/
-ios/
 .idea/
 *.log
 .env
 .env.*
 !*.example
+
+# Android local / build junk (keep project sources if present)
+android/.gradle/
+android/build/
+android/app/build/
+android/captures/
+android/local.properties
+android/*.iml
+android/.idea/
+ios/
