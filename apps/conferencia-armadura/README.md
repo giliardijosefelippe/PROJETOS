@@ -28,11 +28,13 @@ python3 -m http.server 8080
 ## Funções
 
 - Abrir PDF (demo ou outro do mesmo estilo)
-- Mover / zoom (pinça ou scroll), riscar, OK, risco, seta, nota
+- Mover / zoom (pinça ou scroll), riscar, seta, nota
+- **✓ OK**: arrastar sobre rótulo (`VG-…`, `P-…`) → lê o texto (pdf.js; OCR Tesseract se preciso) → destaque verde → relatório como pilar/viga conferido
+- **✕ Não conforme**: arrastar sobre rótulo → destaque vermelho → pede motivo → relatório
 - **Tela ligada** (Wake Lock — melhor em http/https)
 - **⟳** gira a visualização 90°
 - **Relatório** com contagens; exportar HTML, copiar texto, compartilhar
-- **Barra flutuante** só com símbolos: arrastar pela tela, recolher/expandir; nomes no `title` / pressão longa
+- **Barra flutuante** só com símbolos: arrastar; clique no `⋮⋮` recolhe/expande
 
 ## APK / Capacitor (caminho futuro, opcional)
 

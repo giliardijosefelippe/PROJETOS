@@ -156,10 +156,10 @@
       box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
     }
     .tool[data-tool="ok"][aria-pressed="true"] { background: #184a2d; border-color: var(--ok); }
-    .tool[data-tool="risk"][aria-pressed="true"] { background: #4a3810; border-color: var(--risk); }
+    .tool[data-tool="risk"][aria-pressed="true"] { background: #4a1818; border-color: #ff4d4d; }
     .tool-icon { font-size: 20px; line-height: 1; }
     .tool-icon.ok { color: #7ddea8; }
-    .tool-icon.risk { color: #ffcc66; font-weight: 900; }
+    .tool-icon.risk { color: #ff6b6b; font-weight: 900; }
     .dock-btn.accent { background: var(--accent); border-color: #ff3b57; color: #fff; }
     .dock-btn.danger { color: #ffc9c9; border-color: #7a3030; }
     .report-panel {
@@ -273,8 +273,8 @@
       <div class="dock-body" id="dock-body">
         <button type="button" class="tool dock-btn" data-tool="pan" aria-pressed="true" title="Mover"><span class="tool-icon" aria-hidden="true">✥</span></button>
         <button type="button" class="tool dock-btn" data-tool="stroke" title="Riscar"><span class="tool-icon" aria-hidden="true">╱</span></button>
-        <button type="button" class="tool dock-btn" data-tool="ok" title="OK"><span class="tool-icon ok" aria-hidden="true">✓</span></button>
-        <button type="button" class="tool dock-btn" data-tool="risk" title="Risco"><span class="tool-icon risk" aria-hidden="true">!</span></button>
+        <button type="button" class="tool dock-btn" data-tool="ok" title="OK — arrastar sobre rótulo (verde)"><span class="tool-icon ok" aria-hidden="true">✓</span></button>
+        <button type="button" class="tool dock-btn" data-tool="risk" title="Não conforme — arrastar + motivo (vermelho)"><span class="tool-icon risk" aria-hidden="true">✕</span></button>
         <button type="button" class="tool dock-btn" data-tool="arrow" title="Seta"><span class="tool-icon" aria-hidden="true">➜</span></button>
         <button type="button" class="tool dock-btn" data-tool="note" title="Nota"><span class="tool-icon" aria-hidden="true">T</span></button>
         <div class="dock-sep" aria-hidden="true"></div>
@@ -287,8 +287,9 @@
     </div>
   </div>
 
-  <!-- PDF.js (CDN). Precisa de internet na 1ª abertura; depois o navegador costuma cachear. -->
+  <!-- PDF.js + Tesseract (CDN). Internet na 1ª abertura; depois o navegador costuma cachear. -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <script>
 (function () {
   "use strict";
@@ -366,29 +367,46 @@
       ctx.moveTo(points[0].x, points[0].y);
       for (var p = 1; p < points.length; p++) ctx.lineTo(points[p].x, points[p].y);
       ctx.stroke();
-    } else if (kind === "ok") {
-      var x = item.x, y = item.y, s = 14;
-      ctx.strokeStyle = "#1f9d55";
-      ctx.fillStyle = "rgba(31,157,85,0.18)";
-      ctx.lineWidth = 3;
-      ctx.beginPath(); ctx.arc(x, y, s, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(x - 6, y); ctx.lineTo(x - 1, y + 6); ctx.lineTo(x + 8, y - 7);
-      ctx.stroke();
-    } else if (kind === "risk") {
-      x = item.x; y = item.y; s = 16;
-      ctx.fillStyle = "rgba(232,163,23,0.22)";
-      ctx.strokeStyle = "#e8a317";
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.moveTo(x, y - s);
-      ctx.lineTo(x + s * 0.9, y + s * 0.75);
-      ctx.lineTo(x - s * 0.9, y + s * 0.75);
-      ctx.closePath(); ctx.fill(); ctx.stroke();
-      ctx.fillStyle = "#2a1f05";
-      ctx.font = "bold 14px sans-serif";
-      ctx.textAlign = "center"; ctx.textBaseline = "middle";
-      ctx.fillText("!", x, y + 2);
+    } else if (kind === "ok" || kind === "risk" || kind === "select") {
+      var x = item.x, y = item.y;
+      var rw = item.w || 0, rh = item.h || 0;
+      var isOk = kind === "ok" || (kind === "select" && item.mode === "ok");
+      var isSelect = kind === "select";
+      if (rw > 2 && rh > 2) {
+        ctx.fillStyle = isOk ? "rgba(31,157,85,0.28)" : "rgba(224,0,36,0.22)";
+        ctx.strokeStyle = isOk ? "#1f9d55" : "#e00024";
+        ctx.lineWidth = isSelect ? 2 : 3;
+        if (isSelect) ctx.setLineDash([6, 4]);
+        ctx.fillRect(x, y, rw, rh);
+        ctx.strokeRect(x, y, rw, rh);
+        ctx.setLineDash([]);
+        if (!isSelect && item.label) {
+          ctx.fillStyle = isOk ? "#0d3d22" : "#5a000c";
+          ctx.font = "bold 11px sans-serif";
+          ctx.textBaseline = "top";
+          ctx.fillText(String(item.label).slice(0, 28), x + 3, y + 3);
+        }
+      } else if (kind === "ok") {
+        var s = 14;
+        ctx.strokeStyle = "#1f9d55";
+        ctx.fillStyle = "rgba(31,157,85,0.18)";
+        ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.arc(x, y, s, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(x - 6, y); ctx.lineTo(x - 1, y + 6); ctx.lineTo(x + 8, y - 7);
+        ctx.stroke();
+      } else if (kind === "risk") {
+        s = 14;
+        ctx.fillStyle = "rgba(224,0,36,0.2)";
+        ctx.strokeStyle = "#e00024";
+        ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.arc(x, y, s, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        ctx.strokeStyle = "#e00024";
+        ctx.beginPath();
+        ctx.moveTo(x - 6, y - 6); ctx.lineTo(x + 6, y + 6);
+        ctx.moveTo(x + 6, y - 6); ctx.lineTo(x - 6, y + 6);
+        ctx.stroke();
+      }
     } else if (kind === "arrow") {
       var x1 = item.x1, y1 = item.y1, x2 = item.x2, y2 = item.y2;
       var color = item.mode === "ok" ? "#1f9d55" : "#e8a317";
@@ -432,9 +450,32 @@
     try { return new Date(iso).toLocaleString("pt-BR"); } catch (e) { return iso || "—"; }
   }
 
+  function classifyLabel(text) {
+    var t = String(text || "").toUpperCase().replace(/\s+/g, " ").trim();
+    if (!t) return "elemento";
+    if (/\bPILAR\b/.test(t) || /\bP[\s\-.]?\d/.test(t) || /^P[\s\-]?\d/.test(t)) return "pilar";
+    if (/\bVIGA\b/.test(t) || /\bVG[\s\-]?\d/.test(t) || /\bVR[\s\-]?\d/.test(t) || /^VG|^VR/.test(t)) return "viga";
+    return "elemento";
+  }
+
+  function elementTypeLabel(type) {
+    if (type === "pilar") return "Pilar";
+    if (type === "viga") return "Viga";
+    return "Elemento";
+  }
+
   function labelFor(item) {
-    if (item.kind === "ok") return "Trecho OK";
-    if (item.kind === "risk") return "Risco / problema";
+    if (item.kind === "ok") {
+      var okName = item.label || item.text || "";
+      return (elementTypeLabel(item.elementType || classifyLabel(okName)) + " conferido")
+        + (okName ? " (" + okName + ")" : "");
+    }
+    if (item.kind === "risk") {
+      var riskName = item.label || item.text || "";
+      return "Não conforme"
+        + (riskName ? " — " + riskName : "")
+        + (item.reason ? " · motivo: " + item.reason : "");
+    }
     if (item.kind === "note") return item.mode === "ok" ? "Nota OK" : "Nota de risco";
     if (item.kind === "arrow") return item.mode === "ok" ? "Seta OK" : "Seta risco";
     if (item.kind === "stroke") {
@@ -488,29 +529,40 @@
 
   function renderReportHtmlFragment(model) {
     var riskLis = model.risks.map(function (r, idx) {
-      var detail = r.text ? " — " + escapeHtml(String(r.text)) : "";
-      return "<li><strong>#" + (idx + 1) + "</strong> " + escapeHtml(labelFor(r)) + detail
+      var bits = [];
+      if (r.label) bits.push(escapeHtml(String(r.label)));
+      if (r.elementType) bits.push(escapeHtml(elementTypeLabel(r.elementType)));
+      if (r.reason) bits.push("motivo: " + escapeHtml(String(r.reason)));
+      else if (r.text && r.kind !== "risk") bits.push(escapeHtml(String(r.text)));
+      var detail = bits.length ? " — " + bits.join(" · ") : "";
+      return "<li><strong>#" + (idx + 1) + "</strong> " + escapeHtml(r.kind === "risk" ? "Não conforme" : labelFor(r)) + detail
         + " <em>(" + escapeHtml(fmtTime(r.createdAt)) + ")</em></li>";
     }).join("");
     var okLis = model.oks.map(function (r, idx) {
-      var detail = r.text ? " — " + escapeHtml(String(r.text)) : "";
-      return "<li><strong>#" + (idx + 1) + "</strong> " + escapeHtml(labelFor(r)) + detail + "</li>";
+      var bits = [];
+      if (r.label) bits.push(escapeHtml(String(r.label)));
+      if (r.elementType) bits.push(escapeHtml(elementTypeLabel(r.elementType) + " conferido"));
+      var detail = bits.length ? " — " + bits.join(" · ") : "";
+      return "<li><strong>#" + (idx + 1) + "</strong> OK" + detail + "</li>";
     }).join("");
     var noteLis = model.notes.map(function (r) {
       return "<li>" + escapeHtml(String(r.text || "(vazia)")) + " <em>(" + escapeHtml(labelFor(r)) + ")</em></li>";
     }).join("");
+    var pilarOk = model.oks.filter(function (i) { return (i.elementType || classifyLabel(i.label)) === "pilar"; }).length;
+    var vigaOk = model.oks.filter(function (i) { return (i.elementType || classifyLabel(i.label)) === "viga"; }).length;
     return ''
       + '<div class="summary">'
-      + '<div class="stat ok"><strong>' + model.counts.ok + '</strong><span>Trechos OK</span></div>'
-      + '<div class="stat risk"><strong>' + model.counts.risk + '</strong><span>Riscos</span></div>'
+      + '<div class="stat ok"><strong>' + model.counts.ok + '</strong><span>Conferidos</span></div>'
+      + '<div class="stat risk"><strong>' + model.counts.risk + '</strong><span>Não conformes</span></div>'
       + '<div class="stat"><strong>' + model.counts.total + '</strong><span>Marcações</span></div>'
       + '</div>'
       + '<p><strong>Documento:</strong> ' + escapeHtml(model.docName) + '<br/>'
-      + '<strong>Gerado em:</strong> ' + escapeHtml(fmtTime(model.generatedAt)) + '</p>'
-      + '<h3>Riscos / problemas</h3>'
-      + (riskLis ? '<ul>' + riskLis + '</ul>' : '<p>Nenhum risco marcado.</p>')
-      + '<h3>Trechos OK</h3>'
-      + (okLis ? '<ul>' + okLis + '</ul>' : '<p>Nenhum trecho OK marcado.</p>')
+      + '<strong>Gerado em:</strong> ' + escapeHtml(fmtTime(model.generatedAt)) + '<br/>'
+      + '<strong>Pilares OK:</strong> ' + pilarOk + ' · <strong>Vigas OK:</strong> ' + vigaOk + '</p>'
+      + '<h3>Não conformes / riscos</h3>'
+      + (riskLis ? '<ul>' + riskLis + '</ul>' : '<p>Nenhum não conforme marcado.</p>')
+      + '<h3>Já conferidos (OK)</h3>'
+      + (okLis ? '<ul>' + okLis + '</ul>' : '<p>Nenhum elemento conferido.</p>')
       + '<h3>Notas de texto</h3>'
       + (noteLis ? '<ul>' + noteLis + '</ul>' : '<p>Sem notas.</p>')
       + '<h3>Setas</h3>'
@@ -523,18 +575,18 @@
       "Documento: " + model.docName,
       "Gerado em: " + fmtTime(model.generatedAt),
       "",
-      "Resumo: " + model.counts.ok + " OK · " + model.counts.risk + " riscos · " + model.counts.total + " marcações",
+      "Resumo: " + model.counts.ok + " conferidos · " + model.counts.risk + " não conformes · " + model.counts.total + " marcações",
       "",
-      "RISCOS / PROBLEMAS"
+      "NÃO CONFORMES / RISCOS"
     ];
     if (!model.risks.length) lines.push("- Nenhum");
     model.risks.forEach(function (r, i) {
-      lines.push((i + 1) + ". " + labelFor(r) + (r.text ? " — " + r.text : "") + " (" + fmtTime(r.createdAt) + ")");
+      lines.push((i + 1) + ". " + labelFor(r) + " (" + fmtTime(r.createdAt) + ")");
     });
-    lines.push("", "TRECHOS OK");
+    lines.push("", "JÁ CONFERIDOS (OK)");
     if (!model.oks.length) lines.push("- Nenhum");
     model.oks.forEach(function (r, i) {
-      lines.push((i + 1) + ". " + labelFor(r) + (r.text ? " — " + r.text : ""));
+      lines.push((i + 1) + ". " + labelFor(r));
     });
     lines.push("", "NOTAS");
     if (!model.notes.length) lines.push("- Nenhuma");
@@ -625,6 +677,9 @@
     tool: "pan",
     contentMode: "risk",
     pdf: null,
+    pdfPage: null,
+    pdfViewport: null,
+    textItems: [],
     docName: DEMO_LABEL,
     pageInfo: null,
     viewRotation: 0,
@@ -637,7 +692,10 @@
     panStart: null,
     pinch: null,
     notePending: null,
-    lastReportModel: null
+    riskPending: null,
+    modalMode: "note",
+    lastReportModel: null,
+    recognizing: false
   };
 
   var annotations = createAnnotationStore();
@@ -719,6 +777,124 @@
 
   function clamp(n, min, max) { return Math.max(min, Math.min(max, n)); }
 
+  function textItemBounds(item, viewport) {
+    var m = pdfjsLib.Util.transform(viewport.transform, item.transform);
+    var fontH = Math.hypot(m[2], m[3]) || 10;
+    var scaleX = Math.hypot(m[0], m[1]) || 1;
+    var srcScale = Math.hypot(item.transform[0], item.transform[1]) || 1;
+    var w = (item.width || 0) * (scaleX / srcScale);
+    return {
+      x: m[4],
+      y: m[5] - fontH,
+      w: Math.max(w, 2),
+      h: Math.max(fontH * 1.15, 4),
+      str: String(item.str || "")
+    };
+  }
+
+  function rectsIntersect(a, b) {
+    return !(a.x + a.w < b.x || b.x + b.w < a.x || a.y + a.h < b.y || b.y + b.h < a.y);
+  }
+
+  function normalizeSel(x0, y0, x1, y1) {
+    var x = Math.min(x0, x1), y = Math.min(y0, y1);
+    return { x: x, y: y, w: Math.abs(x1 - x0), h: Math.abs(y1 - y0) };
+  }
+
+  function isStructuralToken(str) {
+    var s = String(str || "").trim();
+    return /^(VG|VR|P|LG)[\s\-]?\d/i.test(s)
+      || /^P-\d/i.test(s)
+      || /\b(VG|VR)-\d/i.test(s)
+      || /^(PILAR|VIGA)\b/i.test(s)
+      || /^\d{2,3}\s*[xX×]\s*\d{2,3}$/.test(s);
+  }
+
+  function extractPdfTextInRect(sel) {
+    var items = state.textItems || [];
+    var hits = [];
+    for (var i = 0; i < items.length; i++) {
+      var it = items[i];
+      if (!it.str || !String(it.str).trim()) continue;
+      if (rectsIntersect(sel, it)) hits.push(it);
+    }
+    hits.sort(function (a, b) {
+      if (Math.abs(a.y - b.y) > Math.min(a.h, b.h) * 0.6) return a.y - b.y;
+      return a.x - b.x;
+    });
+    var structural = hits.filter(function (it) { return isStructuralToken(it.str); });
+    var use = structural.length ? structural : hits;
+    var parts = [];
+    for (var j = 0; j < use.length; j++) {
+      var s = String(use[j].str).trim();
+      if (s) parts.push(s);
+    }
+    return parts.join(" ").replace(/\s+/g, " ").trim();
+  }
+
+  function cropSelectionToCanvas(sel) {
+    var cssW = state.pageInfo.cssWidth;
+    var dpr = els.pdfCanvas.width / cssW;
+    var sx = Math.max(0, Math.floor(sel.x * dpr));
+    var sy = Math.max(0, Math.floor(sel.y * dpr));
+    var sw = Math.min(els.pdfCanvas.width - sx, Math.ceil(sel.w * dpr));
+    var sh = Math.min(els.pdfCanvas.height - sy, Math.ceil(sel.h * dpr));
+    if (sw < 4 || sh < 4) return null;
+    var out = document.createElement("canvas");
+    // Upscale small crops for OCR
+    var scaleUp = Math.max(2, Math.min(4, Math.ceil(120 / Math.min(sw, sh))));
+    out.width = sw * scaleUp;
+    out.height = sh * scaleUp;
+    var ctx = out.getContext("2d");
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(els.pdfCanvas, sx, sy, sw, sh, 0, 0, out.width, out.height);
+    return out;
+  }
+
+  function cleanOcrText(raw) {
+    return String(raw || "")
+      .replace(/[|]/g, "I")
+      .replace(/\s+/g, " ")
+      .replace(/[^A-Za-z0-9ÁÉÍÓÚÂÊÔÃÕÇáéíóúâêôãõç\-xX./ ]/g, "")
+      .trim();
+  }
+
+  async function ocrSelection(sel) {
+    if (!window.Tesseract) return "";
+    var crop = cropSelectionToCanvas(sel);
+    if (!crop) return "";
+    try {
+      var result = await Tesseract.recognize(crop, "eng", {
+        logger: function () {}
+      });
+      return cleanOcrText(result && result.data && result.data.text);
+    } catch (err) {
+      console.warn("OCR falhou", err);
+      return "";
+    }
+  }
+
+  async function recognizeSelectionLabel(sel) {
+    var padded = {
+      x: sel.x - 6,
+      y: sel.y - 6,
+      w: sel.w + 12,
+      h: sel.h + 12
+    };
+    var fromPdf = extractPdfTextInRect(padded);
+    if (fromPdf && (isStructuralToken(fromPdf) || /[A-Za-z].*\d|\d.*[xX×]\d/.test(fromPdf))) {
+      return { label: fromPdf, source: "pdf-text" };
+    }
+    if (fromPdf && fromPdf.length >= 3 && !/^\W+$/.test(fromPdf)) {
+      // Prefer PDF text over OCR when available (CAD exports often have a text layer).
+      return { label: fromPdf, source: "pdf-text" };
+    }
+    setHint("Lendo texto (OCR)…");
+    var fromOcr = await ocrSelection(padded);
+    if (fromOcr) return { label: fromOcr, source: "ocr" };
+    return { label: fromPdf || "", source: fromPdf ? "pdf-text" : "none" };
+  }
+
   async function renderPage(pdf) {
     var page = await pdf.getPage(1);
     var baseScale = 1.75;
@@ -733,8 +909,20 @@
     await page.render({ canvasContext: ctx, viewport: viewport, transform: transform }).promise;
     state.pageInfo = {
       cssWidth: viewport.width,
-      cssHeight: viewport.height
+      cssHeight: viewport.height,
+      baseScale: baseScale
     };
+    state.pdfPage = page;
+    state.pdfViewport = viewport;
+    try {
+      var tc = await page.getTextContent();
+      state.textItems = (tc.items || []).map(function (it) {
+        return textItemBounds(it, viewport);
+      });
+    } catch (err) {
+      console.warn(err);
+      state.textItems = [];
+    }
     els.scene.style.width = viewport.width + "px";
     els.scene.style.height = viewport.height + "px";
     syncAnnoCanvas();
@@ -754,8 +942,8 @@
       state.viewRotation = 0;
       await renderPage(state.pdf);
       centerPage();
-      setHint("Toque: marque OK / risco. Dois dedos: zoom.");
-      setTimeout(function () { setHint(""); }, 2800);
+      setHint("✓/✕: arraste sobre o rótulo. Dois dedos: zoom.");
+      setTimeout(function () { setHint(""); }, 3200);
     } catch (err) {
       console.error(err);
       setHint("Falha ao abrir o PDF. Tente outro arquivo.");
@@ -795,9 +983,79 @@
     state.drawing = false;
     redrawAnnotations();
   }
-  function placeStamp(kind, point) {
-    annotations.add({ kind: kind, x: point.x, y: point.y });
+  function startSelect(point) {
+    annotations.setDraft({
+      kind: "select",
+      mode: state.tool === "ok" ? "ok" : "risk",
+      x: point.x,
+      y: point.y,
+      w: 0,
+      h: 0,
+      x0: point.x,
+      y0: point.y
+    });
+    state.drawing = true;
     redrawAnnotations();
+  }
+  function updateSelect(point) {
+    var draft = annotations.getDraft();
+    if (!draft || draft.kind !== "select") return;
+    var n = normalizeSel(draft.x0, draft.y0, point.x, point.y);
+    draft.x = n.x; draft.y = n.y; draft.w = n.w; draft.h = n.h;
+    redrawAnnotations();
+  }
+  async function endSelect() {
+    var draft = annotations.getDraft();
+    state.drawing = false;
+    if (!draft || draft.kind !== "select") {
+      annotations.setDraft(null);
+      redrawAnnotations();
+      return;
+    }
+    var sel = { x: draft.x, y: draft.y, w: draft.w, h: draft.h, mode: draft.mode };
+    annotations.setDraft(null);
+    redrawAnnotations();
+    if (sel.w < 8 || sel.h < 8) {
+      setHint("Arraste sobre o rótulo (ex.: VG-114x90).");
+      setTimeout(function () { setHint(""); }, 2200);
+      return;
+    }
+    if (state.recognizing) return;
+    state.recognizing = true;
+    setHint("Reconhecendo texto…");
+    try {
+      var rec = await recognizeSelectionLabel(sel);
+      var label = rec.label || "(sem texto)";
+      var elementType = classifyLabel(label);
+      if (sel.mode === "ok") {
+        annotations.add({
+          kind: "ok",
+          x: sel.x, y: sel.y, w: sel.w, h: sel.h,
+          label: label,
+          text: label,
+          elementType: elementType,
+          source: rec.source
+        });
+        redrawAnnotations();
+        setHint((elementTypeLabel(elementType) + " conferido: " + label).slice(0, 80));
+        setTimeout(function () { setHint(""); }, 2200);
+      } else {
+        state.riskPending = {
+          x: sel.x, y: sel.y, w: sel.w, h: sel.h,
+          label: label,
+          text: label,
+          elementType: elementType,
+          source: rec.source
+        };
+        openRiskReasonModal();
+      }
+    } catch (err) {
+      console.error(err);
+      setHint("Falha ao reconhecer o texto da seleção.");
+      setTimeout(function () { setHint(""); }, 2500);
+    } finally {
+      state.recognizing = false;
+    }
   }
   function startArrow(point) {
     annotations.setDraft({ kind: "arrow", mode: state.contentMode, x1: point.x, y1: point.y, x2: point.x, y2: point.y });
@@ -820,18 +1078,69 @@
     redrawAnnotations();
   }
   function openNoteModal(point) {
+    state.modalMode = "note";
     state.notePending = point;
+    state.riskPending = null;
     els.textModalTitle.textContent = state.contentMode === "ok" ? "Nota OK no PDF" : "Nota de risco no PDF";
+    els.textInput.placeholder = "Descreva o trecho ou o risco…";
     els.textInput.value = "";
     els.textModal.hidden = false;
+    setTimeout(function () { els.textInput.focus(); }, 50);
+  }
+  function openRiskReasonModal() {
+    state.modalMode = "risk-reason";
+    var pending = state.riskPending || {};
+    els.textModalTitle.textContent = "Motivo do erro"
+      + (pending.label ? " — " + pending.label : "");
+    els.textInput.placeholder = "Digite o motivo da não conformidade…";
+    els.textInput.value = "";
+    els.textModal.hidden = false;
+    // Preview red highlight while editing reason
+    annotations.setDraft({
+      kind: "risk",
+      x: pending.x, y: pending.y, w: pending.w, h: pending.h,
+      label: pending.label
+    });
+    redrawAnnotations();
     setTimeout(function () { els.textInput.focus(); }, 50);
   }
   function closeNoteModal() {
     els.textModal.hidden = true;
     state.notePending = null;
+    if (state.modalMode === "risk-reason") {
+      annotations.setDraft(null);
+      state.riskPending = null;
+      redrawAnnotations();
+    }
+    state.modalMode = "note";
   }
   function saveNote() {
     var text = els.textInput.value.trim();
+    if (state.modalMode === "risk-reason") {
+      if (!text || !state.riskPending) {
+        setHint("Informe o motivo do erro.");
+        setTimeout(function () { setHint(""); }, 1800);
+        return;
+      }
+      var p = state.riskPending;
+      annotations.setDraft(null);
+      annotations.add({
+        kind: "risk",
+        x: p.x, y: p.y, w: p.w, h: p.h,
+        label: p.label,
+        text: p.label,
+        elementType: p.elementType,
+        reason: text,
+        source: p.source
+      });
+      state.riskPending = null;
+      state.modalMode = "note";
+      els.textModal.hidden = true;
+      redrawAnnotations();
+      setHint("Não conforme registrado.");
+      setTimeout(function () { setHint(""); }, 1800);
+      return;
+    }
     if (!text || !state.notePending) { closeNoteModal(); return; }
     annotations.add({ kind: "note", mode: state.contentMode, x: state.notePending.x, y: state.notePending.y, text: text });
     closeNoteModal();
@@ -839,6 +1148,7 @@
   }
 
   function onPointerDown(e) {
+    if (state.recognizing) return;
     try { els.viewport.setPointerCapture(e.pointerId); } catch (err) {}
     state.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (state.pointers.size === 2) {
@@ -862,8 +1172,7 @@
     var point = clientToPage(e.clientX, e.clientY);
     if (state.tool === "stroke") startStroke(point);
     else if (state.tool === "arrow") startArrow(point);
-    else if (state.tool === "ok") placeStamp("ok", point);
-    else if (state.tool === "risk") placeStamp("risk", point);
+    else if (state.tool === "ok" || state.tool === "risk") startSelect(point);
     else if (state.tool === "note") openNoteModal(point);
   }
 
@@ -897,6 +1206,7 @@
     var point = clientToPage(e.clientX, e.clientY);
     if (state.tool === "stroke") extendStroke(point);
     if (state.tool === "arrow") updateArrow(point);
+    if (state.tool === "ok" || state.tool === "risk") updateSelect(point);
   }
 
   function onPointerUp(e) {
@@ -906,6 +1216,7 @@
     if (state.drawing) {
       if (state.tool === "stroke") endStroke();
       if (state.tool === "arrow") endArrow();
+      if (state.tool === "ok" || state.tool === "risk") endSelect();
     }
     try {
       if (els.viewport.hasPointerCapture && els.viewport.hasPointerCapture(e.pointerId)) {
