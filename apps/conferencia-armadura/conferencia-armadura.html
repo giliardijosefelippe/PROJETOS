@@ -75,6 +75,19 @@
     .scene { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; }
     #pdf-canvas, #anno-canvas { position: absolute; left: 0; top: 0; display: block; }
     #anno-canvas { z-index: 2; }
+    /* Lightweight selection preview — CSS only during drag (no canvas/pdf.js on pointermove). */
+    #select-preview {
+      position: absolute; left: 0; top: 0; z-index: 3;
+      width: 0; height: 0; pointer-events: none;
+      border: 2px dashed #e00024;
+      box-sizing: border-box;
+      will-change: transform, width, height;
+      transform: translate3d(0, 0, 0);
+      display: none;
+    }
+    #select-preview.on { display: block; }
+    #select-preview.ok { border-color: #1f9d55; }
+    #select-preview.risk { border-color: #e00024; }
     .hint {
       position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
       background: rgba(18, 22, 26, 0.85); border: 1px solid var(--border);
@@ -239,6 +252,7 @@
         <div id="scene" class="scene">
           <canvas id="pdf-canvas"></canvas>
           <canvas id="anno-canvas"></canvas>
+          <div id="select-preview" aria-hidden="true"></div>
         </div>
       </div>
       <div id="hint" class="hint">Carregando…</div>
@@ -700,6 +714,7 @@
     scene: document.getElementById("scene"),
     pdfCanvas: document.getElementById("pdf-canvas"),
     annoCanvas: document.getElementById("anno-canvas"),
+    selectPreview: document.getElementById("select-preview"),
     hint: document.getElementById("hint"),
     docLabel: document.getElementById("doc-label"),
     btnWake: document.getElementById("btn-wake"),
@@ -746,7 +761,8 @@
     recognizing: false,
     pdfDocKey: "",
     pageRasterCache: null,
-    snapRaf: 0,
+    selectDrag: null,
+    selectRaf: 0,
     resizeTimer: 0
   };
 
@@ -1260,64 +1276,65 @@
     redrawAnnotations();
     finishToMove();
   }
+  function hideSelectPreview() {
+    var el = els.selectPreview;
+    if (!el) return;
+    el.className = "";
+    el.style.width = "0";
+    el.style.height = "0";
+    el.style.transform = "translate3d(0,0,0)";
+  }
+
+  function paintSelectPreview(drag) {
+    var el = els.selectPreview;
+    if (!el || !drag) return;
+    var w = Math.max(0, drag.w);
+    var h = Math.max(0, drag.h);
+    el.className = "on " + (drag.mode === "ok" ? "ok" : "risk");
+    el.style.width = w + "px";
+    el.style.height = h + "px";
+    el.style.transform = "translate3d(" + drag.x + "px," + drag.y + "px,0)";
+  }
+
+  function clearSelectDrag() {
+    if (state.selectRaf) {
+      cancelAnimationFrame(state.selectRaf);
+      state.selectRaf = 0;
+    }
+    state.selectDrag = null;
+    hideSelectPreview();
+  }
+
   function startSelect(point) {
-    annotations.setDraft({
-      kind: "select",
+    // Preview only — never touch pdf.js / OCR / anno canvas during drag.
+    state.selectDrag = {
       mode: state.tool === "ok" ? "ok" : "risk",
+      x0: point.x,
+      y0: point.y,
       x: point.x,
       y: point.y,
       w: 0,
-      h: 0,
-      x0: point.x,
-      y0: point.y
-    });
-    state.drawing = true;
-    redrawAnnotations();
-  }
-  function applySelectSnap(draft) {
-    if (!draft || draft.kind !== "select") return;
-    var n = {
-      x: draft.rawX != null ? draft.rawX : draft.x,
-      y: draft.rawY != null ? draft.rawY : draft.y,
-      w: draft.rawW != null ? draft.rawW : draft.w,
-      h: draft.rawH != null ? draft.rawH : draft.h
+      h: 0
     };
-    var snapped = snapSelectToText(n);
-    if (snapped && snapped.bbox) {
-      draft.x = snapped.bbox.x;
-      draft.y = snapped.bbox.y;
-      draft.w = snapped.bbox.w;
-      draft.h = snapped.bbox.h;
-      draft.snapLabel = snapped.label;
-      draft.snapName = snapped.name;
-      draft.snapDims = snapped.dims;
-    } else {
-      draft.x = n.x; draft.y = n.y; draft.w = n.w; draft.h = n.h;
-      draft.snapLabel = "";
-      draft.snapName = "";
-      draft.snapDims = "";
-    }
+    state.drawing = true;
+    paintSelectPreview(state.selectDrag);
   }
 
   function updateSelect(point) {
-    var draft = annotations.getDraft();
-    if (!draft || draft.kind !== "select") return;
-    var n = normalizeSel(draft.x0, draft.y0, point.x, point.y);
-    draft.rawX = n.x; draft.rawY = n.y; draft.rawW = n.w; draft.rawH = n.h;
-    // Paint finger rect immediately; snap to text on next frame (keeps UI ultra-fast).
-    if (!draft.snapLabel) {
-      draft.x = n.x; draft.y = n.y; draft.w = n.w; draft.h = n.h;
-    }
-    if (!state.snapRaf) {
-      state.snapRaf = requestAnimationFrame(function () {
-        state.snapRaf = 0;
-        var d = annotations.getDraft();
-        if (!d || d.kind !== "select") return;
-        applySelectSnap(d);
-        redrawAnnotations();
+    var drag = state.selectDrag;
+    if (!drag) return;
+    var n = normalizeSel(drag.x0, drag.y0, point.x, point.y);
+    drag.x = n.x;
+    drag.y = n.y;
+    drag.w = n.w;
+    drag.h = n.h;
+    // Coalesce paints to one CSS update per frame — no canvas, no text scan.
+    if (!state.selectRaf) {
+      state.selectRaf = requestAnimationFrame(function () {
+        state.selectRaf = 0;
+        if (state.selectDrag) paintSelectPreview(state.selectDrag);
       });
     }
-    redrawAnnotations();
   }
 
   function commitSelectResult(sel, rec) {
@@ -1355,38 +1372,19 @@
   }
 
   function endSelect() {
-    var draft = annotations.getDraft();
     state.drawing = false;
-    if (!draft || draft.kind !== "select") {
-      annotations.setDraft(null);
-      redrawAnnotations();
+    var drag = state.selectDrag;
+    if (state.selectRaf) {
+      cancelAnimationFrame(state.selectRaf);
+      state.selectRaf = 0;
+    }
+    clearSelectDrag();
+    if (!drag) {
       finishToMove();
       return;
     }
-    var raw = {
-      x: draft.rawX != null ? draft.rawX : draft.x,
-      y: draft.rawY != null ? draft.rawY : draft.y,
-      w: draft.rawW != null ? draft.rawW : draft.w,
-      h: draft.rawH != null ? draft.rawH : draft.h
-    };
-    var sel = {
-      x: draft.x, y: draft.y, w: draft.w, h: draft.h,
-      mode: draft.mode
-    };
-    if (state.snapRaf) {
-      cancelAnimationFrame(state.snapRaf);
-      state.snapRaf = 0;
-    }
-    // Final snap before commit so border == fill.
-    draft.rawX = raw.x; draft.rawY = raw.y; draft.rawW = raw.w; draft.rawH = raw.h;
-    applySelectSnap(draft);
-    sel = {
-      x: draft.x, y: draft.y, w: draft.w, h: draft.h,
-      mode: draft.mode
-    };
-    var snapLabel = draft.snapLabel || "";
-    annotations.setDraft(null);
-    redrawAnnotations();
+    var raw = { x: drag.x, y: drag.y, w: drag.w, h: drag.h };
+    var sel = { x: drag.x, y: drag.y, w: drag.w, h: drag.h, mode: drag.mode };
     if (raw.w < 8 || raw.h < 8) {
       setHint("Arraste sobre o rótulo (ex.: VG-114x90).");
       setTimeout(function () { setHint(""); }, 1800);
@@ -1394,21 +1392,17 @@
       return;
     }
 
-    // Hot path: pdf.js only — immediate highlight, no Tesseract wait.
+    // Recognize ONLY on pointerup (pdf.js text layer). Snap fill to glyph bbox here.
     var rec = recognizeSelectionLabelFast(raw);
-    if (!rec.label && snapLabel) {
-      rec.label = snapLabel;
-      rec.source = "pdf-text";
-    }
-    if (!rec.bbox && sel.w > 2) {
-      rec.bbox = { x: sel.x, y: sel.y, w: sel.w, h: sel.h };
+    if (rec.bbox && rec.bbox.w > 2) {
+      sel.x = rec.bbox.x; sel.y = rec.bbox.y; sel.w = rec.bbox.w; sel.h = rec.bbox.h;
     }
     if (rec.label || (rec.bbox && rec.bbox.w > 2)) {
       commitSelectResult(sel, rec);
       return;
     }
 
-    // Rare fallback: async OCR without blocking UI — keep provisional box first.
+    // Rare fallback: async OCR — provisional box, no drag involvement.
     annotations.add({
       kind: sel.mode === "ok" ? "ok" : "risk",
       x: sel.x, y: sel.y, w: sel.w, h: sel.h,
@@ -1419,12 +1413,7 @@
       provisional: true
     });
     redrawAnnotations();
-    if (sel.mode === "risk") {
-      // Don't open reason modal until we have a label; finish move for now.
-      finishToMove();
-    } else {
-      finishToMove();
-    }
+    finishToMove();
     setHint("Texto não encontrado na camada PDF — OCR em segundo plano…");
     ocrSelection({
       x: raw.x - 8, y: raw.y - 8, w: raw.w + 16, h: raw.h + 16
@@ -1453,7 +1442,6 @@
             name: last.name, dims: last.dims,
             elementType: last.elementType, source: "ocr"
           };
-          // Remove provisional risk until reason is saved
           annotations.undo();
           openRiskReasonModal();
         }
@@ -1572,6 +1560,7 @@
       state.pinching = true;
       state.drawing = false;
       annotations.setDraft(null);
+      clearSelectDrag();
       var pts = Array.from(state.pointers.values());
       var a = pts[0], b = pts[1];
       state.pinch = {
