@@ -449,7 +449,7 @@
     var t = String(text || "").toUpperCase().replace(/\s+/g, " ").trim();
     if (!t) return "elemento";
     if (/\bPILAR\b/.test(t) || /\bP[\s\-.]?\d/.test(t) || /^P[\s\-]?\d/.test(t)) return "pilar";
-    if (/\bVIGA\b/.test(t) || /\bVG[\s\-]?\d/.test(t) || /\bVR[\s\-]?\d/.test(t) || /^VG|^VR/.test(t)) return "viga";
+    if (/\bVIGA\b/.test(t) || /\bVG[\s\-]?\d/.test(t) || /\bVR[\s\-]?\d/.test(t) || /\bVT[\s\-]?\d/.test(t) || /^VG|^VR|^VT/.test(t)) return "viga";
     return "elemento";
   }
 
@@ -773,17 +773,38 @@
   function clamp(n, min, max) { return Math.max(min, Math.min(max, n)); }
 
   function textItemBounds(item, viewport) {
-    var m = pdfjsLib.Util.transform(viewport.transform, item.transform);
-    var fontH = Math.hypot(m[2], m[3]) || 10;
-    var scaleX = Math.hypot(m[0], m[1]) || 1;
-    var srcScale = Math.hypot(item.transform[0], item.transform[1]) || 1;
-    var w = (item.width || 0) * (scaleX / srcScale);
+    // pdf.js item.width is advance length in PDF user-space units.
+    // Text may be rotated 90° (common in CAD); build the glyph quad then AABB in viewport/CSS space.
+    var t = item.transform;
+    var hScale = Math.hypot(t[0], t[1]) || 1;
+    var tsAdvance = (item.width || 0) / hScale;
+    // Text-space corners: baseline 0→advance, ascent 0→1 em (font size baked into matrix).
+    var cornersPdf = [
+      pdfjsLib.Util.applyTransform([0, 0], t),
+      pdfjsLib.Util.applyTransform([tsAdvance, 0], t),
+      pdfjsLib.Util.applyTransform([0, 1], t),
+      pdfjsLib.Util.applyTransform([tsAdvance, 1], t)
+    ];
+    var xs = [], ys = [];
+    for (var i = 0; i < cornersPdf.length; i++) {
+      var vp = viewport.convertToViewportPoint(cornersPdf[i][0], cornersPdf[i][1]);
+      xs.push(vp[0]);
+      ys.push(vp[1]);
+    }
+    var minX = Math.min.apply(null, xs);
+    var maxX = Math.max.apply(null, xs);
+    var minY = Math.min.apply(null, ys);
+    var maxY = Math.max.apply(null, ys);
     return {
-      x: m[4],
-      y: m[5] - fontH,
-      w: Math.max(w, 2),
-      h: Math.max(fontH * 1.15, 4),
-      str: String(item.str || "")
+      x: minX,
+      y: minY,
+      w: Math.max(maxX - minX, 2),
+      h: Math.max(maxY - minY, 2),
+      str: String(item.str || ""),
+      angle: Math.atan2(
+        pdfjsLib.Util.transform(viewport.transform, t)[1],
+        pdfjsLib.Util.transform(viewport.transform, t)[0]
+      )
     };
   }
 
@@ -798,11 +819,12 @@
 
   function isStructuralToken(str) {
     var s = String(str || "").trim();
-    return /^(VG|VR|P|LG)[\s\-]?\d/i.test(s)
+    return /^(VG|VR|VT|P|LG)[\s\-]?\d/i.test(s)
       || /^P-\d/i.test(s)
-      || /\b(VG|VR)-\d/i.test(s)
+      || /\b(VG|VR|VT)-\d/i.test(s)
       || /^(PILAR|VIGA)\b/i.test(s)
-      || /^\d{2,3}\s*[xX×]\s*\d{2,3}$/.test(s);
+      || /^\d{2,3}\s*[xX×]\s*\d{2,3}$/.test(s)
+      || /^e\s*=/i.test(s);
   }
 
   function unionTextBounds(items, pad) {
