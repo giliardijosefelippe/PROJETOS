@@ -17,6 +17,7 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import JSONResponse, Response
 
 from .convert import CadConvertError, convert_bytes, converter_status
+from .parse_dxf import parse_dxf_bytes
 
 MAX_BYTES = int(os.environ.get("CAD_CONVERT_MAX_BYTES", str(40 * 1024 * 1024)))
 
@@ -136,3 +137,33 @@ async def convert_bundle(file: Annotated[UploadFile, File(...)]):
         "pdf_mime": "application/pdf",
         "png_mime": "image/png",
     }
+
+
+@app.post("/parse")
+async def parse_dxf(file: Annotated[UploadFile, File(...)]):
+    """
+    MapaConcreto Fase 2: DXF → layers/entities (metros).
+    Não cria elementos estruturais. DWG requer conversão prévia (ODA).
+    """
+    name = file.filename or "drawing.dxf"
+    data = await file.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="Arquivo vazio.")
+    if len(data) > MAX_BYTES:
+        raise HTTPException(status_code=413, detail="Arquivo muito grande.")
+    lower = name.lower()
+    if lower.endswith(".dwg"):
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "DWG_NOT_IN_PARSE",
+                "message": "Converta DWG→DXF antes do /parse (ODA opcional). Sem SDK pago.",
+            },
+        )
+    try:
+        return parse_dxf_bytes(data, name)
+    except CadConvertError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": exc.code, "message": exc.message},
+        ) from exc

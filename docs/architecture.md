@@ -61,13 +61,14 @@ Obra → Pavimento → Importar PDF → Calibrar escala
 
 `diferenca_nf_teorico` é diferença entre métricas selecionadas; a UI **não** rotula como perda sem evidência.
 
-## 5. Limitações conscientes (Fase 1)
+## 5. Limitações conscientes (Fase 1–2)
 
 - PDF: renderização + calibração; sem OCR/extração automática de elementos.
 - Elementos planos (laje) com espessura constante: cálculo automático auditável.
 - Pilares / verticais: exigem altura ou ficam **indeterminados**.
-- DXF/DWG/IFC: fora do MVP (ver `services/cad-convert` e fases 2–3).
-- Sem SDK pago; alternativa local = PDF + CSV.
+- **DXF (Fase 2):** parser ASCII TS + opcional `POST /parse` (ezdxf). Layers/entidades → modelo interno em metros. **Não** cria elementos estruturais automaticamente.
+- DWG/IFC: Fase 3 (ver `services/cad-convert`; sem SDK pago sem autorização).
+- Sem SDK pago; alternativa local = PDF + CSV + DXF ASCII.
 
 ## 6. Segurança e multi-tenant
 

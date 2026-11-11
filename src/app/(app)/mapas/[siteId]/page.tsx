@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { requireSession } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { uploadPlantPdfAction } from "@/actions/mapas/drawings";
+import { uploadPlantDxfAction } from "@/actions/mapas/dxf";
 import { createElementAction } from "@/actions/mapas/elements";
 import { importElementsCsvAction } from "@/actions/mapas/import-elements";
 import { Button } from "@/components/ui/button";
@@ -48,7 +49,7 @@ export default async function SiteDetailPage({
   const { data: drawings } = await supabase
     .from("mc_drawing_revisions")
     .select(
-      "id, revision_code, title, file_name, meters_per_pdf_unit, is_demo, created_at",
+      "id, revision_code, title, file_name, meters_per_pdf_unit, is_demo, created_at, source_kind, cad_unit_label",
     )
     .eq("site_id", siteId)
     .order("created_at", { ascending: false });
@@ -222,6 +223,41 @@ export default async function SiteDetailPage({
         </form>
 
         <form
+          action={uploadPlantDxfAction}
+          className="space-y-3 rounded-lg border border-border bg-surface p-4"
+          encType="multipart/form-data"
+        >
+          <h3 className="font-semibold">Importar DXF (Fase 2)</h3>
+          <p className="text-xs text-ink-muted">
+            Parser ASCII local (layers, polilinhas, blocos/INSERT). Não cria
+            lajes/pilares automaticamente. Fixture demo:{" "}
+            <code>fixtures/mapas/demo-laje-40m2.dxf</code>.
+          </p>
+          <input type="hidden" name="site_id" value={siteId} />
+          <input type="hidden" name="floor_id" value={floors[0]?.id || ""} />
+          <div>
+            <Label htmlFor="dxf_revision">Revisão</Label>
+            <Input id="dxf_revision" name="revision_code" defaultValue="R00" />
+          </div>
+          <div>
+            <Label htmlFor="dxf_title">Título</Label>
+            <Input id="dxf_title" name="title" defaultValue="Planta DXF" />
+          </div>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" name="is_demo" value="1" />
+            Marcar como demonstração
+          </label>
+          <Input
+            id="dxf_file"
+            name="file"
+            type="file"
+            accept=".dxf,image/vnd.dxf,application/dxf"
+            required
+          />
+          <Button type="submit">Enviar DXF</Button>
+        </form>
+
+        <form
           action={uploadPlantPdfAction}
           className="space-y-3 rounded-lg border border-border bg-surface p-4"
           encType="multipart/form-data"
@@ -336,9 +372,11 @@ export default async function SiteDetailPage({
                 </Link>
                 <p className="text-ink-muted">
                   {d.file_name}
-                  {d.meters_per_pdf_unit
-                    ? " · escala calibrada"
-                    : " · escala pendente"}
+                  {d.source_kind === "dxf"
+                    ? ` · DXF${d.cad_unit_label ? ` (${d.cad_unit_label})` : ""}`
+                    : d.meters_per_pdf_unit
+                      ? " · escala calibrada"
+                      : " · escala pendente"}
                   {d.is_demo ? " · demonstração" : ""}
                 </p>
               </div>

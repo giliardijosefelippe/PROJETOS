@@ -36,6 +36,7 @@ CAD_CONVERT_URL=http://127.0.0.1:8091
 | GET | `/health` | Status + disponibilidade ODA |
 | POST | `/convert?format=pdf\|png\|both` | Multipart `file` → PDF/PNG |
 | POST | `/convert/bundle` | JSON com PDF+PNG em base64 (usado pelo Next.js) |
+| POST | `/parse` | DXF → layers/entities JSON (MapaConcreto Fase 2; metros) |
 
 ## DWG (ODA File Converter)
 

@@ -13,6 +13,7 @@ import {
   polygonFromGeoJson,
   type GeoJsonPolygon,
 } from "@/lib/mapas/geometry";
+import type { CadEntity, CadLayer } from "@/lib/mapas/dxf/types";
 
 const BUCKET = process.env.STORAGE_BUCKET_LIBRARY || "library";
 
@@ -84,7 +85,10 @@ export default async function PlantaPage({
             {drawing.revision_code} — {drawing.title}
           </h2>
           <p className="text-sm text-ink-muted">
-            {drawing.file_name} · hash {drawing.content_hash.slice(0, 12)}…
+            {drawing.file_name} ·{" "}
+            {drawing.source_kind === "dxf" ? "DXF" : "PDF"} · hash{" "}
+            {drawing.content_hash.slice(0, 12)}…
+            {drawing.cad_unit_label ? ` · unidade ${drawing.cad_unit_label}` : ""}
             {drawing.is_demo ? " · " : ""}
             {drawing.is_demo && <Badge>Demonstração</Badge>}
           </p>
@@ -124,7 +128,7 @@ export default async function PlantaPage({
         </p>
       )}
 
-      {!signed?.signedUrl ? (
+      {drawing.source_kind !== "dxf" && !signed?.signedUrl ? (
         <p className="text-sm text-[var(--color-status-danger)]">
           Não foi possível assinar a URL do PDF. Verifique Storage/bucket{" "}
           <code>{BUCKET}</code>.
@@ -133,11 +137,16 @@ export default async function PlantaPage({
         <PlantViewer
           siteId={siteId}
           drawingId={drawingId}
-          pdfUrl={signed.signedUrl}
+          pdfUrl={
+            drawing.source_kind === "dxf" ? null : signed?.signedUrl || null
+          }
+          sourceKind={drawing.source_kind === "dxf" ? "dxf" : "pdf"}
           metersPerPdfUnit={
             drawing.meters_per_pdf_unit != null
               ? Number(drawing.meters_per_pdf_unit)
-              : null
+              : drawing.source_kind === "dxf"
+                ? 1
+                : null
           }
           scaleP1={drawing.scale_p1 as number[] | null}
           scaleP2={drawing.scale_p2 as number[] | null}
@@ -145,6 +154,14 @@ export default async function PlantaPage({
             drawing.scale_real_m != null ? Number(drawing.scale_real_m) : null
           }
           selectedPage={drawing.selected_page || 1}
+          cadLayers={(drawing.cad_layers as CadLayer[] | null) || []}
+          cadEntities={(drawing.cad_entities as CadEntity[] | null) || []}
+          cadWarnings={
+            Array.isArray(drawing.cad_warnings)
+              ? (drawing.cad_warnings as string[])
+              : []
+          }
+          cadUnitLabel={drawing.cad_unit_label}
           regions={(regions || []).map((r) => ({
             id: r.id,
             name: r.name,
