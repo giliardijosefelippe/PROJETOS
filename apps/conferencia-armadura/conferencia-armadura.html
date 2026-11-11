@@ -287,9 +287,8 @@
     </div>
   </div>
 
-  <!-- PDF.js + Tesseract (CDN). Internet na 1ª abertura; depois o navegador costuma cachear. -->
+  <!-- PDF.js (CDN). Tesseract só carrega sob demanda no fallback OCR — fora do caminho quente. -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <script>
 (function () {
   "use strict";
@@ -373,14 +372,18 @@
       var isOk = kind === "ok" || (kind === "select" && item.mode === "ok");
       var isSelect = kind === "select";
       if (rw > 2 && rh > 2) {
-        ctx.fillStyle = isOk ? "rgba(31,157,85,0.28)" : "rgba(224,0,36,0.22)";
         ctx.strokeStyle = isOk ? "#1f9d55" : "#e00024";
         ctx.lineWidth = isSelect ? 2 : 3;
-        if (isSelect) ctx.setLineDash([6, 4]);
-        ctx.fillRect(x, y, rw, rh);
-        ctx.strokeRect(x, y, rw, rh);
-        ctx.setLineDash([]);
-        // Keep overlay on the glyph bbox; original PDF text remains visible underneath.
+        if (isSelect) {
+          // Selection border only (snapped to text) — fill comes after commit.
+          ctx.setLineDash([5, 4]);
+          ctx.strokeRect(x, y, rw, rh);
+          ctx.setLineDash([]);
+        } else {
+          ctx.fillStyle = isOk ? "rgba(31,157,85,0.28)" : "rgba(224,0,36,0.22)";
+          ctx.fillRect(x, y, rw, rh);
+          ctx.strokeRect(x, y, rw, rh);
+        }
       } else if (kind === "ok") {
         var s = 14;
         ctx.strokeStyle = "#1f9d55";
@@ -459,16 +462,41 @@
     return "Elemento";
   }
 
+  function splitLabelNameDims(label) {
+    var s = String(label || "").replace(/\s+/g, " ").trim();
+    if (!s) return { name: "", dims: "", display: "" };
+    // VR-114x65 → name VR-114, dims 114x65 already in token — keep name, pull dims if glued
+    var glued = s.match(/^((?:P|VG|VR|VT|LG)[\-]?\d+[A-Za-z]?)[\s\-]*(\d+\s*[xX×]\s*\d+.*)$/i);
+    if (glued) {
+      return {
+        name: glued[1],
+        dims: glued[2].trim(),
+        display: glued[1] + " · " + glued[2].trim()
+      };
+    }
+    var m = s.match(/^((?:P|VG|VR|VT|LG)[\s\-]?\d+[A-Za-z]?)\s*(.*)$/i);
+    if (m) {
+      var name = m[1].replace(/\s+/g, "");
+      var dims = (m[2] || "").trim();
+      return { name: name, dims: dims, display: name + (dims ? " · " + dims : "") };
+    }
+    var parts = s.split(/\s+/);
+    if (parts.length >= 2) {
+      return { name: parts[0], dims: parts.slice(1).join(" "), display: parts[0] + " · " + parts.slice(1).join(" ") };
+    }
+    return { name: s, dims: "", display: s };
+  }
+
   function labelFor(item) {
     if (item.kind === "ok") {
-      var okName = item.label || item.text || "";
-      return (elementTypeLabel(item.elementType || classifyLabel(okName)) + " conferido")
-        + (okName ? " (" + okName + ")" : "");
+      var okParts = splitLabelNameDims(item.label || item.text || "");
+      return (elementTypeLabel(item.elementType || classifyLabel(okParts.display)) + " conferido")
+        + (okParts.display ? " (" + okParts.display + ")" : "");
     }
     if (item.kind === "risk") {
-      var riskName = item.label || item.text || "";
+      var riskParts = splitLabelNameDims(item.label || item.text || "");
       return "Não conforme"
-        + (riskName ? " — " + riskName : "")
+        + (riskParts.display ? " — " + riskParts.display : "")
         + (item.reason ? " · motivo: " + item.reason : "");
     }
     if (item.kind === "note") return item.mode === "ok" ? "Nota OK" : "Nota de risco";
@@ -522,23 +550,37 @@
     };
   }
 
+  function reportNameDims(item) {
+    var parts = splitLabelNameDims(
+      (item.name && item.dims)
+        ? (item.name + " " + item.dims)
+        : (item.label || item.text || "")
+    );
+    if (item.name && !parts.name) parts.name = item.name;
+    if (item.dims && !parts.dims) parts.dims = item.dims;
+    return parts;
+  }
+
   function renderReportHtmlFragment(model) {
+    // Always: name first (P-2, VG-2…), then dims (25x50…), then status.
     var riskLis = model.risks.map(function (r, idx) {
-      var bits = [];
-      if (r.label) bits.push(escapeHtml(String(r.label)));
-      if (r.elementType) bits.push(escapeHtml(elementTypeLabel(r.elementType)));
-      if (r.reason) bits.push("motivo: " + escapeHtml(String(r.reason)));
-      else if (r.text && r.kind !== "risk") bits.push(escapeHtml(String(r.text)));
-      var detail = bits.length ? " — " + bits.join(" · ") : "";
-      return "<li><strong>#" + (idx + 1) + "</strong> " + escapeHtml(r.kind === "risk" ? "Não conforme" : labelFor(r)) + detail
+      var parts = reportNameDims(r);
+      var head = parts.name
+        ? "<strong>" + escapeHtml(parts.name) + "</strong>"
+          + (parts.dims ? " · " + escapeHtml(parts.dims) : "")
+        : escapeHtml(parts.display || labelFor(r));
+      var tail = " — Não conforme";
+      if (r.reason) tail += " · motivo: " + escapeHtml(String(r.reason));
+      return "<li><strong>#" + (idx + 1) + "</strong> " + head + tail
         + " <em>(" + escapeHtml(fmtTime(r.createdAt)) + ")</em></li>";
     }).join("");
     var okLis = model.oks.map(function (r, idx) {
-      var bits = [];
-      if (r.label) bits.push(escapeHtml(String(r.label)));
-      if (r.elementType) bits.push(escapeHtml(elementTypeLabel(r.elementType) + " conferido"));
-      var detail = bits.length ? " — " + bits.join(" · ") : "";
-      return "<li><strong>#" + (idx + 1) + "</strong> OK" + detail + "</li>";
+      var parts = reportNameDims(r);
+      var head = parts.name
+        ? "<strong>" + escapeHtml(parts.name) + "</strong>"
+          + (parts.dims ? " · " + escapeHtml(parts.dims) : "")
+        : escapeHtml(parts.display || (r.label || r.text || "OK"));
+      return "<li><strong>#" + (idx + 1) + "</strong> " + head + " — conferido</li>";
     }).join("");
     var noteLis = model.notes.map(function (r) {
       return "<li>" + escapeHtml(String(r.text || "(vazia)")) + " <em>(" + escapeHtml(labelFor(r)) + ")</em></li>";
@@ -576,12 +618,23 @@
     ];
     if (!model.risks.length) lines.push("- Nenhum");
     model.risks.forEach(function (r, i) {
-      lines.push((i + 1) + ". " + labelFor(r) + " (" + fmtTime(r.createdAt) + ")");
+      var parts = reportNameDims(r);
+      var head = parts.name
+        ? parts.name + (parts.dims ? " · " + parts.dims : "")
+        : (parts.display || labelFor(r));
+      var line = (i + 1) + ". " + head + " — Não conforme";
+      if (r.reason) line += " · motivo: " + r.reason;
+      line += " (" + fmtTime(r.createdAt) + ")";
+      lines.push(line);
     });
     lines.push("", "JÁ CONFERIDOS (OK)");
     if (!model.oks.length) lines.push("- Nenhum");
     model.oks.forEach(function (r, i) {
-      lines.push((i + 1) + ". " + labelFor(r));
+      var parts = reportNameDims(r);
+      var head = parts.name
+        ? parts.name + (parts.dims ? " · " + parts.dims : "")
+        : (parts.display || labelFor(r));
+      lines.push((i + 1) + ". " + head + " — conferido");
     });
     lines.push("", "NOTAS");
     if (!model.notes.length) lines.push("- Nenhuma");
@@ -690,7 +743,11 @@
     riskPending: null,
     modalMode: "note",
     lastReportModel: null,
-    recognizing: false
+    recognizing: false,
+    pdfDocKey: "",
+    pageRasterCache: null,
+    snapRaf: 0,
+    resizeTimer: 0
   };
 
   var annotations = createAnnotationStore();
@@ -846,6 +903,47 @@
     };
   }
 
+  function clusterAroundSeed(seed, pool, pad) {
+    var box = unionTextBounds([seed], pad);
+    var cluster = [seed];
+    for (var i = 0; i < pool.length; i++) {
+      var it = pool[i];
+      if (it === seed) continue;
+      if (rectsIntersect(box, it)) {
+        cluster.push(it);
+      }
+    }
+    // Second pass: grow with dims near the expanded seed cluster
+    box = unionTextBounds(cluster, Math.max(8, pad * 0.45));
+    for (var j = 0; j < pool.length; j++) {
+      var extra = pool[j];
+      if (cluster.indexOf(extra) >= 0) continue;
+      if (rectsIntersect(box, extra)) cluster.push(extra);
+    }
+    cluster.sort(function (a, b) {
+      if (Math.abs(a.y - b.y) > Math.min(a.h, b.h) * 0.6) return a.y - b.y;
+      return a.x - b.x;
+    });
+    return cluster;
+  }
+
+  function packTextCluster(use) {
+    var parts = [];
+    for (var j = 0; j < use.length; j++) {
+      var s = String(use[j].str).trim();
+      if (s) parts.push(s);
+    }
+    var joined = parts.join(" ").replace(/\s+/g, " ").trim();
+    var ordered = splitLabelNameDims(joined);
+    return {
+      label: ordered.display || joined,
+      name: ordered.name,
+      dims: ordered.dims,
+      bbox: unionTextBounds(use, 2),
+      items: use
+    };
+  }
+
   function extractPdfTextInRect(sel) {
     var items = state.textItems || [];
     var hits = [];
@@ -854,22 +952,64 @@
       if (!it.str || !String(it.str).trim()) continue;
       if (rectsIntersect(sel, it)) hits.push(it);
     }
+    if (!hits.length) {
+      return { label: "", name: "", dims: "", bbox: null, items: [] };
+    }
     hits.sort(function (a, b) {
       if (Math.abs(a.y - b.y) > Math.min(a.h, b.h) * 0.6) return a.y - b.y;
       return a.x - b.x;
     });
     var structural = hits.filter(function (it) { return isStructuralToken(it.str); });
-    var use = structural.length ? structural : hits;
-    var parts = [];
-    for (var j = 0; j < use.length; j++) {
-      var s = String(use[j].str).trim();
-      if (s) parts.push(s);
+    var cx = sel.x + sel.w / 2;
+    var cy = sel.y + sel.h / 2;
+
+    // Prefer the structural token closest to the selection center — keeps the
+    // red selection border tight even when the finger stroke is large.
+    if (structural.length) {
+      var best = null;
+      var bestDist = Infinity;
+      for (var s = 0; s < structural.length; s++) {
+        var st = structural[s];
+        // Prefer name-like tokens (P-2, VG-2) over pure dims (25x50)
+        var isName = /^(P|VG|VR|VT|LG)[\s\-]?\d/i.test(String(st.str).trim())
+          || /^(PILAR|VIGA)\b/i.test(String(st.str).trim());
+        var stx = st.x + st.w / 2;
+        var sty = st.y + st.h / 2;
+        var dist = Math.hypot(stx - cx, sty - cy) - (isName ? 40 : 0);
+        if (dist < bestDist) {
+          bestDist = dist;
+          best = st;
+        }
+      }
+      return packTextCluster(clusterAroundSeed(best, hits, 30));
     }
-    return {
-      label: parts.join(" ").replace(/\s+/g, " ").trim(),
-      bbox: unionTextBounds(use, 3),
-      items: use
+
+    // No structural token: take nearest hit + nearby neighbors
+    var nearest = hits[0];
+    var nearestDist = Infinity;
+    for (var h = 0; h < hits.length; h++) {
+      var hit = hits[h];
+      var d = Math.hypot(hit.x + hit.w / 2 - cx, hit.y + hit.h / 2 - cy);
+      if (d < nearestDist) {
+        nearestDist = d;
+        nearest = hit;
+      }
+    }
+    return packTextCluster(clusterAroundSeed(nearest, hits, 18));
+  }
+
+  function snapSelectToText(sel) {
+    if (!sel || sel.w < 6 || sel.h < 6) return null;
+    var padded = {
+      x: sel.x - 6,
+      y: sel.y - 6,
+      w: sel.w + 12,
+      h: sel.h + 12
     };
+    var fromPdf = extractPdfTextInRect(padded);
+    if (!fromPdf.bbox || fromPdf.bbox.w < 2 || fromPdf.bbox.h < 2) return null;
+    if (!fromPdf.label) return null;
+    return fromPdf;
   }
 
   function cropSelectionToCanvas(sel) {
@@ -899,11 +1039,32 @@
       .trim();
   }
 
+  var tesseractLoadPromise = null;
+  function ensureTesseract() {
+    if (window.Tesseract) return Promise.resolve(window.Tesseract);
+    if (tesseractLoadPromise) return tesseractLoadPromise;
+    tesseractLoadPromise = new Promise(function (resolve, reject) {
+      var s = document.createElement("script");
+      s.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
+      s.async = true;
+      s.onload = function () {
+        if (window.Tesseract) resolve(window.Tesseract);
+        else reject(new Error("Tesseract não disponível"));
+      };
+      s.onerror = function () {
+        tesseractLoadPromise = null;
+        reject(new Error("Falha ao carregar Tesseract"));
+      };
+      document.head.appendChild(s);
+    });
+    return tesseractLoadPromise;
+  }
+
   async function ocrSelection(sel) {
-    if (!window.Tesseract) return { label: "", bbox: null };
     var crop = cropSelectionToCanvas(sel);
     if (!crop) return { label: "", bbox: null };
     try {
+      await ensureTesseract();
       var result = await Tesseract.recognize(crop, "eng", {
         logger: function () {}
       });
@@ -941,31 +1102,25 @@
     }
   }
 
-  async function recognizeSelectionLabel(sel) {
+  /** Sync fast path only (pdf.js text layer). Never calls Tesseract. */
+  function recognizeSelectionLabelFast(sel) {
     var padded = {
-      x: sel.x - 6,
-      y: sel.y - 6,
-      w: sel.w + 12,
-      h: sel.h + 12
+      x: sel.x - 8,
+      y: sel.y - 8,
+      w: sel.w + 16,
+      h: sel.h + 16
     };
     var fromPdf = extractPdfTextInRect(padded);
-    if (fromPdf.label && (isStructuralToken(fromPdf.label) || /[A-Za-z].*\d|\d.*[xX×]\d/.test(fromPdf.label))) {
-      return { label: fromPdf.label, source: "pdf-text", bbox: fromPdf.bbox || null };
+    if (fromPdf.label) {
+      return {
+        label: fromPdf.label,
+        name: fromPdf.name,
+        dims: fromPdf.dims,
+        source: "pdf-text",
+        bbox: fromPdf.bbox || null
+      };
     }
-    if (fromPdf.label && fromPdf.label.length >= 3 && !/^\W+$/.test(fromPdf.label)) {
-      // Prefer PDF text over OCR when available (CAD exports often have a text layer).
-      return { label: fromPdf.label, source: "pdf-text", bbox: fromPdf.bbox || null };
-    }
-    setHint("Lendo texto (OCR)…");
-    var fromOcr = await ocrSelection(padded);
-    if (fromOcr.label) {
-      return { label: fromOcr.label, source: "ocr", bbox: fromOcr.bbox || null };
-    }
-    return {
-      label: fromPdf.label || "",
-      source: fromPdf.label ? "pdf-text" : "none",
-      bbox: fromPdf.bbox || null
-    };
+    return { label: "", name: "", dims: "", source: "none", bbox: null };
   }
 
   function highlightBoxFromRecognition(sel, rec) {
@@ -979,37 +1134,72 @@
     setTool("pan");
   }
 
-  async function renderPage(pdf) {
-    var page = await pdf.getPage(1);
-    var baseScale = 1.75;
-    var viewport = page.getViewport({ scale: baseScale, rotation: 0 });
-    var outputScale = Math.min(window.devicePixelRatio || 1, 2);
-    els.pdfCanvas.width = Math.floor(viewport.width * outputScale);
-    els.pdfCanvas.height = Math.floor(viewport.height * outputScale);
-    els.pdfCanvas.style.width = Math.floor(viewport.width) + "px";
-    els.pdfCanvas.style.height = Math.floor(viewport.height) + "px";
+  function applyRasterToPdfCanvas(cache) {
+    els.pdfCanvas.width = cache.pixelW;
+    els.pdfCanvas.height = cache.pixelH;
+    els.pdfCanvas.style.width = cache.cssWidth + "px";
+    els.pdfCanvas.style.height = cache.cssHeight + "px";
     var ctx = els.pdfCanvas.getContext("2d", { alpha: false });
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(cache.canvas, 0, 0);
+    state.pageInfo = {
+      cssWidth: cache.cssWidth,
+      cssHeight: cache.cssHeight,
+      baseScale: cache.baseScale
+    };
+    state.pdfPage = cache.page;
+    state.pdfViewport = cache.viewport;
+    state.textItems = cache.textItems;
+    els.scene.style.width = cache.cssWidth + "px";
+    els.scene.style.height = cache.cssHeight + "px";
+    syncAnnoCanvas();
+  }
+
+  async function renderPage(pdf, opts) {
+    opts = opts || {};
+    var pageNumber = 1;
+    var baseScale = 1.75;
+    var outputScale = Math.min(window.devicePixelRatio || 1, 2);
+    var cacheKey = (state.pdfDocKey || "doc") + "|" + pageNumber + "|" + baseScale + "|0|" + outputScale;
+    if (!opts.force && state.pageRasterCache && state.pageRasterCache.key === cacheKey) {
+      applyRasterToPdfCanvas(state.pageRasterCache);
+      return;
+    }
+
+    var page = await pdf.getPage(pageNumber);
+    var viewport = page.getViewport({ scale: baseScale, rotation: 0 });
+    var pixelW = Math.floor(viewport.width * outputScale);
+    var pixelH = Math.floor(viewport.height * outputScale);
+    var off = document.createElement("canvas");
+    off.width = pixelW;
+    off.height = pixelH;
+    var ctx = off.getContext("2d", { alpha: false });
     var transform = outputScale !== 1 ? [outputScale, 0, 0, outputScale, 0, 0] : null;
     await page.render({ canvasContext: ctx, viewport: viewport, transform: transform }).promise;
-    state.pageInfo = {
-      cssWidth: viewport.width,
-      cssHeight: viewport.height,
-      baseScale: baseScale
-    };
-    state.pdfPage = page;
-    state.pdfViewport = viewport;
+
+    var textItems = [];
     try {
       var tc = await page.getTextContent();
-      state.textItems = (tc.items || []).map(function (it) {
+      textItems = (tc.items || []).map(function (it) {
         return textItemBounds(it, viewport);
       });
     } catch (err) {
       console.warn(err);
-      state.textItems = [];
     }
-    els.scene.style.width = viewport.width + "px";
-    els.scene.style.height = viewport.height + "px";
-    syncAnnoCanvas();
+
+    state.pageRasterCache = {
+      key: cacheKey,
+      canvas: off,
+      pixelW: pixelW,
+      pixelH: pixelH,
+      cssWidth: viewport.width,
+      cssHeight: viewport.height,
+      baseScale: baseScale,
+      page: page,
+      viewport: viewport,
+      textItems: textItems
+    };
+    applyRasterToPdfCanvas(state.pageRasterCache);
   }
 
   async function openPdfBytes(bytes, label) {
@@ -1019,12 +1209,14 @@
     }
     setHint("Carregando prancha…");
     try {
+      state.pdfDocKey = String(label || "pdf") + ":" + bytes.byteLength + ":" + (bytes[0] || 0) + (bytes[100] || 0);
+      state.pageRasterCache = null;
       state.pdf = await pdfjsLib.getDocument({ data: bytes, useSystemFonts: true, isEvalSupported: false }).promise;
       state.docName = label;
       els.docLabel.textContent = label;
       annotations.clear();
       state.viewRotation = 0;
-      await renderPage(state.pdf);
+      await renderPage(state.pdf, { force: true });
       centerPage();
       setHint("✓/✕: arraste sobre o rótulo. Dois dedos: zoom.");
       setTimeout(function () { setHint(""); }, 3200);
@@ -1082,14 +1274,87 @@
     state.drawing = true;
     redrawAnnotations();
   }
+  function applySelectSnap(draft) {
+    if (!draft || draft.kind !== "select") return;
+    var n = {
+      x: draft.rawX != null ? draft.rawX : draft.x,
+      y: draft.rawY != null ? draft.rawY : draft.y,
+      w: draft.rawW != null ? draft.rawW : draft.w,
+      h: draft.rawH != null ? draft.rawH : draft.h
+    };
+    var snapped = snapSelectToText(n);
+    if (snapped && snapped.bbox) {
+      draft.x = snapped.bbox.x;
+      draft.y = snapped.bbox.y;
+      draft.w = snapped.bbox.w;
+      draft.h = snapped.bbox.h;
+      draft.snapLabel = snapped.label;
+      draft.snapName = snapped.name;
+      draft.snapDims = snapped.dims;
+    } else {
+      draft.x = n.x; draft.y = n.y; draft.w = n.w; draft.h = n.h;
+      draft.snapLabel = "";
+      draft.snapName = "";
+      draft.snapDims = "";
+    }
+  }
+
   function updateSelect(point) {
     var draft = annotations.getDraft();
     if (!draft || draft.kind !== "select") return;
     var n = normalizeSel(draft.x0, draft.y0, point.x, point.y);
-    draft.x = n.x; draft.y = n.y; draft.w = n.w; draft.h = n.h;
+    draft.rawX = n.x; draft.rawY = n.y; draft.rawW = n.w; draft.rawH = n.h;
+    // Paint finger rect immediately; snap to text on next frame (keeps UI ultra-fast).
+    if (!draft.snapLabel) {
+      draft.x = n.x; draft.y = n.y; draft.w = n.w; draft.h = n.h;
+    }
+    if (!state.snapRaf) {
+      state.snapRaf = requestAnimationFrame(function () {
+        state.snapRaf = 0;
+        var d = annotations.getDraft();
+        if (!d || d.kind !== "select") return;
+        applySelectSnap(d);
+        redrawAnnotations();
+      });
+    }
     redrawAnnotations();
   }
-  async function endSelect() {
+
+  function commitSelectResult(sel, rec) {
+    var label = rec.label || "(sem texto)";
+    var parts = splitLabelNameDims(label);
+    var elementType = classifyLabel(label);
+    var box = highlightBoxFromRecognition(sel, rec);
+    if (sel.mode === "ok") {
+      annotations.add({
+        kind: "ok",
+        x: box.x, y: box.y, w: box.w, h: box.h,
+        label: parts.display || label,
+        text: parts.display || label,
+        name: parts.name,
+        dims: parts.dims,
+        elementType: elementType,
+        source: rec.source
+      });
+      redrawAnnotations();
+      setHint((parts.name || label).slice(0, 48) + " ✓");
+      setTimeout(function () { setHint(""); }, 1400);
+      finishToMove();
+    } else {
+      state.riskPending = {
+        x: box.x, y: box.y, w: box.w, h: box.h,
+        label: parts.display || label,
+        text: parts.display || label,
+        name: parts.name,
+        dims: parts.dims,
+        elementType: elementType,
+        source: rec.source
+      };
+      openRiskReasonModal();
+    }
+  }
+
+  function endSelect() {
     var draft = annotations.getDraft();
     state.drawing = false;
     if (!draft || draft.kind !== "select") {
@@ -1098,55 +1363,112 @@
       finishToMove();
       return;
     }
-    var sel = { x: draft.x, y: draft.y, w: draft.w, h: draft.h, mode: draft.mode };
+    var raw = {
+      x: draft.rawX != null ? draft.rawX : draft.x,
+      y: draft.rawY != null ? draft.rawY : draft.y,
+      w: draft.rawW != null ? draft.rawW : draft.w,
+      h: draft.rawH != null ? draft.rawH : draft.h
+    };
+    var sel = {
+      x: draft.x, y: draft.y, w: draft.w, h: draft.h,
+      mode: draft.mode
+    };
+    if (state.snapRaf) {
+      cancelAnimationFrame(state.snapRaf);
+      state.snapRaf = 0;
+    }
+    // Final snap before commit so border == fill.
+    draft.rawX = raw.x; draft.rawY = raw.y; draft.rawW = raw.w; draft.rawH = raw.h;
+    applySelectSnap(draft);
+    sel = {
+      x: draft.x, y: draft.y, w: draft.w, h: draft.h,
+      mode: draft.mode
+    };
+    var snapLabel = draft.snapLabel || "";
     annotations.setDraft(null);
     redrawAnnotations();
-    if (sel.w < 8 || sel.h < 8) {
+    if (raw.w < 8 || raw.h < 8) {
       setHint("Arraste sobre o rótulo (ex.: VG-114x90).");
-      setTimeout(function () { setHint(""); }, 2200);
+      setTimeout(function () { setHint(""); }, 1800);
       finishToMove();
       return;
     }
-    if (state.recognizing) return;
-    state.recognizing = true;
-    setHint("Reconhecendo texto…");
-    try {
-      var rec = await recognizeSelectionLabel(sel);
-      var label = rec.label || "(sem texto)";
-      var elementType = classifyLabel(label);
-      var box = highlightBoxFromRecognition(sel, rec);
-      if (sel.mode === "ok") {
-        annotations.add({
-          kind: "ok",
-          x: box.x, y: box.y, w: box.w, h: box.h,
-          label: label,
-          text: label,
-          elementType: elementType,
-          source: rec.source
-        });
-        redrawAnnotations();
-        setHint((elementTypeLabel(elementType) + " conferido: " + label).slice(0, 80));
-        setTimeout(function () { setHint(""); }, 2200);
-        finishToMove();
-      } else {
-        state.riskPending = {
-          x: box.x, y: box.y, w: box.w, h: box.h,
-          label: label,
-          text: label,
-          elementType: elementType,
-          source: rec.source
-        };
-        openRiskReasonModal();
-        // Stay on risk until reason is saved/cancelled; then finishToMove.
-      }
-    } catch (err) {
-      console.error(err);
-      setHint("Falha ao reconhecer o texto da seleção.");
-      setTimeout(function () { setHint(""); }, 2500);
-      finishToMove();
-    } finally {
-      state.recognizing = false;
+
+    // Hot path: pdf.js only — immediate highlight, no Tesseract wait.
+    var rec = recognizeSelectionLabelFast(raw);
+    if (!rec.label && snapLabel) {
+      rec.label = snapLabel;
+      rec.source = "pdf-text";
     }
+    if (!rec.bbox && sel.w > 2) {
+      rec.bbox = { x: sel.x, y: sel.y, w: sel.w, h: sel.h };
+    }
+    if (rec.label || (rec.bbox && rec.bbox.w > 2)) {
+      commitSelectResult(sel, rec);
+      return;
+    }
+
+    // Rare fallback: async OCR without blocking UI — keep provisional box first.
+    annotations.add({
+      kind: sel.mode === "ok" ? "ok" : "risk",
+      x: sel.x, y: sel.y, w: sel.w, h: sel.h,
+      label: "(lendo…)",
+      text: "(lendo…)",
+      elementType: "elemento",
+      source: "pending",
+      provisional: true
+    });
+    redrawAnnotations();
+    if (sel.mode === "risk") {
+      // Don't open reason modal until we have a label; finish move for now.
+      finishToMove();
+    } else {
+      finishToMove();
+    }
+    setHint("Texto não encontrado na camada PDF — OCR em segundo plano…");
+    ocrSelection({
+      x: raw.x - 8, y: raw.y - 8, w: raw.w + 16, h: raw.h + 16
+    }).then(function (fromOcr) {
+      var list = annotations.list();
+      var last = list.length ? list[list.length - 1] : null;
+      if (!last || !last.provisional) return;
+      if (fromOcr.label) {
+        var parts = splitLabelNameDims(fromOcr.label);
+        var box = fromOcr.bbox && fromOcr.bbox.w > 2 ? fromOcr.bbox : { x: last.x, y: last.y, w: last.w, h: last.h };
+        last.label = parts.display || fromOcr.label;
+        last.text = last.label;
+        last.name = parts.name;
+        last.dims = parts.dims;
+        last.elementType = classifyLabel(last.label);
+        last.source = "ocr";
+        last.provisional = false;
+        last.x = box.x; last.y = box.y; last.w = box.w; last.h = box.h;
+        redrawAnnotations();
+        setHint((parts.name || last.label).slice(0, 48));
+        setTimeout(function () { setHint(""); }, 1400);
+        if (last.kind === "risk") {
+          state.riskPending = {
+            x: last.x, y: last.y, w: last.w, h: last.h,
+            label: last.label, text: last.label,
+            name: last.name, dims: last.dims,
+            elementType: last.elementType, source: "ocr"
+          };
+          // Remove provisional risk until reason is saved
+          annotations.undo();
+          openRiskReasonModal();
+        }
+      } else {
+        last.provisional = false;
+        last.label = "(sem texto)";
+        last.text = last.label;
+        redrawAnnotations();
+        setHint("Sem texto reconhecido nessa seleção.");
+        setTimeout(function () { setHint(""); }, 2000);
+      }
+    }).catch(function () {
+      setHint("OCR indisponível.");
+      setTimeout(function () { setHint(""); }, 1800);
+    });
   }
   function startArrow(point) {
     annotations.setDraft({ kind: "arrow", mode: state.contentMode, x1: point.x, y1: point.y, x2: point.x, y2: point.y });
@@ -1222,6 +1544,8 @@
         x: p.x, y: p.y, w: p.w, h: p.h,
         label: p.label,
         text: p.label,
+        name: p.name || "",
+        dims: p.dims || "",
         elementType: p.elementType,
         reason: text,
         source: p.source
@@ -1242,7 +1566,6 @@
   }
 
   function onPointerDown(e) {
-    if (state.recognizing) return;
     try { els.viewport.setPointerCapture(e.pointerId); } catch (err) {}
     state.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (state.pointers.size === 2) {
@@ -1592,7 +1915,15 @@
     els.viewport.addEventListener("pointerup", onPointerUp);
     els.viewport.addEventListener("pointercancel", onPointerUp);
     els.viewport.addEventListener("wheel", onWheel, { passive: false });
-    window.addEventListener("resize", function () { if (state.pageInfo) centerPage(); });
+    window.addEventListener("resize", function () {
+      clearTimeout(state.resizeTimer);
+      state.resizeTimer = setTimeout(function () {
+        if (!state.pageInfo || !state.pdf) return;
+        // Zoom/pan only — reuse cached raster (no pdf.js re-render).
+        centerPage();
+        if (state.pageRasterCache) applyRasterToPdfCanvas(state.pageRasterCache);
+      }, 120);
+    });
     bindFloatingDock();
   }
 
