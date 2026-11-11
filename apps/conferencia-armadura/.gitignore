@@ -7,6 +7,7 @@ www/
 .env
 .env.*
 !*.example
+# Keep vendor/pdfjs (local pdf.js for Capacitor) tracked.
 
 # Android local / build junk (keep project sources if present)
 android/.gradle/

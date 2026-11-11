@@ -24,6 +24,8 @@ Arquivo gerado neste repo:
 
 **`apps/conferencia-armadura/android-dist/conf-armadura-debug.apk`**
 
+> **CDA-15:** o APK embute `vendor/pdfjs` (pdf.js + worker em blob). Não depende de CDN no celular — evita o freeze ao abrir PDF no WebView.
+
 ### Instalar no celular
 
 1. Copie o `.apk` para o aparelho (USB, Drive, WhatsApp…).

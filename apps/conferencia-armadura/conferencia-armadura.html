@@ -350,8 +350,8 @@
     </div>
   </div>
 
-  <!-- PDF.js (CDN). Tesseract só carrega sob demanda no fallback OCR — fora do caminho quente. -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <!-- PDF.js local first (Capacitor/Android). CDN só fallback no browser. -->
+  <script src="vendor/pdfjs/pdf.min.js"></script>
   <script>
 (function () {
   "use strict";
@@ -359,11 +359,12 @@
   var DEMO_PDF = "demo-pilares-vigas.pdf";
   var DEMO_LABEL = "2330_GAR PILARES E VIGAS — Sanluzzi Selenza Rev01";
   var PDFJS_VER = "3.11.174";
-
-  if (window.pdfjsLib) {
-    pdfjsLib.GlobalWorkerOptions.workerSrc =
-      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/" + PDFJS_VER + "/pdf.worker.min.js";
-  }
+  var PDFJS_LOCAL = "vendor/pdfjs/pdf.min.js";
+  var PDFJS_WORKER_LOCAL = "vendor/pdfjs/pdf.worker.min.js";
+  var PDFJS_CDN = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/" + PDFJS_VER + "/pdf.min.js";
+  var PDFJS_WORKER_CDN = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/" + PDFJS_VER + "/pdf.worker.min.js";
+  var pdfJsReady = null;
+  var openingPdf = false;
 
   function uid() {
     if (crypto && crypto.randomUUID) return crypto.randomUUID();
@@ -379,7 +380,7 @@
     try {
       return !!(window.Capacitor && Capacitor.isNativePlatform && Capacitor.isNativePlatform());
     } catch (e) {
-      return false;
+      return !!(window.Capacitor && (Capacitor.getPlatform && Capacitor.getPlatform() !== "web"));
     }
   }
 
@@ -389,6 +390,67 @@
     } catch (e) {
       return null;
     }
+  }
+
+  function loadScript(src) {
+    return new Promise(function (resolve, reject) {
+      var s = document.createElement("script");
+      s.src = src;
+      s.async = true;
+      s.onload = function () { resolve(); };
+      s.onerror = function () { reject(new Error("Falha ao carregar " + src)); };
+      document.head.appendChild(s);
+    });
+  }
+
+  function setPdfWorkerFromText(workerJs) {
+    var blob = new Blob([workerJs], { type: "application/javascript" });
+    var url = URL.createObjectURL(blob);
+    pdfjsLib.GlobalWorkerOptions.workerSrc = url;
+    return url;
+  }
+
+  /** Capacitor WebView freezes if pdf.js waits on a CDN/CORS worker. Prefer local blob worker. */
+  function ensurePdfJs() {
+    if (pdfJsReady) return pdfJsReady;
+    pdfJsReady = (async function () {
+      if (!window.pdfjsLib) {
+        try {
+          await loadScript(PDFJS_LOCAL);
+        } catch (e1) {
+          await loadScript(PDFJS_CDN);
+        }
+      }
+      if (!window.pdfjsLib) throw new Error("pdf.js indisponível");
+
+      // Prefer same-origin / blob worker — never block on remote CDN worker inside the APK.
+      var workerOk = false;
+      try {
+        var res = await fetch(PDFJS_WORKER_LOCAL, { cache: "force-cache" });
+        if (res.ok) {
+          setPdfWorkerFromText(await res.text());
+          workerOk = true;
+        }
+      } catch (e) {}
+      if (!workerOk && !isNativeCapacitor()) {
+        try {
+          var resCdn = await fetch(PDFJS_WORKER_CDN, { cache: "force-cache" });
+          if (resCdn.ok) {
+            setPdfWorkerFromText(await resCdn.text());
+            workerOk = true;
+          }
+        } catch (e2) {}
+      }
+      if (!workerOk) {
+        // Last resort: main-thread fake worker (slow, but opens PDFs on WebView).
+        try {
+          pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER_LOCAL;
+        } catch (e3) {}
+        try { pdfjsLib.disableWorker = true; } catch (e4) {}
+      }
+      return pdfjsLib;
+    })();
+    return pdfJsReady;
   }
 
   function bytesToBase64(bytes) {
@@ -1686,8 +1748,10 @@
   async function renderPage(pdf, opts) {
     opts = opts || {};
     var pageNumber = 1;
-    var baseScale = 1.75;
-    var outputScale = Math.min(window.devicePixelRatio || 1, 2);
+    // Lower raster budget on Capacitor WebView to avoid OOM/freeze on big CAD sheets.
+    var native = isNativeCapacitor();
+    var baseScale = native ? 1.25 : 1.75;
+    var outputScale = Math.min(window.devicePixelRatio || 1, native ? 1.25 : 2);
     var cacheKey = (state.pdfDocKey || "doc") + "|" + pageNumber + "|" + baseScale + "|0|" + outputScale;
     if (!opts.force && state.pageRasterCache && state.pageRasterCache.key === cacheKey) {
       applyRasterToPdfCanvas(state.pageRasterCache);
@@ -1732,34 +1796,63 @@
 
   async function openPdfBytes(bytes, label, opts) {
     opts = opts || {};
-    if (!window.pdfjsLib) {
-      setHint("PDF.js não carregou. Verifique a internet (CDN) e recarregue.");
+    if (openingPdf) {
+      setHint("Aguarde — abrindo PDF…");
       return;
     }
+    openingPdf = true;
     setHint("Carregando prancha…");
     try {
+      await ensurePdfJs();
       var u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
-      var docId = opts.docId || makeDocId(label, u8);
+      // Own copies: pdf.js may transfer/detach the ArrayBuffer sent to the worker.
+      var forPdf = u8.slice(0);
+      var keep = u8.slice(0);
+      var docId = opts.docId || makeDocId(label, keep);
       state.pdfDocKey = docId;
       state.pageRasterCache = null;
-      state.pdf = await pdfjsLib.getDocument({ data: u8, useSystemFonts: true, isEvalSupported: false }).promise;
+      if (state.pdf && typeof state.pdf.destroy === "function") {
+        try { await state.pdf.destroy(); } catch (e) {}
+      }
+      var loadingTask = pdfjsLib.getDocument({
+        data: forPdf,
+        useSystemFonts: true,
+        isEvalSupported: false,
+        disableAutoFetch: true,
+        disableStream: true,
+        verbosity: 0
+      });
+      // Guard against silent worker hangs on some WebViews.
+      var doc = await Promise.race([
+        loadingTask.promise,
+        new Promise(function (_, reject) {
+          setTimeout(function () {
+            reject(new Error("Tempo esgotado ao ler o PDF (worker). Tentando de novo…"));
+          }, 25000);
+        })
+      ]).catch(async function (err) {
+        try { loadingTask.destroy(); } catch (e) {}
+        // Retry once on main thread (no worker) if first attempt hung/failed.
+        try { pdfjsLib.disableWorker = true; } catch (e2) {}
+        return pdfjsLib.getDocument({
+          data: keep.slice(0),
+          useSystemFonts: true,
+          isEvalSupported: false,
+          disableAutoFetch: true,
+          disableStream: true,
+          verbosity: 0
+        }).promise;
+      });
+      state.pdf = doc;
       state.docName = label;
       state.docId = docId;
-      state.pdfBytes = u8;
+      state.pdfBytes = keep;
       els.docLabel.textContent = label;
-      // Load autosaved marks before notify hooks fire on clear/replace.
       var saved = loadAnnotsForDoc(docId);
       annotations.replaceAll(saved);
       state.viewRotation = 0;
       await renderPage(state.pdf, { force: true });
       centerPage();
-      if (!opts.skipLibrarySave) {
-        try {
-          await savePdfToLibrary(u8, label, { docId: docId });
-        } catch (err) {
-          console.warn("Não foi possível guardar na biblioteca", err);
-        }
-      }
       setHint(
         saved.length
           ? ("Marcações restauradas (" + saved.length + "). ✓/✕ sobre o rótulo.")
@@ -1767,9 +1860,20 @@
       );
       setTimeout(function () { setHint(""); }, 2800);
       renderLibraryList();
+      // Library/FS write AFTER first paint — never block open on storage permissions.
+      if (!opts.skipLibrarySave) {
+        setTimeout(function () {
+          savePdfToLibrary(keep, label, { docId: docId }).catch(function (err) {
+            console.warn("Não foi possível guardar na biblioteca", err);
+          });
+        }, 0);
+      }
     } catch (err) {
       console.error(err);
-      setHint("Falha ao abrir o PDF. Tente outro arquivo.");
+      setHint("Falha ao abrir o PDF. Tente Importar novamente ou a Biblioteca.");
+      setTimeout(function () { setHint(""); }, 3500);
+    } finally {
+      openingPdf = false;
     }
   }
 
@@ -1782,7 +1886,7 @@
       await openPdfBytes(new Uint8Array(buf), DEMO_LABEL);
     } catch (err) {
       console.warn(err);
-      setHint("Abra o arquivo demo-pilares-vigas.pdf (ao lado deste HTML) pelo botão Abrir PDF, ou use Demo se estiver em servidor local.");
+      setHint("Use 📄 Importar PDF ou 📚 Biblioteca. Demo não carregou.");
     }
   }
 
@@ -2552,12 +2656,25 @@
     bindUi();
     setTool("pan");
     setWakeEnabled(true).then(updateWakeUi);
-    ensureNativeFs().catch(function () {});
-    if (!window.pdfjsLib) {
-      setHint("Falha ao carregar PDF.js do CDN. Conecte-se à internet e recarregue, ou use Abrir PDF depois.");
-      return;
-    }
-    tryLoadDemo();
+    setHint("Preparando leitor de PDF…");
+    ensurePdfJs().then(function () {
+      // Defer native FS permission prompts until after first interactive frame.
+      setTimeout(function () { ensureNativeFs().catch(function () {}); }, 1500);
+      var index = readLibraryIndex();
+      if (index.pdfs && index.pdfs.length) {
+        var first = index.pdfs[0];
+        setHint("Reabrindo da biblioteca…");
+        return loadPdfFromLibrary(first.id).then(function (doc) {
+          return openPdfBytes(doc.bytes, doc.name || first.name, { docId: first.id, skipLibrarySave: true });
+        }).catch(function () {
+          return tryLoadDemo();
+        });
+      }
+      return tryLoadDemo();
+    }).catch(function (err) {
+      console.error(err);
+      setHint("PDF.js não carregou. Reinstale o app ou use o HTML com vendor/pdfjs.");
+    });
   }
 
   boot();
