@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "seed": "node scripts/seed.mjs",
-    "test": "tsx --test src/lib/workflow.test.ts src/lib/approval.test.ts src/lib/conditionals.test.ts src/lib/rls-matrix.test.ts src/lib/template-version.test.ts src/lib/validation/upload.test.ts src/lib/spreadsheet.test.ts src/lib/revision-compare.test.ts",
+    "seed:mapas": "node scripts/seed-mapas.mjs",
+    "test": "tsx --test src/lib/workflow.test.ts src/lib/approval.test.ts src/lib/conditionals.test.ts src/lib/rls-matrix.test.ts src/lib/template-version.test.ts src/lib/validation/upload.test.ts src/lib/spreadsheet.test.ts src/lib/revision-compare.test.ts src/lib/mapas/geometry.test.ts src/lib/mapas/quantities.test.ts src/lib/mapas/csv-elements.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -18,7 +19,9 @@
     "date-fns": "^4.1.0",
     "iconv-lite": "^0.7.3",
     "next": "15.1.0",
+    "pdfjs-dist": "^6.5.438",
     "pdfkit": "^0.15.1",
+    "polygon-clipping": "^0.15.7",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "tailwind-merge": "^2.6.0",
