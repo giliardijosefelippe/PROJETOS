@@ -94,7 +94,7 @@ Seed cria org demo, templates Forma/Vigas/Lajes, projeto `DEMO-001`, prancha `VI
 
 Extras: `/indicators`, `/revisions/compare`, anotações, CSV, upload PDF/DXF/DWG, `/integrations`.
 
-Migrations extras após 00005: `00006_dwg_support.sql` (kind/preview + MIME CAD).
+Migrations extras após 00005: `00006_dwg_support.sql` (kind/preview + MIME CAD); `00007_mapaconcreto.sql` (MapaConcreto — obras, plantas, regiões, NFs/Slump).
 
 CAD local:
 
