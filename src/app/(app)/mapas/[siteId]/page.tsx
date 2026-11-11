@@ -339,6 +339,33 @@ export default async function SiteDetailPage({
               <Input id="height_m" name="height_m" type="number" step="0.01" />
             </div>
             <div>
+              <Label htmlFor="section_area_m2">Área seção (m²) — vigas</Label>
+              <Input
+                id="section_area_m2"
+                name="section_area_m2"
+                type="number"
+                step="0.001"
+              />
+            </div>
+            <div>
+              <Label htmlFor="axis_length_m">Comp. eixo (m) — vigas</Label>
+              <Input
+                id="axis_length_m"
+                name="axis_length_m"
+                type="number"
+                step="0.01"
+              />
+            </div>
+            <div>
+              <Label htmlFor="executed_length_m">Comp. executado (m)</Label>
+              <Input
+                id="executed_length_m"
+                name="executed_length_m"
+                type="number"
+                step="0.01"
+              />
+            </div>
+            <div>
               <Label htmlFor="origin_x">Origem X (m)</Label>
               <Input id="origin_x" name="origin_x" type="number" step="0.01" defaultValue="0" />
             </div>
@@ -348,8 +375,8 @@ export default async function SiteDetailPage({
             </div>
           </div>
           <p className="text-xs text-ink-muted">
-            Exemplo de aceite: 8×5 m (40 m²) × 0,15 m. Pilar sem altura fica com
-            volume indeterminado.
+            Laje: 8×5×0,15. Pilar sem altura → indeterminado. Viga exige seção +
+            comprimento executado (planta 2D não basta).
           </p>
           <Button type="submit">Salvar elemento</Button>
         </form>

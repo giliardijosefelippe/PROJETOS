@@ -89,4 +89,30 @@ describe("MapaConcreto quantities", () => {
     });
     assert.match(c.labels.diferencaNfTeorico, /não é desperdício/i);
   });
+
+  it("beam without executed length stays indeterminate with calc memory", () => {
+    const result = computeRegionElementIntersection(
+      {
+        id: "r1",
+        geometry: toGeoJsonPolygon(rectanglePolygon(0, 0, 5, 1)),
+        area_m2: 5,
+      },
+      {
+        id: "e1",
+        kind: "viga",
+        geometry: toGeoJsonPolygon(rectanglePolygon(0, 0, 10, 0.3)),
+        area_m2: 3,
+        thickness_m: null,
+        height_m: null,
+        volume_teorico_m3: null,
+        section_area_m2: 0.2,
+        axis_length_m: 10,
+        executed_length_m: null,
+      },
+    );
+    assert.equal(result.indeterminate, true);
+    assert.equal(result.volumeEstimadoM3, null);
+    assert.ok(result.calcMemory);
+    assert.equal(result.calcMemory!.ruleId, "beam_constant_section");
+  });
 });
