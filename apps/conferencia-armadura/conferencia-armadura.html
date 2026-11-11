@@ -202,6 +202,12 @@
     .report-body .stat span { color: var(--muted); font-size: 12px; }
     .report-body .stat.ok strong { color: #7ddea8; }
     .report-body .stat.risk strong { color: #ffcc66; }
+    .report-body h4 {
+      margin: 12px 0 6px; font-size: 13px; color: var(--muted); font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+    .report-body h4:first-child { margin-top: 4px; }
+    .report-body .group-empty { color: var(--muted); font-size: 13px; margin: 0 0 8px; }
     .report-body h3 {
       margin: 12px 0 6px; font-size: 13px; text-transform: uppercase;
       letter-spacing: 0.06em; color: var(--muted);
@@ -462,41 +468,80 @@
     try { return new Date(iso).toLocaleString("pt-BR"); } catch (e) { return iso || "—"; }
   }
 
+  // Structural codes: letter(s) + number. Longer prefixes first (VG before V, LG before L).
+  // Do not swallow dimension "x" in tokens like VR-114x65 (that "x" is not a suffix letter).
+  var STRUCT_CODE_RE = /\b((?:VG|VR|VT|LG|LR|LA|P|R)[\-\s]?\d+)([A-Za-z])?(?=\b|[xX×]|$)/i;
+  var DIM_ONLY_RE = /^(?:\d{1,3}\s*[xX×]\s*\d{1,3}.*|h\s*=\s*\d)/i;
+
+  function extractStructuralCode(text) {
+    var m = String(text || "").match(STRUCT_CODE_RE);
+    if (!m) return "";
+    var code = String(m[1]).replace(/\s+/g, "");
+    if (m[2] && !/^[xX×]$/.test(m[2])) code += m[2];
+    return code;
+  }
+
   function classifyLabel(text) {
+    var code = extractStructuralCode(text).toUpperCase();
     var t = String(text || "").toUpperCase().replace(/\s+/g, " ").trim();
-    if (!t) return "elemento";
-    if (/\bPILAR\b/.test(t) || /\bP[\s\-.]?\d/.test(t) || /^P[\s\-]?\d/.test(t)) return "pilar";
-    if (/\bVIGA\b/.test(t) || /\bVG[\s\-]?\d/.test(t) || /\bVR[\s\-]?\d/.test(t) || /\bVT[\s\-]?\d/.test(t) || /^VG|^VR|^VT/.test(t)) return "viga";
+    var key = code || t;
+    if (!key) return "elemento";
+    if (/^P[\-]?\d/.test(key) || /\bPILAR\b/.test(t) || /\bP[\s\-.]?\d/.test(t)) return "pilar";
+    if (/^(VG|VR|VT)/.test(key) || /\bVIGA\b/.test(t) || /\bV[GRT][\s\-]?\d/.test(t)) return "viga";
+    if (/^(LG|LR|LA)/.test(key) || /^R[\-]?\d/.test(key) || /\bLAJE\b/.test(t) || /\bLG[\s\-]?\d/.test(t)) return "laje";
     return "elemento";
   }
 
   function elementTypeLabel(type) {
     if (type === "pilar") return "Pilar";
     if (type === "viga") return "Viga";
+    if (type === "laje") return "Laje";
     return "Elemento";
   }
 
+  function vplGroupKey(type) {
+    if (type === "viga") return "viga";
+    if (type === "pilar") return "pilar";
+    if (type === "laje") return "laje";
+    return "outro";
+  }
+
   function splitLabelNameDims(label) {
-    var s = String(label || "").replace(/\s+/g, " ").trim();
+    var s = String(label || "")
+      .replace(/\s*[·•]\s*/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
     if (!s) return { name: "", dims: "", display: "" };
-    // VR-114x65 → name VR-114, dims 114x65 already in token — keep name, pull dims if glued
-    var glued = s.match(/^((?:P|VG|VR|VT|LG)[\-]?\d+[A-Za-z]?)[\s\-]*(\d+\s*[xX×]\s*\d+.*)$/i);
-    if (glued) {
+
+    // Always prefer a letter+number code anywhere in the string (never lead with 25x50 / h=15).
+    var code = extractStructuralCode(s);
+    if (code) {
+      var rest = s
+        .replace(new RegExp(code.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "ig"), " ")
+        .replace(/\s+/g, " ")
+        .replace(/^[\s\-–—]+|[\s\-–—]+$/g, "")
+        .trim();
+      // VR-114x65 / VG114x90 glued into one token → name VR-114, dims 114x65
+      var glued = code.match(/^((?:VG|VR|VT|LG|LR|LA|P|R)[\-]?\d+)[xX×](\d+.*)$/i);
+      if (glued) {
+        var stem = glued[1];
+        var num = (stem.match(/\d+$/) || [""])[0];
+        code = stem;
+        rest = (num + "x" + glued[2] + (rest ? " " + rest : "")).replace(/\s+/g, " ").trim();
+      } else if (/^[xX×]/.test(rest)) {
+        var num2 = (code.match(/\d+$/) || [""])[0];
+        rest = (num2 + rest.replace(/^[xX×]/, "x") + "").trim();
+      }
       return {
-        name: glued[1],
-        dims: glued[2].trim(),
-        display: glued[1] + " · " + glued[2].trim()
+        name: code,
+        dims: rest,
+        display: code + (rest ? " · " + rest : "")
       };
     }
-    var m = s.match(/^((?:P|VG|VR|VT|LG)[\s\-]?\d+[A-Za-z]?)\s*(.*)$/i);
-    if (m) {
-      var name = m[1].replace(/\s+/g, "");
-      var dims = (m[2] || "").trim();
-      return { name: name, dims: dims, display: name + (dims ? " · " + dims : "") };
-    }
-    var parts = s.split(/\s+/);
-    if (parts.length >= 2) {
-      return { name: parts[0], dims: parts.slice(1).join(" "), display: parts[0] + " · " + parts.slice(1).join(" ") };
+
+    // No structural code found — keep raw, but never invent a "name" from pure dims.
+    if (DIM_ONLY_RE.test(s)) {
+      return { name: "", dims: s, display: s };
     }
     return { name: s, dims: "", display: s };
   }
@@ -565,42 +610,100 @@
   }
 
   function reportNameDims(item) {
-    var parts = splitLabelNameDims(
-      (item.name && item.dims)
-        ? (item.name + " " + item.dims)
-        : (item.label || item.text || "")
+    // Re-parse full blob so swapped storage (dims as name) still yields code-first.
+    var raw = [item.name, item.dims, item.label, item.text]
+      .filter(function (v) { return v != null && String(v).trim(); })
+      .join(" ");
+    return splitLabelNameDims(raw);
+  }
+
+  function itemVplType(item) {
+    var parts = reportNameDims(item);
+    return vplGroupKey(
+      item.elementType && item.elementType !== "elemento"
+        ? item.elementType
+        : classifyLabel(parts.name || parts.display || item.label || item.text || "")
     );
-    if (item.name && !parts.name) parts.name = item.name;
-    if (item.dims && !parts.dims) parts.dims = item.dims;
-    return parts;
+  }
+
+  function groupItemsByVpl(items) {
+    var groups = { viga: [], pilar: [], laje: [], outro: [] };
+    (items || []).forEach(function (item) {
+      groups[itemVplType(item)].push(item);
+    });
+    return groups;
+  }
+
+  function reportHeadHtml(item) {
+    var parts = reportNameDims(item);
+    if (parts.name) {
+      return "<strong>" + escapeHtml(parts.name) + "</strong>"
+        + (parts.dims ? " · " + escapeHtml(parts.dims) : "");
+    }
+    // Prefer any code still buried in display; never lead with bare dims if we can help it.
+    var code = extractStructuralCode(parts.display || item.label || item.text || "");
+    if (code) {
+      var rest = splitLabelNameDims((parts.display || "") + " " + code);
+      return "<strong>" + escapeHtml(code) + "</strong>"
+        + (rest.dims ? " · " + escapeHtml(rest.dims) : "");
+    }
+    return escapeHtml(parts.display || item.label || item.text || "—");
+  }
+
+  function reportHeadText(item) {
+    var parts = reportNameDims(item);
+    if (parts.name) return parts.name + (parts.dims ? " · " + parts.dims : "");
+    var code = extractStructuralCode(parts.display || item.label || item.text || "");
+    if (code) {
+      var rest = splitLabelNameDims((parts.display || "") + " " + code);
+      return code + (rest.dims ? " · " + rest.dims : "");
+    }
+    return parts.display || item.label || item.text || "—";
+  }
+
+  var VPL_SECTIONS = [
+    { key: "viga", title: "Vigas (V)" },
+    { key: "pilar", title: "Pilares (P)" },
+    { key: "laje", title: "Lajes (L)" },
+    { key: "outro", title: "Outros" }
+  ];
+
+  function renderGroupedLisHtml(items, lineFn) {
+    var groups = groupItemsByVpl(items);
+    var html = "";
+    var any = false;
+    VPL_SECTIONS.forEach(function (sec) {
+      var list = groups[sec.key] || [];
+      if (!list.length) {
+        if (sec.key === "outro") return;
+        html += "<h4>" + escapeHtml(sec.title) + "</h4><p class=\"group-empty\">Nenhum</p>";
+        return;
+      }
+      any = true;
+      html += "<h4>" + escapeHtml(sec.title) + "</h4><ul>";
+      list.forEach(function (item, idx) {
+        html += lineFn(item, idx);
+      });
+      html += "</ul>";
+    });
+    return { html: html, any: any || !!(items && items.length) };
   }
 
   function renderReportHtmlFragment(model) {
-    // Always: name first (P-2, VG-2…), then dims (25x50…), then status.
-    var riskLis = model.risks.map(function (r, idx) {
-      var parts = reportNameDims(r);
-      var head = parts.name
-        ? "<strong>" + escapeHtml(parts.name) + "</strong>"
-          + (parts.dims ? " · " + escapeHtml(parts.dims) : "")
-        : escapeHtml(parts.display || labelFor(r));
+    var riskBlock = renderGroupedLisHtml(model.risks, function (r, idx) {
       var tail = " — Não conforme";
       if (r.reason) tail += " · motivo: " + escapeHtml(String(r.reason));
-      return "<li><strong>#" + (idx + 1) + "</strong> " + head + tail
+      return "<li><strong>#" + (idx + 1) + "</strong> " + reportHeadHtml(r) + tail
         + " <em>(" + escapeHtml(fmtTime(r.createdAt)) + ")</em></li>";
-    }).join("");
-    var okLis = model.oks.map(function (r, idx) {
-      var parts = reportNameDims(r);
-      var head = parts.name
-        ? "<strong>" + escapeHtml(parts.name) + "</strong>"
-          + (parts.dims ? " · " + escapeHtml(parts.dims) : "")
-        : escapeHtml(parts.display || (r.label || r.text || "OK"));
-      return "<li><strong>#" + (idx + 1) + "</strong> " + head + " — conferido</li>";
-    }).join("");
+    });
+    var okBlock = renderGroupedLisHtml(model.oks, function (r, idx) {
+      return "<li><strong>#" + (idx + 1) + "</strong> " + reportHeadHtml(r) + " — conferido</li>";
+    });
     var noteLis = model.notes.map(function (r) {
       return "<li>" + escapeHtml(String(r.text || "(vazia)")) + " <em>(" + escapeHtml(labelFor(r)) + ")</em></li>";
     }).join("");
-    var pilarOk = model.oks.filter(function (i) { return (i.elementType || classifyLabel(i.label)) === "pilar"; }).length;
-    var vigaOk = model.oks.filter(function (i) { return (i.elementType || classifyLabel(i.label)) === "viga"; }).length;
+    var okGroups = groupItemsByVpl(model.oks);
+    var riskGroups = groupItemsByVpl(model.risks);
     return ''
       + '<div class="summary">'
       + '<div class="stat ok"><strong>' + model.counts.ok + '</strong><span>Conferidos</span></div>'
@@ -609,15 +712,42 @@
       + '</div>'
       + '<p><strong>Documento:</strong> ' + escapeHtml(model.docName) + '<br/>'
       + '<strong>Gerado em:</strong> ' + escapeHtml(fmtTime(model.generatedAt)) + '<br/>'
-      + '<strong>Pilares OK:</strong> ' + pilarOk + ' · <strong>Vigas OK:</strong> ' + vigaOk + '</p>'
+      + '<strong>OK:</strong> V ' + okGroups.viga.length
+      + ' · P ' + okGroups.pilar.length
+      + ' · L ' + okGroups.laje.length
+      + ' &nbsp;|&nbsp; <strong>NC:</strong> V ' + riskGroups.viga.length
+      + ' · P ' + riskGroups.pilar.length
+      + ' · L ' + riskGroups.laje.length
+      + '</p>'
       + '<h3>Não conformes / riscos</h3>'
-      + (riskLis ? '<ul>' + riskLis + '</ul>' : '<p>Nenhum não conforme marcado.</p>')
+      + (model.risks.length ? riskBlock.html : '<p>Nenhum não conforme marcado.</p>')
       + '<h3>Já conferidos (OK)</h3>'
-      + (okLis ? '<ul>' + okLis + '</ul>' : '<p>Nenhum elemento conferido.</p>')
+      + (model.oks.length ? okBlock.html : '<p>Nenhum elemento conferido.</p>')
       + '<h3>Notas de texto</h3>'
       + (noteLis ? '<ul>' + noteLis + '</ul>' : '<p>Sem notas.</p>')
       + '<h3>Setas</h3>'
       + '<p>' + model.counts.arrows + ' seta(s) · ' + model.counts.strokes + ' traço(s)</p>';
+  }
+
+  function appendGroupedPlain(lines, title, items, lineFn) {
+    lines.push("", title);
+    if (!items.length) {
+      lines.push("- Nenhum");
+      return;
+    }
+    var groups = groupItemsByVpl(items);
+    VPL_SECTIONS.forEach(function (sec) {
+      var list = groups[sec.key] || [];
+      if (!list.length && sec.key === "outro") return;
+      lines.push("", sec.title);
+      if (!list.length) {
+        lines.push("- Nenhum");
+        return;
+      }
+      list.forEach(function (item, idx) {
+        lines.push(lineFn(item, idx));
+      });
+    });
   }
 
   function buildPlainTextReport(model) {
@@ -626,29 +756,16 @@
       "Documento: " + model.docName,
       "Gerado em: " + fmtTime(model.generatedAt),
       "",
-      "Resumo: " + model.counts.ok + " conferidos · " + model.counts.risk + " não conformes · " + model.counts.total + " marcações",
-      "",
-      "NÃO CONFORMES / RISCOS"
+      "Resumo: " + model.counts.ok + " conferidos · " + model.counts.risk + " não conformes · " + model.counts.total + " marcações"
     ];
-    if (!model.risks.length) lines.push("- Nenhum");
-    model.risks.forEach(function (r, i) {
-      var parts = reportNameDims(r);
-      var head = parts.name
-        ? parts.name + (parts.dims ? " · " + parts.dims : "")
-        : (parts.display || labelFor(r));
-      var line = (i + 1) + ". " + head + " — Não conforme";
+    appendGroupedPlain(lines, "NÃO CONFORMES / RISCOS", model.risks, function (r, i) {
+      var line = (i + 1) + ". " + reportHeadText(r) + " — Não conforme";
       if (r.reason) line += " · motivo: " + r.reason;
       line += " (" + fmtTime(r.createdAt) + ")";
-      lines.push(line);
+      return line;
     });
-    lines.push("", "JÁ CONFERIDOS (OK)");
-    if (!model.oks.length) lines.push("- Nenhum");
-    model.oks.forEach(function (r, i) {
-      var parts = reportNameDims(r);
-      var head = parts.name
-        ? parts.name + (parts.dims ? " · " + parts.dims : "")
-        : (parts.display || labelFor(r));
-      lines.push((i + 1) + ". " + head + " — conferido");
+    appendGroupedPlain(lines, "JÁ CONFERIDOS (OK)", model.oks, function (r, i) {
+      return (i + 1) + ". " + reportHeadText(r) + " — conferido";
     });
     lines.push("", "NOTAS");
     if (!model.notes.length) lines.push("- Nenhuma");
@@ -892,11 +1009,12 @@
 
   function isStructuralToken(str) {
     var s = String(str || "").trim();
-    return /^(VG|VR|VT|P|LG)[\s\-]?\d/i.test(s)
+    return /^(VG|VR|VT|LG|LR|LA|P|R)[\s\-]?\d/i.test(s)
       || /^P-\d/i.test(s)
-      || /\b(VG|VR|VT)-\d/i.test(s)
-      || /^(PILAR|VIGA)\b/i.test(s)
+      || /\b(VG|VR|VT|LG|LR|LA|R)-\d/i.test(s)
+      || /^(PILAR|VIGA|LAJE)\b/i.test(s)
       || /^\d{2,3}\s*[xX×]\s*\d{2,3}$/.test(s)
+      || /^h\s*=/i.test(s)
       || /^e\s*=/i.test(s);
   }
 
