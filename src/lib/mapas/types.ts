@@ -97,9 +97,16 @@ export type McDrawingRevision = {
   scale_real_m: number | null;
   meters_per_pdf_unit: number | null;
   unit: string;
+  supersedes_revision_id?: string | null;
   is_demo: boolean;
   created_at: string;
 };
+
+export type McReconcileDecision =
+  | "copy_to_target"
+  | "reassociate"
+  | "archive"
+  | "dismiss";
 
 export type McStructuralElement = {
   id: string;
@@ -131,6 +138,9 @@ export type McMappedRegion = {
   area_m2: number | null;
   color: string | null;
   notes: string | null;
+  archived_at?: string | null;
+  archived_reason?: string | null;
+  copied_from_region_id?: string | null;
   is_demo: boolean;
   created_at: string;
 };
