@@ -506,6 +506,26 @@
     return "outro";
   }
 
+  /** Collapse repeated dim phrases: "14x90 14x90 14x90" → "14x90". */
+  function dedupeDimTokens(text) {
+    var s = String(text || "").replace(/\s+/g, " ").trim();
+    if (!s) return "";
+    var phrases = [];
+    var re = /\d+\s*[xX×]\s*\d+(?:\s*\([^)]*\))?|h\s*=\s*[\d.,]+|[^\s]+/gi;
+    var m;
+    while ((m = re.exec(s))) phrases.push(String(m[0]).replace(/\s+/g, " ").trim());
+    if (!phrases.length) return s;
+    var seen = Object.create(null);
+    var out = [];
+    for (var i = 0; i < phrases.length; i++) {
+      var key = phrases[i].toLowerCase().replace(/\s+/g, "");
+      if (seen[key]) continue;
+      seen[key] = true;
+      out.push(phrases[i]);
+    }
+    return out.join(" ");
+  }
+
   function splitLabelNameDims(label) {
     var s = String(label || "")
       .replace(/\s*[·•]\s*/g, " ")
@@ -532,6 +552,7 @@
         var num2 = (code.match(/\d+$/) || [""])[0];
         rest = (num2 + rest.replace(/^[xX×]/, "x") + "").trim();
       }
+      rest = dedupeDimTokens(rest);
       return {
         name: code,
         dims: rest,
@@ -541,7 +562,8 @@
 
     // No structural code found — keep raw, but never invent a "name" from pure dims.
     if (DIM_ONLY_RE.test(s)) {
-      return { name: "", dims: s, display: s };
+      var onlyDims = dedupeDimTokens(s);
+      return { name: "", dims: onlyDims, display: onlyDims };
     }
     return { name: s, dims: "", display: s };
   }
@@ -610,11 +632,21 @@
   }
 
   function reportNameDims(item) {
-    // Re-parse full blob so swapped storage (dims as name) still yields code-first.
-    var raw = [item.name, item.dims, item.label, item.text]
-      .filter(function (v) { return v != null && String(v).trim(); })
-      .join(" ");
-    return splitLabelNameDims(raw);
+    // Use one canonical string — joining name+dims+label+text tripled dims (14x90×3).
+    var label = String(item.label || item.text || "").trim();
+    var name = String(item.name || "").trim();
+    var dims = String(item.dims || "").trim();
+    var raw = label;
+    if (!raw) raw = [name, dims].filter(Boolean).join(" ");
+    else if (name && !extractStructuralCode(label) && extractStructuralCode(name)) {
+      raw = name + (dims ? " " + dims : "") + " " + label;
+    }
+    var parts = splitLabelNameDims(raw);
+    parts.dims = dedupeDimTokens(parts.dims);
+    parts.display = parts.name
+      ? (parts.name + (parts.dims ? " · " + parts.dims : ""))
+      : (parts.dims || parts.display || "");
+    return parts;
   }
 
   function itemVplType(item) {
