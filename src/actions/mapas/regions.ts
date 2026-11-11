@@ -121,7 +121,7 @@ export async function saveRegionAction(formData: FormData) {
   const { data: elements } = await supabase
     .from("mc_structural_elements")
     .select(
-      "id, kind, geometry, area_m2, thickness_m, height_m, volume_teorico_m3",
+      "id, kind, geometry, area_m2, thickness_m, height_m, volume_teorico_m3, section_area_m2, axis_length_m, executed_length_m",
     )
     .eq("site_id", siteId)
     .eq("organization_id", session.organizationId);
@@ -138,6 +138,12 @@ export async function saveRegionAction(formData: FormData) {
         height_m: el.height_m != null ? Number(el.height_m) : null,
         volume_teorico_m3:
           el.volume_teorico_m3 != null ? Number(el.volume_teorico_m3) : null,
+        section_area_m2:
+          el.section_area_m2 != null ? Number(el.section_area_m2) : null,
+        axis_length_m:
+          el.axis_length_m != null ? Number(el.axis_length_m) : null,
+        executed_length_m:
+          el.executed_length_m != null ? Number(el.executed_length_m) : null,
       },
     );
     await supabase.from("mc_region_element_intersections").upsert(
@@ -153,6 +159,8 @@ export async function saveRegionAction(formData: FormData) {
         precision_note: result.precisionNote,
         warnings: result.warnings,
         indeterminate: result.indeterminate,
+        calc_memory: result.calcMemory || null,
+        containment: result.containment || null,
       },
       { onConflict: "region_id,element_id" },
     );

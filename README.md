@@ -103,6 +103,7 @@ A diferença NF − teórico **não** é classificada automaticamente como despe
 - PDF sem extração automática de elementos; calibração manual.
 - Cálculo automático confiável para **lajes de espessura constante**; pilares exigem altura ou ficam indeterminados.
 - **DXF (Fase 2):** importa layers/geometrias; **não** inventa lajes/pilares — use CSV/manual. Fixture: `fixtures/mapas/demo-laje-40m2.dxf`.
+- **Booleanas / regras (Fase 2B):** vazios, união acumulada, conflitos sem dupla contagem; vigas (seção×comp. executado), pilares (altura) e fundações simples com memória de cálculo.
 - DWG/IFC e SDK pagos **fora** deste incremento (alternativa: exportar DXF/PDF/CSV).
 - Relatório PDF consolida quantitativos; mapa vetorial completo da planta é evolução.
 

@@ -30,6 +30,21 @@ export async function createElementAction(formData: FormData) {
   const originY = Number(formData.get("origin_y") || 0);
   const widthM = Number(formData.get("width_m") || 0);
   const depthM = Number(formData.get("depth_m") || 0);
+  const sectionAreaRaw = formData.get("section_area_m2");
+  const axisLenRaw = formData.get("axis_length_m");
+  const execLenRaw = formData.get("executed_length_m");
+  const sectionAreaM2 =
+    sectionAreaRaw === null || String(sectionAreaRaw).trim() === ""
+      ? null
+      : Number(sectionAreaRaw);
+  const axisLengthM =
+    axisLenRaw === null || String(axisLenRaw).trim() === ""
+      ? null
+      : Number(axisLenRaw);
+  const executedLengthM =
+    execLenRaw === null || String(execLenRaw).trim() === ""
+      ? null
+      : Number(execLenRaw);
 
   if (!siteId || !code || !name) {
     redirect(`/mapas/${siteId}?error=Preencha código e nome do elemento`);
@@ -44,14 +59,21 @@ export async function createElementAction(formData: FormData) {
     area = widthM * depthM;
   }
 
-  const volumeTeorico =
-    kind === "pilar" || kind === "parede"
-      ? heightM != null && heightM > 0
-        ? area * heightM
-        : null
-      : thicknessM > 0
-        ? area * thicknessM
+  let volumeTeorico: number | null = null;
+  if (kind === "pilar" || kind === "parede") {
+    volumeTeorico =
+      heightM != null && heightM > 0 ? area * heightM : null;
+  } else if (kind === "viga") {
+    volumeTeorico =
+      axisLengthM != null &&
+      axisLengthM > 0 &&
+      sectionAreaM2 != null &&
+      sectionAreaM2 > 0
+        ? axisLengthM * sectionAreaM2
         : null;
+  } else if (thicknessM > 0) {
+    volumeTeorico = area * thicknessM;
+  }
 
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -68,6 +90,9 @@ export async function createElementAction(formData: FormData) {
       area_m2: area || null,
       thickness_m: thicknessM || null,
       height_m: heightM,
+      section_area_m2: sectionAreaM2,
+      axis_length_m: axisLengthM,
+      executed_length_m: executedLengthM,
       volume_teorico_m3: volumeTeorico,
       quantity_source: "manual",
       reliability: geometry ? "geometria_manual" : "area_manual",
