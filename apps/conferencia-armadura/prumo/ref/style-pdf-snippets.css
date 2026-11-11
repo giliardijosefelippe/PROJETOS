@@ -1,0 +1,215 @@
+﻿/* Trechos relevantes de dist/style.css (referência — não é o runtime). */
+/* Origem: C:\Users\User\Projects\VISUALIZADOR DE DWG\dist\style.css */
+
+#pdf{position:absolute;inset:0;overflow:hidden;touch-action:none;background:#e9eef5}
+
+#pdf canvas{position:absolute;top:0;left:0;right:auto;bottom:auto;inset:auto;width:auto;height:auto;max-width:none;max-height:none}
+
+#pdf-tools{position:static;z-index:auto;top:auto;left:auto;right:auto;display:flex;gap:6px;align-items:center;padding:0;background:transparent;border:0;border-radius:0;flex-wrap:nowrap;font-size:12px}
+
+#pdf-tools button{padding:7px 10px}
+
+#pdf-tools input{background:#071c2e;color:#fff;border:1px solid #476277;padding:7px;border-radius:5px;min-width:0}
+
+#pdf-page{width:55px}
+
+#pdf-query{width:150px}
+
+#pdf-results{font-size:11px;color:#66dbe6}
+
+body:has(.pdf-mode) #background{display:none}
+
+.tools #pdf-tools{flex-wrap:nowrap;max-width:none;padding:0;min-width:max-content}
+
+#pdf-query{width:90px}
+
+#pdf-results{flex-basis:auto}
+
+#pdf{top:0}
+
+#pdf-tools{background:transparent;border-color:transparent}
+
+#pdf-tools input{background:#082016;border-color:#4b6649}
+
+#pdf canvas{will-change:transform;backface-visibility:hidden;pointer-events:none;user-select:none}
+
+body.viewer-fullscreen #pdf-tools{top:auto;right:auto;left:auto}
+
+body.viewer-fullscreen #pdf{top:0}
+
+@media(min-width:600px){body.viewer-fullscreen #pdf{top:0}
+
+body.viewer-fullscreen #pdf{top:0}
+
+body.word-mode #pdf-prev,body.word-mode #pdf-next,body.word-mode #pdf-page,body.word-mode #pdf-total,body.word-mode #pdf-rotate{display:none}
+
+#pdf-results{color:#ead48c;letter-spacing:0;font-size:11px}
+
+.tools #pdf-tools{position:static;inset:auto;top:auto;left:auto;right:auto;z-index:auto;display:flex;flex-direction:row;flex-wrap:nowrap;align-items:center;gap:5px;padding:0 6px 0 0;margin:0;background:transparent;border:0;border-radius:0;width:auto;max-width:none;font-size:16px;box-shadow:none}
+
+.tools #pdf-tools[hidden]{display:none!important}
+
+.tools #pdf-tools::after{content:"";display:block;width:1px;height:21px;margin:0 4px 0 7px;background:#496044;flex:0 0 auto}
+
+.tools #pdf-tools button,.tools #pdf-tools input,.tools #pdf-tools span{width:auto;min-width:max-content;flex:0 0 auto;min-height:30px;height:30px;box-sizing:border-box;padding:0 9px;font-size:16px;line-height:1;border-radius:8px}
+
+.tools #pdf-tools input{padding:0 9px;border-radius:8px;border:1px solid #57734f;background:#16392c;color:#eff4ea}
+
+.tools #pdf-tools #pdf-page{width:63px;text-align:center}
+
+.tools #pdf-tools #pdf-query{width:180px}
+
+.tools #pdf-tools #pdf-prev,.tools #pdf-tools #pdf-next,.tools #pdf-tools #pdf-match-prev,.tools #pdf-tools #pdf-match{min-width:30px;padding:0}
+
+.tools #pdf-tools #pdf-rotate{display:none}
+
+.tools #pdf-tools #pdf-total,.tools #pdf-tools #pdf-results{min-height:0;height:auto;padding:0 3px;font-size:15px;color:#c8b775;text-align:center;white-space:nowrap}
+
+.tools #pdf-tools #pdf-results:empty{display:none}
+
+body.viewer-fullscreen .tools #pdf-tools{top:auto;left:auto;right:auto}
+
+#pdf{inset:0;top:0}
+
+body.viewer-fullscreen #pdf,body.viewer-fullscreen.word-mode #word{top:0}
+
+body.word-mode #pdf-prev,body.word-mode #pdf-next,body.word-mode #pdf-page,body.word-mode #pdf-total{display:inline-block}
+
+#pdf{contain:paint}
+
+#pdf canvas{position:absolute;top:0;left:0;right:auto;bottom:auto;inset:auto;width:auto;height:auto;max-width:none;max-height:none;will-change:transform;transform-origin:0 0}
+
+html.is-apk .tools #pdf-tools{gap:4px;padding:0 6px 0 0;flex:0 0 auto;min-width:max-content;flex-wrap:nowrap!important}
+
+html.is-apk .tools #pdf-tools button,html.is-apk .tools #pdf-tools input,html.is-apk .tools #pdf-tools span{min-height:42px;height:42px;padding:0 8px;font-size:14px;min-width:max-content;flex:0 0 auto}
+
+html.is-apk .tools #pdf-tools #pdf-query{width:110px}
+
+html.is-apk .tools #pdf-tools #pdf-page{width:48px}
+
+html.is-apk .tools #pdf-tools::after{height:24px;margin:0 4px 0 6px}
+
+html:not(.is-apk) .bottom .tools:has(#pdf-tools:not([hidden])),html:not(.is-apk) #doc-toolbar .tools:has(#pdf-tools:not([hidden])){height:auto;min-height:36px;max-width:100%;overflow-x:auto}
+
+/* PDF/Word document toolbar under the tabs */
+#doc-toolbar{flex:0 0 auto;display:flex;align-items:center;width:100%;min-height:0;padding:5px 10px;background:linear-gradient(100deg,#102c21,#081d16);border-bottom:1px solid #355241;box-sizing:border-box;overflow-x:auto;overflow-y:visible;z-index:6;-webkit-overflow-scrolling:touch}
+
+#doc-toolbar[hidden]{display:none!important}
+
+#doc-toolbar .tools{margin:0;width:max-content;min-width:100%;max-width:none;height:auto;min-height:36px;padding:4px 6px;gap:5px;border-radius:10px;justify-content:flex-start;align-items:center;flex-wrap:nowrap;overflow:visible;box-sizing:border-box}
+
+#doc-toolbar .tools>button,#doc-toolbar .tools>.tool-divider,#doc-toolbar .tools>#zoom{flex:0 0 auto}
+
+#doc-toolbar .tools #pdf-tools{flex:0 0 auto;min-width:max-content;max-width:none;flex-wrap:nowrap!important;overflow:visible}
+
+body.doc-toolbar-mode footer.bottom .tools{display:none}
+
+html:not(.is-apk) body.doc-toolbar-mode .bottom,html:not(.is-apk) body.doc-toolbar-mode.viewer-fullscreen .bottom{grid-template-columns:1fr;min-height:34px}
+
+html:not(.is-apk) body.doc-toolbar-mode .bottom .status-area{grid-column:1;grid-row:1}
+
+html:not(.is-apk) #doc-toolbar .tools{height:auto;min-height:36px;padding:4px 6px}
+
+html:not(.is-apk) #doc-toolbar .tools>button{min-height:28px;height:28px;min-width:28px;padding:0 8px;font-size:14px;gap:5px}
+
+html:not(.is-apk) #doc-toolbar .tools>button span{font-size:13px}
+
+html:not(.is-apk) #doc-toolbar .tools>#minus,html:not(.is-apk) #doc-toolbar .tools>#plus{font-size:18px;min-width:28px;padding:0}
+
+html:not(.is-apk) #doc-toolbar #zoom{min-width:42px;font-size:12px}
+
+html:not(.is-apk) #doc-toolbar .tools .tool-divider{height:18px;margin:0 3px}
+
+html:not(.is-apk) #doc-toolbar .tools #pdf-tools button,html:not(.is-apk) #doc-toolbar .tools #pdf-tools input,html:not(.is-apk) #doc-toolbar .tools #pdf-tools span{min-height:28px;height:28px;font-size:14px}
+
+html:not(.is-apk) #doc-toolbar .tools #pdf-tools #pdf-query{width:150px}
+
+html:not(.is-apk) #doc-toolbar .tools #pdf-tools::after{height:18px}
+
+body.viewer-fullscreen #doc-toolbar{padding-top:max(5px,env(safe-area-inset-top))}
+
+body.capture-focus #doc-toolbar{display:none!important}
+
+/* Print sheets stay off-screen until printing-pdf. WebView2 preview paints on-screen layout. */
+#pdf-print-root{position:fixed;left:-10000px;top:0;width:auto;max-width:100%;pointer-events:none;opacity:0;z-index:-1}
+
+#pdf-print-root .print-sheet{display:block;box-sizing:border-box;margin:0 auto;background:#fff;page-break-after:always;break-after:page;break-inside:avoid;page-break-inside:avoid}
+
+#pdf-print-root .print-sheet:last-child{page-break-after:auto;break-after:auto}
+
+#pdf-print-root .print-sheet img,#pdf-print-root .print-sheet canvas{display:block;width:100%;height:100%;object-fit:fill;background:#fff}
+
+#pdf-print-root .word-print-page{display:block;color:#182520;background:#fff;box-sizing:border-box;margin:0 auto;box-shadow:none;overflow:hidden;page-break-after:always;break-after:page;break-inside:avoid;page-break-inside:avoid;position:relative!important;left:auto!important;top:auto!important;transform:none!important}
+
+#pdf-print-root .word-print-page:last-child{page-break-after:auto;break-after:auto}
+
+#pdf-print-root .word-print-page .word-page-number{display:none!important}
+
+body.printing-pdf{background:#fff!important}
+
+body.printing-pdf>*:not(#pdf-print-root){visibility:hidden!important}
+
+/* Stack every sheet so preview/print see all pages (do not clip to one centered page). */
+body.printing-pdf #pdf-print-root{
+ position:fixed!important;inset:0!important;left:0!important;top:0!important;width:100%!important;height:100%!important;
+ z-index:2147483646!important;opacity:1!important;overflow:auto!important;background:#fff!important;pointer-events:none!important;visibility:visible!important;
+ display:block!important;padding:0;margin:0
+}
+
+body.printing-pdf #pdf-print-root .print-sheet{
+ width:min(100%,calc(100vh * var(--print-w,794) / var(--print-h,1122)))!important;
+ height:auto!important;aspect-ratio:var(--print-w,794)/var(--print-h,1122);margin:0 auto 12px!important
+}
+
+body.printing-pdf #pdf-print-root .word-print-page{
+ width:min(100%,calc(100vh * var(--print-w,794) / var(--print-h,1122)))!important;
+ height:auto!important;aspect-ratio:var(--print-w,794)/var(--print-h,1122);margin:0 auto 12px!important;max-height:none!important
+}
+
+body.printing-pdf>*:not(#pdf-print-root){display:none!important;visibility:hidden!important}
+
+body.printing-pdf #pdf-print-root{position:static!important;inset:auto!important;width:auto!important;height:auto!important;overflow:visible!important;opacity:1!important;visibility:visible!important;display:block!important;padding:0!important}
+
+body.printing-pdf #pdf-print-root .print-sheet{
+  width:100%!important;height:100vh!important;max-width:none!important;margin:0!important;aspect-ratio:auto;
+  page-break-after:always;break-after:page;break-inside:avoid;page-break-inside:avoid
+ }
+
+body.printing-pdf #pdf-print-root .print-sheet:last-child{page-break-after:auto;break-after:auto}
+
+body.printing-pdf #pdf-print-root .print-sheet img,body.printing-pdf #pdf-print-root .print-sheet canvas{
+  width:100%!important;height:100%!important;object-fit:contain;margin:0!important;-webkit-print-color-adjust:exact;print-color-adjust:exact
+ }
+
+body.printing-pdf #pdf-print-root .word-print-page{
+  width:100%!important;height:auto!important;min-height:100vh!important;max-height:none!important;aspect-ratio:auto;margin:0!important;
+  page-break-after:always;break-after:page;break-inside:avoid;-webkit-print-color-adjust:exact;print-color-adjust:exact
+ }
+
+body.printing-pdf #pdf-print-root .word-print-page:last-child{page-break-after:auto;break-after:auto}
+
+body.doc-toolbar-mode footer.bottom:not(:has(#ifc-info:not([hidden]))):has(#status:empty){display:none}
+
+@media(max-width:760px){
+ #doc-toolbar{padding:4px 8px}
+
+#doc-toolbar .tools{min-height:44px;gap:4px;padding:3px 4px;flex-wrap:nowrap}
+
+#doc-toolbar .tools button span{display:none}
+
+#doc-toolbar .tools #pdf-tools{flex-wrap:nowrap!important;min-width:max-content}
+
+#doc-toolbar .tools #pdf-tools #pdf-query{width:96px}
+
+html.is-apk #doc-toolbar{overflow-x:auto;overflow-y:visible;padding:6px 8px;min-height:56px;align-items:stretch}
+
+html.is-apk #doc-toolbar .tools{min-height:48px;height:48px;padding:3px 4px;gap:4px;flex-wrap:nowrap;align-items:center;width:max-content;min-width:100%}
+
+html.is-apk #doc-toolbar .tools>button{min-height:42px;height:42px;min-width:42px;padding:0 8px}
+
+html.is-apk #doc-toolbar .tools #pdf-tools{flex:0 0 auto;min-width:max-content;flex-wrap:nowrap!important}
+
+html.is-apk #doc-toolbar .tools #pdf-tools button,html.is-apk #doc-toolbar .tools #pdf-tools input,html.is-apk #doc-toolbar .tools #pdf-tools span{min-height:42px;height:42px}
+
+html.is-apk #doc-toolbar #zoom{min-width:40px;font-size:13px}
+
