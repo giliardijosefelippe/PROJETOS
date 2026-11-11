@@ -2,21 +2,22 @@
 
 App de campo (pt-BR) para marcar a prancha PDF de armadura (pilares/vigas): OK, risco, seta, nota, tela ligada, giro da vista, relatório, **biblioteca de PDFs** e **autosave**.
 
-## Uso principal — HTML único
+## Uso principal
 
-**`apps/conferencia-armadura/conferencia-armadura.html`**
+**`apps/conferencia-armadura/conferencia-armadura.html`** + **`conference-app.mjs`**
 
-1. Duplo clique / abra no Chrome, ou sirva a pasta com `python3 -m http.server 8080`.
-2. Demo: `demo-pilares-vigas.pdf` ao lado do HTML.
-3. PDF.js (CDN) na 1ª abertura.
+Sirva a pasta (módulos ES): `python3 -m http.server 8080` → `http://localhost:8080/conferencia-armadura.html`.
 
-### Funções
+### Motor PDF = Prumo PdfViewer
 
-- Toolbar flutuante (⋮⋮ recolhe); ✓ / ✕ sobre rótulos; mover / zoom / riscar / seta / nota
-- **Biblioteca (📚)**: PDFs importados; reabrir; remove
-- **Autosave**: marcações gravam sozinhas (localStorage + IndexedDB; no APK também em storage/`Download/ConfArmadura`)
-- Sem botão “Salvar documento” — só **Confirmar** no modal de texto/motivo
-- Relatório agrupado Vigas (V) / Pilares (P) / Lajes (L)
+- Fonte: `prumo/pdf-view.js` (não reescrito) + `prumo/vendor/pdf/`
+- Preview CSS no gesto + refinement (~36 ms); **sem** `page.render` no `pointermove`
+- Controles: páginas, zoom −/＋, fit, busca, rotate
+- Overlay de anotações alinhado a `scale` / `x` / `y` / `rotation`
+
+### Conferência (mantida)
+
+- Dock flutuante ✓/✕ / riscar / seta / nota / relatório V·P·L / biblioteca 📚 / autosave / wake lock
 
 ## APK Android (instalável)
 

@@ -1,16 +1,22 @@
 #!/usr/bin/env bash
-# Copy the single-file HTML app into Capacitor webDir (www/).
+# Sync Capacitor www/ from HTML + Prumo PdfViewer + conference module.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-mkdir -p "$ROOT/www/vendor/pdfjs"
-cp -f "$ROOT/conferencia-armadura.html" "$ROOT/www/index.html"
-cp -f "$ROOT/demo-pilares-vigas.pdf" "$ROOT/www/demo-pilares-vigas.pdf"
-# Local pdf.js (required on Android — CDN/worker hangs the WebView)
-if [[ -f "$ROOT/vendor/pdfjs/pdf.min.js" ]]; then
-  cp -f "$ROOT/vendor/pdfjs/pdf.min.js" "$ROOT/www/vendor/pdfjs/pdf.min.js"
-  cp -f "$ROOT/vendor/pdfjs/pdf.worker.min.js" "$ROOT/www/vendor/pdfjs/pdf.worker.min.js"
-else
-  echo "ERROR: missing vendor/pdfjs — run scripts/fetch-pdfjs.sh" >&2
-  exit 1
-fi
-echo "www synced from conferencia-armadura.html (+ vendor/pdfjs)"
+WWW="$ROOT/www"
+rm -rf "$WWW"
+mkdir -p "$WWW"
+
+cp -f "$ROOT/conferencia-armadura.html" "$WWW/index.html"
+cp -f "$ROOT/conference-app.mjs" "$WWW/conference-app.mjs"
+cp -f "$ROOT/demo-pilares-vigas.pdf" "$WWW/demo-pilares-vigas.pdf"
+
+# PdfViewer module + vendor (asset paths resolve via PrumoAssets → prumo/vendor/pdf)
+mkdir -p "$WWW/prumo"
+cp -f "$ROOT/prumo/pdf-view.js" "$WWW/prumo/pdf-view.js"
+cp -a "$ROOT/prumo/vendor" "$WWW/prumo/vendor"
+
+# Also expose ./vendor/pdf for document.baseURI fallbacks inside pdf-view.js
+mkdir -p "$WWW/vendor"
+cp -a "$ROOT/prumo/vendor/pdf" "$WWW/vendor/pdf"
+
+echo "www synced: index.html + conference-app.mjs + prumo/pdf-view.js + vendor/pdf"
