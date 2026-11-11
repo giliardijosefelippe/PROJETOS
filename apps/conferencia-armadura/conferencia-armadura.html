@@ -19,9 +19,9 @@
       --risk: #e8a317;
       --safe-bottom: env(safe-area-inset-bottom, 0px);
       --safe-top: env(safe-area-inset-top, 0px);
-      --toolbar-h: 132px;
       --top-h: 56px;
       --touch: 48px;
+      --dock-size: 52px;
       font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
     }
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -31,7 +31,7 @@
     }
     #app {
       display: grid;
-      grid-template-rows: calc(var(--top-h) + var(--safe-top)) 1fr calc(var(--toolbar-h) + var(--safe-bottom));
+      grid-template-rows: calc(var(--top-h) + var(--safe-top)) 1fr;
       height: 100%; height: 100dvh;
     }
     .top-bar {
@@ -52,7 +52,7 @@
       overflow: hidden; text-overflow: ellipsis; max-width: 42vw;
     }
     .top-actions { display: flex; align-items: center; gap: 8px; }
-    .chip, .icon-btn, .tool, .action, .primary, .secondary, .file-btn {
+    .chip, .icon-btn, .tool, .dock-btn, .primary, .secondary {
       border: 1px solid var(--border); background: var(--surface-2); color: var(--text);
       font-weight: 700; cursor: pointer;
     }
@@ -82,32 +82,81 @@
       font-size: 14px; pointer-events: none; z-index: 3; max-width: 80vw; text-align: center;
     }
     .hint[hidden] { display: none !important; }
-    .toolbar {
-      background: #151a1f; border-top: 1px solid var(--border);
-      padding: 8px 8px calc(8px + var(--safe-bottom));
-      display: flex; flex-direction: column; gap: 8px; z-index: 5;
+
+    /* Floating icon dock */
+    #tool-dock {
+      position: fixed;
+      z-index: 35;
+      left: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: calc(var(--dock-size) + 10px);
+      max-height: calc(100dvh - var(--top-h) - 24px - var(--safe-bottom));
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 6px;
+      border-radius: 16px;
+      background: rgba(21, 26, 31, 0.94);
+      border: 1px solid var(--border);
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+      touch-action: none;
+      user-select: none;
     }
-    .tool-row { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
-    .tool-row::-webkit-scrollbar { display: none; }
-    .tool, .action {
-      flex: 0 0 auto; min-height: var(--touch); min-width: 64px; border-radius: 12px;
-      font-size: 12px; display: inline-flex; flex-direction: column;
-      align-items: center; justify-content: center; gap: 2px; padding: 6px 10px;
+    #tool-dock.collapsed {
+      width: var(--dock-size);
+      padding: 6px;
+      gap: 0;
     }
-    .secondary-row .action, .file-btn {
-      flex-direction: row; min-width: auto; padding: 0 14px; font-size: 13px;
+    #tool-dock.collapsed .dock-body { display: none; }
+    .dock-handle {
+      display: flex; align-items: center; justify-content: center; gap: 4px;
+      min-height: 28px; border-radius: 10px; color: var(--muted);
+      font-size: 14px; letter-spacing: 0.12em; cursor: grab;
+      background: rgba(255, 255, 255, 0.04);
     }
+    .dock-handle:active { cursor: grabbing; }
+    .dock-toggle {
+      width: 100%; min-height: var(--dock-size); border-radius: 12px;
+      border: 1px solid var(--border); background: var(--surface-2); color: var(--text);
+      font-size: 20px; font-weight: 700; cursor: pointer;
+    }
+    .dock-body {
+      display: flex; flex-direction: column; gap: 6px;
+      overflow-y: auto; overflow-x: hidden;
+      scrollbar-width: thin;
+      -webkit-overflow-scrolling: touch;
+      padding-bottom: 2px;
+    }
+    .dock-sep {
+      height: 1px; margin: 2px 6px; background: var(--border); flex: 0 0 auto;
+    }
+    .dock-btn, .tool.dock-btn, label.dock-btn {
+      width: 100%;
+      min-width: var(--dock-size);
+      min-height: var(--dock-size);
+      margin: 0;
+      padding: 0;
+      border-radius: 12px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      line-height: 1;
+      flex: 0 0 auto;
+    }
+    label.dock-btn { cursor: pointer; }
     .tool[aria-pressed="true"] {
       background: #2c3640; border-color: #7f93a8;
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
     }
     .tool[data-tool="ok"][aria-pressed="true"] { background: #184a2d; border-color: var(--ok); }
     .tool[data-tool="risk"][aria-pressed="true"] { background: #4a3810; border-color: var(--risk); }
-    .tool-icon { font-size: 18px; line-height: 1; }
+    .tool-icon { font-size: 20px; line-height: 1; }
     .tool-icon.ok { color: #7ddea8; }
     .tool-icon.risk { color: #ffcc66; font-weight: 900; }
-    .action.accent { background: var(--accent); border-color: #ff3b57; color: #fff; }
-    .action.danger { color: #ffc9c9; border-color: #7a3030; }
-    .file-btn { display: inline-flex; align-items: center; justify-content: center; }
+    .dock-btn.accent { background: var(--accent); border-color: #ff3b57; color: #fff; }
+    .dock-btn.danger { color: #ffc9c9; border-color: #7a3030; }
     .report-panel {
       position: fixed; left: 0; right: 0; bottom: 0; max-height: min(72vh, 640px);
       background: var(--surface); border-top: 1px solid var(--border); z-index: 40;
@@ -153,7 +202,7 @@
     .modal[hidden] { display: none !important; }
     .modal-card {
       width: min(480px, 100%); background: var(--surface); border: 1px solid var(--border);
-      border-radius: 14px; padding: 14px; margin-bottom: calc(var(--toolbar-h) + var(--safe-bottom));
+      border-radius: 14px; padding: 14px; margin-bottom: calc(24px + var(--safe-bottom));
     }
     .modal-card h3 { margin: 0 0 10px; font-size: 16px; }
     .modal-card textarea {
@@ -214,23 +263,24 @@
       </div>
     </div>
 
-    <nav class="toolbar" aria-label="Ferramentas">
-      <div class="tool-row primary-row">
-        <button type="button" class="tool" data-tool="pan" aria-pressed="true"><span class="tool-icon">✥</span><span>Mover</span></button>
-        <button type="button" class="tool" data-tool="stroke"><span class="tool-icon">╱</span><span>Riscar</span></button>
-        <button type="button" class="tool" data-tool="ok"><span class="tool-icon ok">✓</span><span>OK</span></button>
-        <button type="button" class="tool" data-tool="risk"><span class="tool-icon risk">!</span><span>Risco</span></button>
-        <button type="button" class="tool" data-tool="arrow"><span class="tool-icon">➜</span><span>Seta</span></button>
-        <button type="button" class="tool" data-tool="note"><span class="tool-icon">T</span><span>Nota</span></button>
+    <div id="tool-dock" aria-label="Ferramentas flutuantes">
+      <div class="dock-handle" id="dock-handle" title="Arrastar barra">⋮⋮</div>
+      <button type="button" class="dock-toggle" id="dock-toggle" title="Recolher / expandir ferramentas" aria-expanded="true">▾</button>
+      <div class="dock-body" id="dock-body">
+        <button type="button" class="tool dock-btn" data-tool="pan" aria-pressed="true" title="Mover"><span class="tool-icon" aria-hidden="true">✥</span></button>
+        <button type="button" class="tool dock-btn" data-tool="stroke" title="Riscar"><span class="tool-icon" aria-hidden="true">╱</span></button>
+        <button type="button" class="tool dock-btn" data-tool="ok" title="OK"><span class="tool-icon ok" aria-hidden="true">✓</span></button>
+        <button type="button" class="tool dock-btn" data-tool="risk" title="Risco"><span class="tool-icon risk" aria-hidden="true">!</span></button>
+        <button type="button" class="tool dock-btn" data-tool="arrow" title="Seta"><span class="tool-icon" aria-hidden="true">➜</span></button>
+        <button type="button" class="tool dock-btn" data-tool="note" title="Nota"><span class="tool-icon" aria-hidden="true">T</span></button>
+        <div class="dock-sep" aria-hidden="true"></div>
+        <button type="button" id="btn-undo" class="dock-btn" title="Desfazer">↶</button>
+        <button type="button" id="btn-clear" class="dock-btn danger" title="Limpar">⌫</button>
+        <label class="dock-btn" title="Abrir PDF">📄<input type="file" id="file-input" accept="application/pdf,.pdf" hidden /></label>
+        <button type="button" id="btn-demo" class="dock-btn" title="Demo">▣</button>
+        <button type="button" id="btn-report" class="dock-btn accent" title="Relatório" onclick="window.__openConfReport && window.__openConfReport(event)">☰</button>
       </div>
-      <div class="tool-row secondary-row">
-        <button type="button" id="btn-undo" class="action">Desfazer</button>
-        <button type="button" id="btn-clear" class="action danger">Limpar</button>
-        <label class="action file-btn">Abrir PDF<input type="file" id="file-input" accept="application/pdf,.pdf" hidden /></label>
-        <button type="button" id="btn-demo" class="action">Demo</button>
-        <button type="button" id="btn-report" class="action accent" onclick="window.__openConfReport && window.__openConfReport(event)">Relatório</button>
-      </div>
-    </nav>
+    </div>
   </div>
 
   <!-- PDF.js (CDN). Precisa de internet na 1ª abertura; depois o navegador costuma cachear. -->
@@ -967,6 +1017,124 @@
     }
   }
 
+  function bindFloatingDock() {
+    var dock = document.getElementById("tool-dock");
+    var handle = document.getElementById("dock-handle");
+    var toggle = document.getElementById("dock-toggle");
+    if (!dock || !handle || !toggle) return;
+
+    var collapsed = false;
+    var dragging = false;
+    var dragMoved = false;
+    var startX = 0, startY = 0, origLeft = 0, origTop = 0;
+    var posKey = "conf-armadura-dock-pos";
+
+    function applyCollapsed() {
+      dock.classList.toggle("collapsed", collapsed);
+      toggle.setAttribute("aria-expanded", String(!collapsed));
+      toggle.textContent = collapsed ? "▸" : "▾";
+      toggle.title = collapsed ? "Expandir ferramentas" : "Recolher ferramentas";
+    }
+
+    function clampDock() {
+      var rect = dock.getBoundingClientRect();
+      var maxL = Math.max(8, window.innerWidth - rect.width - 8);
+      var maxT = Math.max(8, window.innerHeight - rect.height - 8);
+      var left = Math.min(maxL, Math.max(8, rect.left));
+      var top = Math.min(maxT, Math.max(8, rect.top));
+      dock.style.left = left + "px";
+      dock.style.top = top + "px";
+      dock.style.right = "auto";
+      dock.style.bottom = "auto";
+      dock.style.transform = "none";
+      try {
+        localStorage.setItem(posKey, JSON.stringify({ left: left, top: top, collapsed: collapsed }));
+      } catch (e) {}
+    }
+
+    try {
+      var saved = JSON.parse(localStorage.getItem(posKey) || "null");
+      if (saved && typeof saved.left === "number" && typeof saved.top === "number") {
+        dock.style.left = saved.left + "px";
+        dock.style.top = saved.top + "px";
+        dock.style.transform = "none";
+        collapsed = !!saved.collapsed;
+        applyCollapsed();
+        requestAnimationFrame(clampDock);
+      }
+    } catch (e) {}
+
+    toggle.addEventListener("click", function (e) {
+      e.stopPropagation();
+      if (dragMoved) return;
+      collapsed = !collapsed;
+      applyCollapsed();
+      requestAnimationFrame(clampDock);
+    });
+
+    function onDragStart(e) {
+      if (e.button != null && e.button !== 0) return;
+      dragging = true;
+      dragMoved = false;
+      startX = e.clientX;
+      startY = e.clientY;
+      var rect = dock.getBoundingClientRect();
+      origLeft = rect.left;
+      origTop = rect.top;
+      dock.style.transform = "none";
+      try { handle.setPointerCapture(e.pointerId); } catch (err) {}
+      e.preventDefault();
+    }
+
+    function onDragMove(e) {
+      if (!dragging) return;
+      var dx = e.clientX - startX;
+      var dy = e.clientY - startY;
+      if (Math.abs(dx) + Math.abs(dy) > 4) dragMoved = true;
+      dock.style.left = (origLeft + dx) + "px";
+      dock.style.top = (origTop + dy) + "px";
+      dock.style.right = "auto";
+      dock.style.bottom = "auto";
+    }
+
+    function onDragEnd(e) {
+      if (!dragging) return;
+      dragging = false;
+      try {
+        if (handle.hasPointerCapture && handle.hasPointerCapture(e.pointerId)) {
+          handle.releasePointerCapture(e.pointerId);
+        }
+      } catch (err) {}
+      clampDock();
+      setTimeout(function () { dragMoved = false; }, 40);
+    }
+
+    handle.addEventListener("pointerdown", onDragStart);
+    handle.addEventListener("pointermove", onDragMove);
+    handle.addEventListener("pointerup", onDragEnd);
+    handle.addEventListener("pointercancel", onDragEnd);
+    window.addEventListener("resize", clampDock);
+
+    // Long-press tip on touch (title/tooltip substitute)
+    var tipTimer = null;
+    dock.addEventListener("pointerdown", function (e) {
+      var t = e.target && e.target.closest ? e.target.closest("[title]") : null;
+      if (!t || t === handle) return;
+      var label = t.getAttribute("title");
+      if (!label) return;
+      clearTimeout(tipTimer);
+      tipTimer = setTimeout(function () {
+        setHint(label);
+        setTimeout(function () { setHint(""); }, 1400);
+      }, 420);
+    }, true);
+    dock.addEventListener("pointerup", function () { clearTimeout(tipTimer); }, true);
+    dock.addEventListener("pointercancel", function () { clearTimeout(tipTimer); }, true);
+    dock.addEventListener("pointermove", function (e) {
+      if (e.pointerType === "touch") clearTimeout(tipTimer);
+    }, true);
+  }
+
   function bindUi() {
     els.tools.forEach(function (btn) {
       btn.addEventListener("click", function () { setTool(btn.getAttribute("data-tool")); });
@@ -1003,6 +1171,7 @@
     els.viewport.addEventListener("pointercancel", onPointerUp);
     els.viewport.addEventListener("wheel", onWheel, { passive: false });
     window.addEventListener("resize", function () { if (state.pageInfo) centerPage(); });
+    bindFloatingDock();
   }
 
   function boot() {

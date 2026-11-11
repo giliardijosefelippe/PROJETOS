@@ -32,6 +32,7 @@ python3 -m http.server 8080
 - **Tela ligada** (Wake Lock — melhor em http/https)
 - **⟳** gira a visualização 90°
 - **Relatório** com contagens; exportar HTML, copiar texto, compartilhar
+- **Barra flutuante** só com símbolos: arrastar pela tela, recolher/expandir; nomes no `title` / pressão longa
 
 ## APK / Capacitor (caminho futuro, opcional)
 
