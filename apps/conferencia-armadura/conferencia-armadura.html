@@ -108,12 +108,23 @@
       padding: 6px;
       gap: 0;
     }
-    #tool-dock.collapsed .dock-body { display: none; }
+    #tool-dock.collapsed .dock-body,
+    #tool-dock.collapsed .dock-toggle { display: none; }
     .dock-handle {
       display: flex; align-items: center; justify-content: center; gap: 4px;
       min-height: 28px; border-radius: 10px; color: var(--muted);
       font-size: 14px; letter-spacing: 0.12em; cursor: grab;
       background: rgba(255, 255, 255, 0.04);
+      border: 1px solid transparent;
+    }
+    #tool-dock.collapsed .dock-handle {
+      min-height: var(--dock-size);
+      width: 100%;
+      border-color: var(--border);
+      background: var(--surface-2);
+      color: var(--text);
+      font-size: 18px;
+      cursor: pointer;
     }
     .dock-handle:active { cursor: grabbing; }
     .dock-toggle {
@@ -264,7 +275,7 @@
     </div>
 
     <div id="tool-dock" aria-label="Ferramentas flutuantes">
-      <div class="dock-handle" id="dock-handle" title="Arrastar barra">⋮⋮</div>
+      <div class="dock-handle" id="dock-handle" role="button" tabindex="0" title="Recolher (clique) · Arrastar para mover">⋮⋮</div>
       <button type="button" class="dock-toggle" id="dock-toggle" title="Recolher / expandir ferramentas" aria-expanded="true">▾</button>
       <div class="dock-body" id="dock-body">
         <button type="button" class="tool dock-btn" data-tool="pan" aria-pressed="true" title="Mover"><span class="tool-icon" aria-hidden="true">✥</span></button>
@@ -1034,6 +1045,17 @@
       toggle.setAttribute("aria-expanded", String(!collapsed));
       toggle.textContent = collapsed ? "▸" : "▾";
       toggle.title = collapsed ? "Expandir ferramentas" : "Recolher ferramentas";
+      handle.title = collapsed
+        ? "Expandir ferramentas (clique) · Arrastar para mover"
+        : "Recolher (clique) · Arrastar para mover";
+      handle.setAttribute("aria-expanded", String(!collapsed));
+      handle.setAttribute("aria-label", collapsed ? "Expandir ferramentas" : "Recolher ferramentas");
+    }
+
+    function toggleCollapsed() {
+      collapsed = !collapsed;
+      applyCollapsed();
+      requestAnimationFrame(clampDock);
     }
 
     function clampDock() {
@@ -1067,9 +1089,7 @@
     toggle.addEventListener("click", function (e) {
       e.stopPropagation();
       if (dragMoved) return;
-      collapsed = !collapsed;
-      applyCollapsed();
-      requestAnimationFrame(clampDock);
+      toggleCollapsed();
     });
 
     function onDragStart(e) {
@@ -1090,7 +1110,9 @@
       if (!dragging) return;
       var dx = e.clientX - startX;
       var dy = e.clientY - startY;
-      if (Math.abs(dx) + Math.abs(dy) > 4) dragMoved = true;
+      // Threshold: little movement = click; otherwise drag
+      if (Math.abs(dx) + Math.abs(dy) > 6) dragMoved = true;
+      if (!dragMoved) return;
       dock.style.left = (origLeft + dx) + "px";
       dock.style.top = (origTop + dy) + "px";
       dock.style.right = "auto";
@@ -1105,7 +1127,12 @@
           handle.releasePointerCapture(e.pointerId);
         }
       } catch (err) {}
-      clampDock();
+      if (!dragMoved) {
+        // Short click on ⋮⋮ → collapse / expand
+        toggleCollapsed();
+      } else {
+        clampDock();
+      }
       setTimeout(function () { dragMoved = false; }, 40);
     }
 
@@ -1113,7 +1140,14 @@
     handle.addEventListener("pointermove", onDragMove);
     handle.addEventListener("pointerup", onDragEnd);
     handle.addEventListener("pointercancel", onDragEnd);
+    handle.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        toggleCollapsed();
+      }
+    });
     window.addEventListener("resize", clampDock);
+    applyCollapsed();
 
     // Long-press tip on touch (title/tooltip substitute)
     var tipTimer = null;
