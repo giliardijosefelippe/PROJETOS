@@ -8,6 +8,7 @@ mkdir -p "$WWW"
 
 cp -f "$ROOT/conferencia-armadura.html" "$WWW/index.html"
 cp -f "$ROOT/conference-app.mjs" "$WWW/conference-app.mjs"
+cp -f "$ROOT/prumo-android-safe.mjs" "$WWW/prumo-android-safe.mjs"
 cp -f "$ROOT/demo-pilares-vigas.pdf" "$WWW/demo-pilares-vigas.pdf"
 
 # PdfViewer module + vendor (asset paths resolve via PrumoAssets → prumo/vendor/pdf)
@@ -19,4 +20,4 @@ cp -a "$ROOT/prumo/vendor" "$WWW/prumo/vendor"
 mkdir -p "$WWW/vendor"
 cp -a "$ROOT/prumo/vendor/pdf" "$WWW/vendor/pdf"
 
-echo "www synced: index.html + conference-app.mjs + prumo/pdf-view.js + vendor/pdf"
+echo "www synced: index.html + conference-app.mjs + prumo-android-safe.mjs + prumo/pdf-view.js + vendor/pdf"

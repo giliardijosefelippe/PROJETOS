@@ -1,8 +1,11 @@
 /**
  * Conf. Armadura — PdfViewer (Prumo) + conference overlay.
  * Imports prumo/pdf-view.js as-is; annotations track scale/x/y/rotation.
+ * Android: Blob worker + paint budget via prumo-android-safe (pdf-view untouched).
  */
-import { PdfViewer } from "./prumo/pdf-view.js";
+import { PdfViewer, patchPdfViewerForAndroid, isNativeCapacitor } from "./prumo-android-safe.mjs";
+
+patchPdfViewerForAndroid();
 
 const DEMO_PDF = "demo-pilares-vigas.pdf";
 const DEMO_LABEL = "2330_GAR PILARES E VIGAS — Sanluzzi Selenza Rev01";
@@ -10,20 +13,7 @@ const LIB_INDEX_KEY = "conf-armadura-library-v1";
 const LIB_FOLDER = "Download/ConfArmadura";
 const IDB_NAME = "conf-armadura-db";
 const IDB_STORE = "pdfs";
-
-// Resolve Prumo vendor assets relative to this module (Capacitor/www offline).
-globalThis.PrumoAssets = new Proxy(
-  {},
-  {
-    get(_t, path) {
-      if (typeof path !== "string") return undefined;
-      if (path.startsWith("./vendor/pdf/")) {
-        return new URL("prumo/vendor/pdf/" + path.slice("./vendor/pdf/".length), import.meta.url).href;
-      }
-      return undefined;
-    },
-  }
-);
+const ANNO_CANVAS_BUDGET = 1_600_000;
 
 const $ = (id) => document.getElementById(id);
 const els = {
@@ -306,8 +296,12 @@ function pageSize() {
   return pdfViewer?.pageSize?.() || null;
 }
 
-/** Sync annotation layer to PdfViewer camera (scale/x/y). */
-function syncAnnoLayer() {
+/**
+ * Sync annotation layer to PdfViewer camera (scale/x/y).
+ * During pan/zoom preview: CSS transform only (no canvas realloc / redraw).
+ * Cap backing-store pixels — full-page DPR canvas on CAD sheets OOMs WebView.
+ */
+function syncAnnoLayer(opts = {}) {
   if (!pdfViewer || !els.annoLayer) return;
   const v = pageSize();
   if (!v) return;
@@ -316,21 +310,36 @@ function syncAnnoLayer() {
   els.annoLayer.style.width = v.width + "px";
   els.annoLayer.style.height = v.height + "px";
   els.annoLayer.style.transform = `translate3d(${pdfViewer.x}px,${pdfViewer.y}px,0) scale(${pdfViewer.scale})`;
-  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  if (opts.transformOnly) return;
+
   const cssW = v.width;
   const cssH = v.height;
-  if (els.annoCanvas.width !== Math.floor(cssW * dpr) || els.annoCanvas.height !== Math.floor(cssH * dpr)) {
-    els.annoCanvas.width = Math.floor(cssW * dpr);
-    els.annoCanvas.height = Math.floor(cssH * dpr);
+  let dpr = Math.min(window.devicePixelRatio || 1, isNativeCapacitor() ? 1.5 : 2);
+  const area = Math.max(1, cssW * cssH);
+  if (area * dpr * dpr > ANNO_CANVAS_BUDGET) {
+    dpr = Math.sqrt(ANNO_CANVAS_BUDGET / area);
+  }
+  const bw = Math.max(1, Math.floor(cssW * dpr));
+  const bh = Math.max(1, Math.floor(cssH * dpr));
+  if (els.annoCanvas.width !== bw || els.annoCanvas.height !== bh) {
+    els.annoCanvas.width = bw;
+    els.annoCanvas.height = bh;
     els.annoCanvas.style.width = cssW + "px";
     els.annoCanvas.style.height = cssH + "px";
-    const ctx = els.annoCanvas.getContext("2d");
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
+  const ctx = els.annoCanvas.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   redrawAnnotations();
 }
 
-function scheduleSync() {
+function scheduleSync(opts = {}) {
+  if (opts.transformOnly) {
+    if (!pdfViewer || !els.annoLayer) return;
+    const v = pageSize();
+    if (!v) return;
+    els.annoLayer.style.transform = `translate3d(${pdfViewer.x}px,${pdfViewer.y}px,0) scale(${pdfViewer.scale})`;
+    return;
+  }
   if (syncRaf) return;
   syncRaf = requestAnimationFrame(() => {
     syncRaf = 0;
@@ -342,7 +351,8 @@ function hookViewerTransforms(viewer) {
   const origPreview = viewer.applyPreview.bind(viewer);
   viewer.applyPreview = function () {
     origPreview();
-    scheduleSync();
+    // Pan/zoom: move overlay with CSS only — never redraw marks every frame.
+    scheduleSync({ transformOnly: true });
   };
   const origChanged = viewer.changed.bind(viewer);
   viewer.changed = function () {
@@ -669,7 +679,10 @@ function onViewerChange(s) {
   els.zoom.textContent = s.zoom + "%";
   updateSearchStatus();
   scheduleSync();
-  refreshTextItems().catch(() => {});
+  // getTextContent on every zoom freezes WebView — only when page changes.
+  if (s.page !== state.textItemsPage) {
+    refreshTextItems().catch(() => {});
+  }
 }
 
 async function refreshTextItems() {
@@ -1182,17 +1195,23 @@ async function boot() {
     setHint(err?.message || "Erro no PDF");
   });
   hookViewerTransforms(pdfViewer);
-  setHint("Preparando visualizador…");
+  // Let chrome paint before any heavy PDF work (avoids "trava direto" on launch).
+  setHint("Pronto · 📄 Importar · 📚 Biblioteca · Demo");
+  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+
   const index = readLibraryIndex();
+  const native = isNativeCapacitor();
   if (index.pdfs.length) {
     try {
       const first = index.pdfs[0];
+      setHint("Abrindo última prancha…");
       const doc = await loadPdfFromLibrary(first.id);
       await openPdfBytes(doc.bytes, doc.name || first.name, { docId: first.id, skipLibrarySave: true });
       return;
     } catch {}
   }
-  await tryLoadDemo();
+  // On native, skip auto-demo (large CAD sheet) — user opens via Demo / Import.
+  if (!native) await tryLoadDemo();
 }
 
 boot();
