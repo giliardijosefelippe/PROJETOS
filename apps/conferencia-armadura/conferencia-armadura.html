@@ -108,8 +108,7 @@
       padding: 6px;
       gap: 0;
     }
-    #tool-dock.collapsed .dock-body,
-    #tool-dock.collapsed .dock-toggle { display: none; }
+    #tool-dock.collapsed .dock-body { display: none; }
     .dock-handle {
       display: flex; align-items: center; justify-content: center; gap: 4px;
       min-height: 28px; border-radius: 10px; color: var(--muted);
@@ -127,11 +126,6 @@
       cursor: pointer;
     }
     .dock-handle:active { cursor: grabbing; }
-    .dock-toggle {
-      width: 100%; min-height: var(--dock-size); border-radius: 12px;
-      border: 1px solid var(--border); background: var(--surface-2); color: var(--text);
-      font-size: 20px; font-weight: 700; cursor: pointer;
-    }
     .dock-body {
       display: flex; flex-direction: column; gap: 6px;
       overflow-y: auto; overflow-x: hidden;
@@ -276,7 +270,6 @@
 
     <div id="tool-dock" aria-label="Ferramentas flutuantes">
       <div class="dock-handle" id="dock-handle" role="button" tabindex="0" title="Recolher (clique) · Arrastar para mover">⋮⋮</div>
-      <button type="button" class="dock-toggle" id="dock-toggle" title="Recolher / expandir ferramentas" aria-expanded="true">▾</button>
       <div class="dock-body" id="dock-body">
         <button type="button" class="tool dock-btn" data-tool="pan" aria-pressed="true" title="Mover"><span class="tool-icon" aria-hidden="true">✥</span></button>
         <button type="button" class="tool dock-btn" data-tool="stroke" title="Riscar"><span class="tool-icon" aria-hidden="true">╱</span></button>
@@ -1031,8 +1024,7 @@
   function bindFloatingDock() {
     var dock = document.getElementById("tool-dock");
     var handle = document.getElementById("dock-handle");
-    var toggle = document.getElementById("dock-toggle");
-    if (!dock || !handle || !toggle) return;
+    if (!dock || !handle) return;
 
     var collapsed = false;
     var dragging = false;
@@ -1042,9 +1034,6 @@
 
     function applyCollapsed() {
       dock.classList.toggle("collapsed", collapsed);
-      toggle.setAttribute("aria-expanded", String(!collapsed));
-      toggle.textContent = collapsed ? "▸" : "▾";
-      toggle.title = collapsed ? "Expandir ferramentas" : "Recolher ferramentas";
       handle.title = collapsed
         ? "Expandir ferramentas (clique) · Arrastar para mover"
         : "Recolher (clique) · Arrastar para mover";
@@ -1085,12 +1074,6 @@
         requestAnimationFrame(clampDock);
       }
     } catch (e) {}
-
-    toggle.addEventListener("click", function (e) {
-      e.stopPropagation();
-      if (dragMoved) return;
-      toggleCollapsed();
-    });
 
     function onDragStart(e) {
       if (e.button != null && e.button !== 0) return;
