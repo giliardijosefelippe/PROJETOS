@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.DS_Store
+android/
+ios/
+.idea/
+*.log
+.env
+.env.*
+!*.example
