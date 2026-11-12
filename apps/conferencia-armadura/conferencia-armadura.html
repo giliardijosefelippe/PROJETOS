@@ -102,6 +102,18 @@
     .hint .hint-actions button.primary { background: var(--accent); border-color: #ff3b57; color: #fff; }
     .top-bar { position: relative; z-index: 40; }
     #doc-toolbar { position: relative; z-index: 40; }
+    /* During Abrir: block pan/tools hit-testing (file-picker click-through). Cancel stays usable. */
+    body.opening-pdf #pdf,
+    body.opening-pdf #anno-layer,
+    body.opening-pdf #doc-toolbar,
+    body.opening-pdf #tool-dock .dock-body,
+    body.opening-pdf #tool-dock .dock-handle {
+      pointer-events: none !important;
+    }
+    body.opening-pdf .hint .hint-actions,
+    body.opening-pdf .hint .hint-actions button {
+      pointer-events: auto !important;
+    }
     .autosave-chip {
       position: fixed; right: 12px; bottom: calc(12px + var(--safe-bottom)); z-index: 30;
       font-size: 11px; color: var(--muted); background: rgba(18,22,26,.82);
@@ -199,7 +211,7 @@
         <div class="brand-text">
           <strong>Conf. Armadura</strong>
           <span id="doc-label">Nenhum PDF</span>
-          <span id="app-revision" class="rev-label" title="Versão do aplicativo">Revisão 1.0.3</span>
+          <span id="app-revision" class="rev-label" title="Versão do aplicativo">Revisão 1.0.4</span>
         </div>
       </div>
       <div class="top-actions">

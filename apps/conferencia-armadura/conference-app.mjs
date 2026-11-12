@@ -15,9 +15,9 @@ import {
 patchPdfViewerForAndroid();
 
 /** App revision shown in header / Sobre (keep in sync with Android versionName). */
-export const APP_VERSION = "1.0.3";
-export const APP_REVISION_LABEL = "Revisão 1.0.3";
-export const APP_VERSION_CODE = 103;
+export const APP_VERSION = "1.0.4";
+export const APP_REVISION_LABEL = "Revisão 1.0.4";
+export const APP_VERSION_CODE = 104;
 
 const DEMO_PDF = "demo-pilares-vigas.pdf";
 const DEMO_LABEL = "2330_GAR PILARES E VIGAS — Sanluzzi Selenza Rev01";
@@ -58,7 +58,7 @@ const els = {
 };
 
 const state = {
-  tool: "pan",
+  tool: "idle",
   contentMode: "risk",
   docId: "",
   docName: "",
@@ -75,6 +75,9 @@ const state = {
   textItemsPage: 0,
   wakeEnabled: true,
   wakeLock: null,
+  /** True while Abrir/load runs — pan/tools must not intercept. */
+  opening: false,
+  viewerReady: false,
 };
 
 let annotations = [];
@@ -115,10 +118,59 @@ function cancelOpen(reason) {
   try {
     pdfViewer?.close?.();
   } catch {}
+  setViewerInteractionLocked(false, { keepIdle: true });
   setHint(reason || "Abertura cancelada. Use 📄 Importar ou Demo.", { busy: false, cancellable: false });
   setTimeout(() => {
     if (!openBusy) setHint("Pronto · 📄 Importar · 📚 Biblioteca · Demo");
   }, 2200);
+}
+
+/**
+ * Gate pan/tools during open. File-picker click-through often lands a pointerdown
+ * on #pdf → PdfViewer.cancelRender() kills the first paint and the UI looks frozen.
+ */
+function setViewerInteractionLocked(locked, opts = {}) {
+  state.opening = !!locked;
+  document.body.classList.toggle("opening-pdf", !!locked);
+  try {
+    pdfViewer?.pointers?.clear?.();
+  } catch {}
+  if (locked) {
+    state.viewerReady = false;
+    state.drawing = false;
+    state.draft = null;
+    hideSelectPreview();
+    setTool("idle", { force: true });
+    els.tools.forEach((btn) => {
+      btn.disabled = true;
+    });
+    ["pdf-prev", "pdf-next", "pdf-page", "pdf-rotate", "pdf-query", "pdf-search", "pdf-match", "pdf-match-prev", "minus", "plus", "fit"].forEach((id) => {
+      const el = $(id);
+      if (el) el.disabled = true;
+    });
+    if (els.pdf) els.pdf.style.pointerEvents = "none";
+    if (els.annoLayer) {
+      els.annoLayer.classList.remove("interactive");
+      els.annoLayer.style.pointerEvents = "none";
+    }
+  } else {
+    els.tools.forEach((btn) => {
+      btn.disabled = false;
+    });
+    ["pdf-prev", "pdf-next", "pdf-page", "pdf-rotate", "pdf-query", "pdf-search", "pdf-match", "pdf-match-prev", "minus", "plus", "fit"].forEach((id) => {
+      const el = $(id);
+      if (el) el.disabled = false;
+    });
+    if (els.pdf) els.pdf.style.pointerEvents = "";
+    if (els.annoLayer) els.annoLayer.style.pointerEvents = "";
+    if (!opts.keepIdle) {
+      state.viewerReady = true;
+      setTool("pan", { force: true });
+    } else {
+      state.viewerReady = false;
+      setTool("idle", { force: true });
+    }
+  }
 }
 
 function flashAutosave() {
@@ -399,6 +451,14 @@ function hookViewerTransforms(viewer) {
     origChanged();
     scheduleSync();
   };
+  // Block gesture-driven camera changes while Abrir is in flight.
+  for (const name of ["zoom", "zoomCentered", "preview"]) {
+    const orig = viewer[name].bind(viewer);
+    viewer[name] = function gated(...args) {
+      if (state.opening) return name === "preview" ? undefined : undefined;
+      return orig(...args);
+    };
+  }
 }
 
 function clientToPage(clientX, clientY) {
@@ -411,14 +471,21 @@ function clientToPage(clientX, clientY) {
   };
 }
 
-function setTool(tool) {
+function setTool(tool, opts = {}) {
+  if (state.opening && !opts.force) return;
+  if (!state.viewerReady && tool !== "idle" && !opts.force && !state.opening) {
+    // No document yet — ignore tool picks until first successful open.
+    if (!pdfViewer?.page) return;
+  }
   state.tool = tool;
   if (tool === "ok") state.contentMode = "ok";
   if (tool === "risk") state.contentMode = "risk";
   els.tools.forEach((btn) => btn.setAttribute("aria-pressed", String(btn.getAttribute("data-tool") === tool)));
-  const draw = tool !== "pan";
+  const draw = tool !== "pan" && tool !== "idle";
   els.annoLayer.classList.toggle("interactive", draw);
-  els.pdf.style.cursor = draw ? "crosshair" : "grab";
+  if (els.pdf) {
+    els.pdf.style.cursor = tool === "pan" ? "grab" : draw ? "crosshair" : "default";
+  }
 }
 
 function paintOne(ctx, item) {
@@ -823,6 +890,7 @@ function hideSelectPreview() {
 }
 
 function finishToMove() {
+  if (state.opening || !state.viewerReady) return;
   setTool("pan");
 }
 
@@ -851,11 +919,13 @@ async function openPdfBytes(bytes, label, opts = {}) {
   openBusy = true;
   clearTimeout(openWatchdog);
   const labelShort = (label || "PDF").slice(0, 42);
+
+  // Disable mover/tools BEFORE any getDocument/paint — absorbs file-picker click-through.
+  setViewerInteractionLocked(true);
   setHint("Abrindo " + labelShort + "… (máx. " + OPEN_TIMEOUT_MS / 1000 + "s)", {
     busy: true,
     cancellable: true,
   });
-  // Watchdog UI even if a race misses — keeps Cancel available.
   openWatchdog = setTimeout(() => {
     if (gen !== openGeneration || !openBusy) return;
     setHint("Demorando… Cancele e tente de novo, ou use outro PDF.", {
@@ -870,8 +940,11 @@ async function openPdfBytes(bytes, label, opts = {}) {
     const docId = opts.docId || makeDocId(label, u8);
     const blob = new Blob([u8.slice(0)], { type: "application/pdf" });
 
-    // Yield so Cancel / toolbar paint before heavy work.
-    await new Promise((r) => setTimeout(r, 0));
+    // Let residual pointerup from the file dialog flush; clear any stuck pointers.
+    await new Promise((r) => setTimeout(r, 80));
+    try {
+      pdfViewer?.pointers?.clear?.();
+    } catch {}
     if (gen !== openGeneration) return false;
 
     const src = workerSrcUrl();
@@ -884,9 +957,17 @@ async function openPdfBytes(bytes, label, opts = {}) {
 
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
     if (gen !== openGeneration) return false;
+    try {
+      pdfViewer?.pointers?.clear?.();
+    } catch {}
     if (pdfViewer.page) await pdfViewer.fit();
     if (gen !== openGeneration) return false;
     if (!pdfViewer.page) throw new Error("PDF sem página renderizada");
+    if (!pdfViewer.rendered) {
+      await pdfViewer.render();
+    }
+    if (gen !== openGeneration) return false;
+    if (!pdfViewer.rendered) throw new Error("PDF sem bitmap renderizado");
 
     state.docId = docId;
     state.docName = label;
@@ -898,6 +979,8 @@ async function openPdfBytes(bytes, label, opts = {}) {
     syncAnnoLayer();
     openBusy = false;
     clearTimeout(openWatchdog);
+    // Only now enable mover + tools.
+    setViewerInteractionLocked(false);
     setHint(annotations.length ? `Marcações restauradas (${annotations.length}).` : "✓/✕ sobre o rótulo · pinça para zoom.");
     setTimeout(() => {
       if (!openBusy) setHint("");
@@ -915,6 +998,7 @@ async function openPdfBytes(bytes, label, opts = {}) {
     try {
       await pdfViewer.close();
     } catch {}
+    setViewerInteractionLocked(false, { keepIdle: true });
     const msg = (err?.message || String(err)).slice(0, 140);
     setHint("Falha ao abrir: " + msg, { busy: false, cancellable: true });
     if (els.btnHintCancel) els.btnHintCancel.textContent = "Fechar";
@@ -935,7 +1019,7 @@ async function tryLoadDemo() {
 }
 
 function onAnnoPointerDown(e) {
-  if (state.tool === "pan") return;
+  if (state.opening || !state.viewerReady || state.tool === "pan" || state.tool === "idle") return;
   e.preventDefault();
   e.stopPropagation();
   try {
@@ -959,7 +1043,7 @@ function onAnnoPointerDown(e) {
 }
 
 function onAnnoPointerMove(e) {
-  if (!state.drawing || !state.draft) return;
+  if (state.opening || !state.drawing || !state.draft) return;
   e.preventDefault();
   e.stopPropagation();
   const p = clientToPage(e.clientX, e.clientY);
@@ -1186,7 +1270,12 @@ function bindUi() {
   const rev = $("app-revision");
   if (rev) rev.textContent = APP_REVISION_LABEL;
   document.title = "Conf. Armadura · " + APP_REVISION_LABEL;
-  els.tools.forEach((btn) => btn.addEventListener("click", () => setTool(btn.getAttribute("data-tool"))));
+  els.tools.forEach((btn) =>
+    btn.addEventListener("click", () => {
+      if (state.opening) return;
+      setTool(btn.getAttribute("data-tool"));
+    })
+  );
   if (els.btnHintCancel) {
     els.btnHintCancel.onclick = () => {
       if (els.btnHintCancel.textContent === "Fechar") {
@@ -1335,18 +1424,37 @@ function bindUi() {
     }
   });
 
-  $("pdf-prev").onclick = () => pdfViewer.go(pdfViewer.pageNumber - 1).catch(console.warn);
-  $("pdf-next").onclick = () => pdfViewer.go(pdfViewer.pageNumber + 1).catch(console.warn);
-  $("pdf-page").onchange = (e) => pdfViewer.go(e.target.value).catch(console.warn);
+  $("pdf-prev").onclick = () => {
+    if (state.opening || !state.viewerReady) return;
+    pdfViewer.go(pdfViewer.pageNumber - 1).catch(console.warn);
+  };
+  $("pdf-next").onclick = () => {
+    if (state.opening || !state.viewerReady) return;
+    pdfViewer.go(pdfViewer.pageNumber + 1).catch(console.warn);
+  };
+  $("pdf-page").onchange = (e) => {
+    if (state.opening || !state.viewerReady) return;
+    pdfViewer.go(e.target.value).catch(console.warn);
+  };
   $("pdf-rotate").onclick = async () => {
+    if (state.opening || !state.viewerReady) return;
     await pdfViewer.rotate();
     state.textItems = [];
     state.textItemsPage = 0;
     syncAnnoLayer();
   };
-  $("minus").onclick = () => pdfViewer.zoomCentered(1 / 1.2);
-  $("plus").onclick = () => pdfViewer.zoomCentered(1.2);
-  $("fit").onclick = () => pdfViewer.fit().catch(console.warn);
+  $("minus").onclick = () => {
+    if (state.opening || !state.viewerReady) return;
+    pdfViewer.zoomCentered(1 / 1.2);
+  };
+  $("plus").onclick = () => {
+    if (state.opening || !state.viewerReady) return;
+    pdfViewer.zoomCentered(1.2);
+  };
+  $("fit").onclick = () => {
+    if (state.opening || !state.viewerReady) return;
+    pdfViewer.fit().catch(console.warn);
+  };
   $("pdf-search").onclick = async () => {
     els.pdfResults.textContent = "Buscando…";
     await pdfViewer.search(els.pdfQuery.value);
@@ -1373,17 +1481,16 @@ function bindUi() {
 
 async function boot() {
   bindUi();
-  setTool("pan");
   setWake(true);
   pdfViewer = new PdfViewer(els.pdf, onViewerChange, (err) => {
     console.error(err);
     setHint(err?.message || "Erro no PDF", { cancellable: true });
   });
   hookViewerTransforms(pdfViewer);
-  // Never auto-open heavy CAD / library on boot — keeps UI usable.
+  // Idle until a PDF finishes opening — do not arm pan/mover on boot.
+  setViewerInteractionLocked(false, { keepIdle: true });
   setHint("Pronto · 📄 Importar · 📚 Biblioteca · Demo");
   await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-  // Warm pdf.js after first paint (does not open a document).
   setTimeout(() => {
     loadPdfLib()
       .then(() => console.info("[pdf-safe] workerSrc=", workerSrcUrl()))
