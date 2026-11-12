@@ -801,15 +801,23 @@ function closeTextModal() {
   state.modalMode = "note";
 }
 
+function looksLikePdf(u8) {
+  return u8 && u8.length > 8 && u8[0] === 0x25 && u8[1] === 0x50 && u8[2] === 0x44 && u8[3] === 0x46;
+}
+
+/** @returns {Promise<boolean>} true if page is on screen */
 async function openPdfBytes(bytes, label, opts = {}) {
-  setHint("Carregando prancha…");
+  setHint("Abrindo " + (label || "PDF") + "…");
   try {
     const u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+    if (!looksLikePdf(u8)) throw new Error("Arquivo não é PDF válido");
     const docId = opts.docId || makeDocId(label, u8);
-    const file = new File([u8.slice(0)], label || "doc.pdf", { type: "application/pdf" });
-    await pdfViewer.open(file);
+    // Blob (not File) — reliable arrayBuffer() on WebView / older Chromium.
+    const blob = new Blob([u8.slice(0)], { type: "application/pdf" });
+    await pdfViewer.open(blob);
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
     if (pdfViewer.page) await pdfViewer.fit();
+    if (!pdfViewer.page) throw new Error("PDF sem página renderizada");
     state.docId = docId;
     state.docName = label;
     state.pdfBytes = u8.slice(0);
@@ -818,27 +826,31 @@ async function openPdfBytes(bytes, label, opts = {}) {
     state.textItems = [];
     state.textItemsPage = 0;
     syncAnnoLayer();
-    await refreshTextItems();
     setHint(annotations.length ? `Marcações restauradas (${annotations.length}).` : "✓/✕ sobre o rótulo · pinça para zoom.");
     setTimeout(() => setHint(""), 2400);
+    // Defer OCR index — large CAD sheets have thousands of text items.
+    setTimeout(() => refreshTextItems().catch(() => {}), 0);
     if (!opts.skipLibrarySave) {
       setTimeout(() => savePdfToLibrary(u8, label, docId).catch(console.warn), 0);
     } else renderLibraryList();
+    return true;
   } catch (err) {
     console.error(err);
-    setHint("Falha ao abrir o PDF.");
+    setHint("Falha ao abrir: " + (err?.message || String(err)).slice(0, 120));
+    return false;
   }
 }
 
 async function tryLoadDemo() {
   setHint("Carregando demo…");
   try {
-    const res = await fetch(DEMO_PDF);
+    const res = await fetch(new URL(DEMO_PDF, import.meta.url).href);
     if (!res.ok) throw new Error("HTTP " + res.status);
-    await openPdfBytes(new Uint8Array(await res.arrayBuffer()), DEMO_LABEL);
+    const ok = await openPdfBytes(new Uint8Array(await res.arrayBuffer()), DEMO_LABEL);
+    if (!ok) setHint("Demo não abriu. Use 📄 Importar PDF.");
   } catch (err) {
     console.warn(err);
-    setHint("Use 📄 Importar PDF ou 📚 Biblioteca.");
+    setHint("Demo indisponível (sirva a pasta via HTTP). 📄 Importar PDF.");
   }
 }
 
@@ -1195,23 +1207,29 @@ async function boot() {
     setHint(err?.message || "Erro no PDF");
   });
   hookViewerTransforms(pdfViewer);
-  // Let chrome paint before any heavy PDF work (avoids "trava direto" on launch).
   setHint("Pronto · 📄 Importar · 📚 Biblioteca · Demo");
   await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
 
   const index = readLibraryIndex();
-  const native = isNativeCapacitor();
   if (index.pdfs.length) {
     try {
       const first = index.pdfs[0];
       setHint("Abrindo última prancha…");
       const doc = await loadPdfFromLibrary(first.id);
-      await openPdfBytes(doc.bytes, doc.name || first.name, { docId: first.id, skipLibrarySave: true });
-      return;
-    } catch {}
+      const ok = await openPdfBytes(doc.bytes, doc.name || first.name, {
+        docId: first.id,
+        skipLibrarySave: true,
+      });
+      if (ok) return;
+    } catch (err) {
+      console.warn("library open failed", err);
+    }
   }
-  // On native, skip auto-demo (large CAD sheet) — user opens via Demo / Import.
-  if (!native) await tryLoadDemo();
+  // Always try demo so PC + APK show a page without manual import.
+  await tryLoadDemo();
 }
 
-boot();
+boot().catch((err) => {
+  console.error(err);
+  setHint("Falha na inicialização: " + (err?.message || String(err)).slice(0, 100));
+});
