@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input, Label, Select } from "@/components/ui/input";
 import { compareVolumes } from "@/lib/mapas/geometry";
+import { SiteNav } from "@/components/mapas/site-nav";
 
 export default async function SiteDetailPage({
   params,
@@ -124,6 +125,7 @@ export default async function SiteDetailPage({
 
   return (
     <div className="space-y-6">
+      <SiteNav siteId={siteId} current="" />
       <div>
         <Link href="/mapas" className="text-sm text-ink-muted hover:underline">
           ← Obras
@@ -135,18 +137,6 @@ export default async function SiteDetailPage({
           {site.is_demo && <Badge>Demonstração</Badge>}
         </div>
         <p className="text-sm text-ink-muted">{site.description}</p>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <Link href={`/mapas/${siteId}/concretagens`}>
-            <Button variant="secondary" size="sm">
-              Concretagens / NFs
-            </Button>
-          </Link>
-          <Link href={`/mapas/${siteId}/rastreio`}>
-            <Button variant="secondary" size="sm">
-              Rastreio NF ↔ regiões
-            </Button>
-          </Link>
-        </div>
       </div>
 
       {sp.error && (
