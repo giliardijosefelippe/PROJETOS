@@ -1,15 +1,23 @@
 /**
  * Conf. Armadura — PdfViewer (Prumo) + conference overlay.
  * Imports prumo/pdf-view.js as-is; annotations track scale/x/y/rotation.
- * Android: Blob worker + paint budget via prumo-android-safe (pdf-view untouched).
+ * Worker: real URL + timeout/cancel (prumo-android-safe; pdf-view untouched).
  */
-import { PdfViewer, patchPdfViewerForAndroid, isNativeCapacitor } from "./prumo-android-safe.mjs";
+import {
+  PdfViewer,
+  patchPdfViewerForAndroid,
+  isNativeCapacitor,
+  OPEN_TIMEOUT_MS,
+  loadPdfLib,
+  workerSrcUrl,
+} from "./prumo-android-safe.mjs";
 
 patchPdfViewerForAndroid();
 
 /** App revision shown in header / Sobre (keep in sync with Android versionName). */
-export const APP_VERSION = "1.0.1";
-export const APP_REVISION_LABEL = "Revisão 1.0.1";
+export const APP_VERSION = "1.0.2";
+export const APP_REVISION_LABEL = "Revisão 1.0.2";
+export const APP_VERSION_CODE = 102;
 
 const DEMO_PDF = "demo-pilares-vigas.pdf";
 const DEMO_LABEL = "2330_GAR PILARES E VIGAS — Sanluzzi Selenza Rev01";
@@ -27,6 +35,9 @@ const els = {
   annoCanvas: $("anno-canvas"),
   selectPreview: $("select-preview"),
   hint: $("hint"),
+  hintMsg: $("hint-msg"),
+  hintActions: $("hint-actions"),
+  btnHintCancel: $("btn-hint-cancel"),
   docLabel: $("doc-label"),
   zoom: $("zoom"),
   pdfPage: $("pdf-page"),
@@ -70,19 +81,44 @@ let annotations = [];
 let pdfViewer = null;
 let autosaveTimer = 0;
 let syncRaf = 0;
+/** Bumps on cancel/new open — ignore stale open completions. */
+let openGeneration = 0;
+let openBusy = false;
+let openWatchdog = 0;
 
 function uid() {
   return crypto.randomUUID ? crypto.randomUUID() : "id-" + Date.now().toString(36);
 }
 
-function setHint(text) {
+function setHint(text, opts = {}) {
+  const busy = !!opts.busy;
+  const cancellable = !!opts.cancellable;
   if (!text) {
     els.hint.hidden = true;
-    els.hint.textContent = "";
+    els.hint.classList.remove("busy");
+    if (els.hintMsg) els.hintMsg.textContent = "";
+    if (els.hintActions) els.hintActions.hidden = true;
     return;
   }
   els.hint.hidden = false;
-  els.hint.textContent = text;
+  els.hint.classList.toggle("busy", busy || cancellable);
+  if (els.hintMsg) els.hintMsg.textContent = text;
+  else els.hint.textContent = text;
+  if (els.hintActions) els.hintActions.hidden = !cancellable;
+}
+
+function cancelOpen(reason) {
+  openGeneration += 1;
+  openBusy = false;
+  clearTimeout(openWatchdog);
+  openWatchdog = 0;
+  try {
+    pdfViewer?.close?.();
+  } catch {}
+  setHint(reason || "Abertura cancelada. Use 📄 Importar ou Demo.", { busy: false, cancellable: false });
+  setTimeout(() => {
+    if (!openBusy) setHint("Pronto · 📄 Importar · 📚 Biblioteca · Demo");
+  }, 2200);
 }
 
 function flashAutosave() {
@@ -811,17 +847,47 @@ function looksLikePdf(u8) {
 
 /** @returns {Promise<boolean>} true if page is on screen */
 async function openPdfBytes(bytes, label, opts = {}) {
-  setHint("Abrindo " + (label || "PDF") + "…");
+  const gen = ++openGeneration;
+  openBusy = true;
+  clearTimeout(openWatchdog);
+  const labelShort = (label || "PDF").slice(0, 42);
+  setHint("Abrindo " + labelShort + "… (máx. " + OPEN_TIMEOUT_MS / 1000 + "s)", {
+    busy: true,
+    cancellable: true,
+  });
+  // Watchdog UI even if a race misses — keeps Cancel available.
+  openWatchdog = setTimeout(() => {
+    if (gen !== openGeneration || !openBusy) return;
+    setHint("Demorando… Cancele e tente de novo, ou use outro PDF.", {
+      busy: true,
+      cancellable: true,
+    });
+  }, OPEN_TIMEOUT_MS);
+
   try {
     const u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
     if (!looksLikePdf(u8)) throw new Error("Arquivo não é PDF válido");
     const docId = opts.docId || makeDocId(label, u8);
-    // Blob (not File) — reliable arrayBuffer() on WebView / older Chromium.
     const blob = new Blob([u8.slice(0)], { type: "application/pdf" });
-    await pdfViewer.open(blob);
+
+    // Yield so Cancel / toolbar paint before heavy work.
+    await new Promise((r) => setTimeout(r, 0));
+    if (gen !== openGeneration) return false;
+
+    const src = workerSrcUrl();
+    if (!src || String(src).startsWith("blob:")) {
+      throw new Error("workerSrc inválido — use URL real do pdf.worker.js");
+    }
+
+    await pdfViewer.open(blob, { timeoutMs: OPEN_TIMEOUT_MS });
+    if (gen !== openGeneration) return false;
+
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    if (gen !== openGeneration) return false;
     if (pdfViewer.page) await pdfViewer.fit();
+    if (gen !== openGeneration) return false;
     if (!pdfViewer.page) throw new Error("PDF sem página renderizada");
+
     state.docId = docId;
     state.docName = label;
     state.pdfBytes = u8.slice(0);
@@ -830,9 +896,12 @@ async function openPdfBytes(bytes, label, opts = {}) {
     state.textItems = [];
     state.textItemsPage = 0;
     syncAnnoLayer();
+    openBusy = false;
+    clearTimeout(openWatchdog);
     setHint(annotations.length ? `Marcações restauradas (${annotations.length}).` : "✓/✕ sobre o rótulo · pinça para zoom.");
-    setTimeout(() => setHint(""), 2400);
-    // Defer OCR index — large CAD sheets have thousands of text items.
+    setTimeout(() => {
+      if (!openBusy) setHint("");
+    }, 2400);
     setTimeout(() => refreshTextItems().catch(() => {}), 0);
     if (!opts.skipLibrarySave) {
       setTimeout(() => savePdfToLibrary(u8, label, docId).catch(console.warn), 0);
@@ -840,21 +909,28 @@ async function openPdfBytes(bytes, label, opts = {}) {
     return true;
   } catch (err) {
     console.error(err);
-    setHint("Falha ao abrir: " + (err?.message || String(err)).slice(0, 120));
+    if (gen !== openGeneration) return false;
+    openBusy = false;
+    clearTimeout(openWatchdog);
+    try {
+      await pdfViewer.close();
+    } catch {}
+    const msg = (err?.message || String(err)).slice(0, 140);
+    setHint("Falha ao abrir: " + msg, { busy: false, cancellable: true });
+    if (els.btnHintCancel) els.btnHintCancel.textContent = "Fechar";
     return false;
   }
 }
 
 async function tryLoadDemo() {
-  setHint("Carregando demo…");
   try {
     const res = await fetch(new URL(DEMO_PDF, import.meta.url).href);
     if (!res.ok) throw new Error("HTTP " + res.status);
     const ok = await openPdfBytes(new Uint8Array(await res.arrayBuffer()), DEMO_LABEL);
-    if (!ok) setHint("Demo não abriu. Use 📄 Importar PDF.");
+    if (!ok) setHint("Demo não abriu. Use 📄 Importar PDF.", { cancellable: true });
   } catch (err) {
     console.warn(err);
-    setHint("Demo indisponível (sirva a pasta via HTTP). 📄 Importar PDF.");
+    setHint("Demo indisponível. Use 📄 Importar PDF.", { cancellable: true });
   }
 }
 
@@ -1066,7 +1142,8 @@ function showAbout() {
   window.alert(
     [
       "Conf. Armadura — " + APP_REVISION_LABEL,
-      "versionName " + APP_VERSION + " · versionCode 101",
+      "versionName " + APP_VERSION + " · versionCode " + APP_VERSION_CODE,
+      "workerSrc: " + String(workerSrcUrl() || "").slice(-48),
       "PdfViewer Prumo + marcações de campo",
     ].join("\n")
   );
@@ -1077,6 +1154,16 @@ function bindUi() {
   if (rev) rev.textContent = APP_REVISION_LABEL;
   document.title = "Conf. Armadura · " + APP_REVISION_LABEL;
   els.tools.forEach((btn) => btn.addEventListener("click", () => setTool(btn.getAttribute("data-tool"))));
+  if (els.btnHintCancel) {
+    els.btnHintCancel.onclick = () => {
+      if (els.btnHintCancel.textContent === "Fechar") {
+        setHint("Pronto · 📄 Importar · 📚 Biblioteca · Demo");
+        if (els.btnHintCancel) els.btnHintCancel.textContent = "Cancelar";
+        return;
+      }
+      cancelOpen("Abertura cancelada.");
+    };
+  }
   $("btn-about").onclick = () => showAbout();
   $("btn-wake").onclick = () => setWake(!state.wakeEnabled);
   $("btn-undo").onclick = () => {
@@ -1222,32 +1309,21 @@ async function boot() {
   setWake(true);
   pdfViewer = new PdfViewer(els.pdf, onViewerChange, (err) => {
     console.error(err);
-    setHint(err?.message || "Erro no PDF");
+    setHint(err?.message || "Erro no PDF", { cancellable: true });
   });
   hookViewerTransforms(pdfViewer);
+  // Never auto-open heavy CAD / library on boot — keeps UI usable.
   setHint("Pronto · 📄 Importar · 📚 Biblioteca · Demo");
   await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-
-  const index = readLibraryIndex();
-  if (index.pdfs.length) {
-    try {
-      const first = index.pdfs[0];
-      setHint("Abrindo última prancha…");
-      const doc = await loadPdfFromLibrary(first.id);
-      const ok = await openPdfBytes(doc.bytes, doc.name || first.name, {
-        docId: first.id,
-        skipLibrarySave: true,
-      });
-      if (ok) return;
-    } catch (err) {
-      console.warn("library open failed", err);
-    }
-  }
-  // Always try demo so PC + APK show a page without manual import.
-  await tryLoadDemo();
+  // Warm pdf.js after first paint (does not open a document).
+  setTimeout(() => {
+    loadPdfLib()
+      .then(() => console.info("[pdf-safe] workerSrc=", workerSrcUrl()))
+      .catch((e) => console.warn("[pdf-safe] preload failed", e));
+  }, 200);
 }
 
 boot().catch((err) => {
   console.error(err);
-  setHint("Falha na inicialização: " + (err?.message || String(err)).slice(0, 100));
+  setHint("Falha na inicialização: " + (err?.message || String(err)).slice(0, 100), { cancellable: true });
 });

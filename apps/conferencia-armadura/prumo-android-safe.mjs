@@ -1,18 +1,17 @@
 /**
  * Safety layer around Prumo PdfViewer (pdf-view.js untouched).
  *
- * Root hang: Blob URL + ESM worker. pdf.worker.js uses import.meta.url; as a
- * blob module that resolution breaks and Worker({type:"module"}) never answers
- * "test" → getDocument hangs forever ("Abrindo…") on desktop and Capacitor.
- *
- * Fix: keep workerSrc as a real same-origin URL. If the module Worker hangs or
- * native WebView is flaky, force FakeWorker (main-thread) by making `new Worker`
- * throw so pdf.js falls back while still `import(workerSrc)` from the real URL.
+ * - workerSrc MUST be a real same-origin URL (never Blob ESM — breaks import.meta.url).
+ * - Prefer real module Worker so parse/render stay off the main thread (UI stays alive).
+ * - Short timeout + close(); FakeWorker only as explicit fallback after failure.
  */
 import { PdfViewer } from "./prumo/pdf-view.js";
 
 const PDF_JS = new URL("./prumo/vendor/pdf/pdf.js", import.meta.url).href;
 const PDF_WORKER = new URL("./prumo/vendor/pdf/pdf.worker.js", import.meta.url).href;
+
+/** Soft open budget — keep UI recoverable (Cancel works while Worker runs). */
+export const OPEN_TIMEOUT_MS = 5000;
 
 let pdfLibPromise = null;
 let patched = false;
@@ -23,6 +22,10 @@ export function isNativeCapacitor() {
   } catch {
     return false;
   }
+}
+
+export function workerSrcUrl() {
+  return PDF_WORKER;
 }
 
 function installPrumoAssetOverride() {
@@ -44,10 +47,14 @@ function installPrumoAssetOverride() {
   );
 }
 
-async function loadPdfLib() {
+export async function loadPdfLib() {
   if (pdfLibPromise) return pdfLibPromise;
   pdfLibPromise = (async () => {
     const lib = await import(PDF_JS);
+    // Never Blob — real URL only.
+    if (typeof PDF_WORKER === "string" && PDF_WORKER.startsWith("blob:")) {
+      throw new Error("workerSrc inválido (blob)");
+    }
     lib.GlobalWorkerOptions.workerSrc = PDF_WORKER;
     return lib;
   })();
@@ -63,13 +70,13 @@ function installPaintBudgetPatch() {
   PdfViewer.prototype.paintBudget = function paintBudget(sharp) {
     const coarse = matchMedia("(pointer:coarse)").matches || navigator.maxTouchPoints > 1;
     if (isNativeCapacitor()) {
-      return sharp ? (coarse ? 1_400_000 : 2_200_000) : coarse ? 420_000 : 720_000;
+      return sharp ? (coarse ? 900_000 : 1_400_000) : coarse ? 280_000 : 480_000;
     }
-    return sharp ? (coarse ? 2_800_000 : 4_500_000) : coarse ? 900_000 : 1_500_000;
+    return sharp ? (coarse ? 2_000_000 : 3_200_000) : coarse ? 700_000 : 1_100_000;
   };
 }
 
-function withTimeout(promise, ms, label) {
+export function withTimeout(promise, ms, label) {
   let timer;
   const timeout = new Promise((_, rej) => {
     timer = setTimeout(() => rej(new Error(label || "Timeout")), ms);
@@ -92,8 +99,7 @@ function withForcedFakeWorker(fn) {
 }
 
 /**
- * Patch open: real worker URL; short hang timeout → FakeWorker retry.
- * On Capacitor, start with FakeWorker (module Worker often hangs in WebView).
+ * Real Worker first (keeps main thread free). On fail/timeout → FakeWorker once.
  */
 export function patchPdfViewerForAndroid() {
   if (patched) return;
@@ -102,46 +108,32 @@ export function patchPdfViewerForAndroid() {
   installPaintBudgetPatch();
 
   const originalOpen = PdfViewer.prototype.open;
-  PdfViewer.prototype.open = async function openSafe(file) {
+  PdfViewer.prototype.open = async function openSafe(file, opts = {}) {
     const lib = await loadPdfLib();
     this.lib = lib;
     lib.GlobalWorkerOptions.workerSrc = PDF_WORKER;
 
-    const native = isNativeCapacitor();
-    const budgetMs = native ? 45000 : 25000;
-
+    const budgetMs = opts.timeoutMs ?? OPEN_TIMEOUT_MS;
+    const preferFake = !!opts.forceFakeWorker;
     const run = (forceFake) => {
       const exec = () => originalOpen.call(this, file);
       return forceFake ? withForcedFakeWorker(exec) : exec();
     };
 
-    // Native: FakeWorker first (reliable). Desktop: real Worker, then FakeWorker.
-    if (native) {
-      try {
-        await withTimeout(run(true), budgetMs, "Timeout ao abrir PDF");
-        return;
-      } catch (err) {
-        console.warn("[pdf-safe] native FakeWorker failed, retry real Worker", err);
-        try {
-          await this.close();
-        } catch {}
-        lib.GlobalWorkerOptions.workerSrc = PDF_WORKER;
-        await withTimeout(run(false), budgetMs, "Timeout ao abrir PDF (worker)");
-        return;
-      }
-    }
-
     try {
-      await withTimeout(run(false), budgetMs, "Timeout ao abrir PDF (worker)");
+      await withTimeout(run(preferFake), budgetMs, "Timeout ao abrir PDF (" + budgetMs + "ms)");
+      return { mode: preferFake ? "fake" : "worker" };
     } catch (err) {
-      console.warn("[pdf-safe] Worker hung/failed — FakeWorker retry", err);
+      console.warn("[pdf-safe] open failed, retry alternate worker mode", err);
       try {
         await this.close();
       } catch {}
       lib.GlobalWorkerOptions.workerSrc = PDF_WORKER;
-      await withTimeout(run(true), budgetMs, "Timeout ao abrir PDF (fake worker)");
+      const altFake = !preferFake;
+      await withTimeout(run(altFake), budgetMs, "Timeout ao abrir PDF (fallback)");
+      return { mode: altFake ? "fake" : "worker" };
     }
   };
 }
 
-export { PdfViewer, loadPdfLib, PDF_WORKER, PDF_JS };
+export { PdfViewer, PDF_WORKER, PDF_JS };
