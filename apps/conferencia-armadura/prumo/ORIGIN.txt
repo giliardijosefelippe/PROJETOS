@@ -1,8 +1,0 @@
-﻿# Fontes Prumo (cópia para conferência)
-
-Origem canônica:
-- C:\Users\User\Projects\VISUALIZADOR DE DWG\dist\pdf-view.js
-- C:\Users\User\Projects\VISUALIZADOR DE DWG\dist\vendor\pdf\
-
-Referência opcional (app.js / style.css) em ref/
-Data da cópia: 2026-11-11 19:46:33

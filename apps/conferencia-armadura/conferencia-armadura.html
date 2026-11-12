@@ -4,323 +4,2683 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <meta name="theme-color" content="#1a1f24" />
-  <meta name="description" content="Conferência de armadura — PdfViewer Prumo + marcações de campo." />
+  <meta name="description" content="Conferência de armadura in loco — marcar PDF, relatório OK/risco." />
   <title>Conf. Armadura</title>
   <style>
     :root {
-      --bg: #12161a; --surface: #1a1f24; --surface-2: #242b33; --border: #3a4550;
-      --text: #f2f4f6; --muted: #a8b2bc; --accent: #e00024; --ok: #1f9d55; --risk: #e8a317;
-      --safe-bottom: env(safe-area-inset-bottom, 0px); --safe-top: env(safe-area-inset-top, 0px);
-      --top-h: 52px; --dock-size: 52px;
+      --bg: #12161a;
+      --surface: #1a1f24;
+      --surface-2: #242b33;
+      --border: #3a4550;
+      --text: #f2f4f6;
+      --muted: #a8b2bc;
+      --accent: #e00024;
+      --ok: #1f9d55;
+      --risk: #e8a317;
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+      --safe-top: env(safe-area-inset-top, 0px);
+      --top-h: 56px;
+      --touch: 48px;
+      --dock-size: 52px;
       font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
     }
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-    html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); overflow: hidden; touch-action: none; }
+    html, body {
+      margin: 0; height: 100%; background: var(--bg); color: var(--text);
+      overflow: hidden; touch-action: none;
+    }
     #app {
       display: grid;
-      grid-template-rows: calc(var(--top-h) + var(--safe-top)) auto 1fr;
+      grid-template-rows: calc(var(--top-h) + var(--safe-top)) 1fr;
       height: 100%; height: 100dvh;
     }
     .top-bar {
       display: flex; align-items: center; justify-content: space-between; gap: 8px;
-      padding: calc(6px + var(--safe-top)) 10px 6px;
-      background: linear-gradient(180deg, #1c232b, #151a1f); border-bottom: 1px solid var(--border); z-index: 8;
+      padding: calc(8px + var(--safe-top)) 12px 8px;
+      background: linear-gradient(180deg, #1c232b 0%, #151a1f 100%);
+      border-bottom: 1px solid var(--border); z-index: 5;
     }
-    .brand { display: flex; align-items: center; gap: 8px; min-width: 0; }
-    .brand-mark { width: 26px; height: 26px; border-radius: 6px; background: linear-gradient(135deg, var(--accent), #8a0016); flex-shrink: 0; }
+    .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .brand-mark {
+      width: 28px; height: 28px; border-radius: 6px; flex-shrink: 0;
+      background: linear-gradient(135deg, var(--accent), #8a0016);
+    }
     .brand-text { display: flex; flex-direction: column; min-width: 0; }
-    .brand-text strong { font-size: 14px; line-height: 1.1; }
-    .brand-text span { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 46vw; }
-    .brand-text .rev-label { font-size: 10px; color: #8fa0ae; letter-spacing: .02em; max-width: none; }
-    .top-actions { display: flex; gap: 6px; align-items: center; }
-    .chip, .icon-btn, .dock-btn, .primary, .secondary, .pdf-bar button, .pdf-bar input {
-      border: 1px solid var(--border); background: var(--surface-2); color: var(--text); font-weight: 700; cursor: pointer;
+    .brand-text strong { font-size: 15px; line-height: 1.1; }
+    .brand-text span {
+      font-size: 11px; color: var(--muted); white-space: nowrap;
+      overflow: hidden; text-overflow: ellipsis; max-width: 42vw;
     }
-    .chip { min-height: 36px; padding: 0 10px; border-radius: 999px; font-size: 12px; color: var(--muted); }
+    .brand-text .rev-label { font-size: 10px; color: #8fa0ae; max-width: none; }
+    .top-actions { display: flex; align-items: center; gap: 8px; }
+    .chip, .icon-btn, .tool, .dock-btn, .primary, .secondary {
+      border: 1px solid var(--border); background: var(--surface-2); color: var(--text);
+      font-weight: 700; cursor: pointer;
+    }
+    .chip {
+      min-height: 40px; padding: 0 12px; border-radius: 999px;
+      font-size: 12px; color: var(--muted);
+    }
     .chip.on { color: #102016; background: #7ddea8; border-color: #4caf78; }
     .chip.accent-chip { color: #fff; background: var(--accent); border-color: #ff3b57; }
-    .icon-btn { width: 40px; height: 40px; border-radius: 10px; font-size: 18px; }
-
-    #doc-toolbar {
-      flex: 0 0 auto; display: flex; align-items: center; width: 100%;
-      padding: 4px 8px; gap: 4px;
-      background: linear-gradient(100deg, #1a2420, #12181a);
-      border-bottom: 1px solid var(--border); overflow-x: auto; z-index: 7;
+    .icon-btn {
+      width: var(--touch); height: var(--touch); border-radius: 12px; font-size: 22px;
     }
-    #doc-toolbar[hidden] { display: none !important; }
-    .tools { display: flex; flex-wrap: nowrap; align-items: center; gap: 4px; min-height: 40px; }
-    .tools button, .tools input[type="number"], .tools input[type="search"] {
-      min-height: 34px; border-radius: 8px; padding: 0 8px; font-size: 13px;
+    .stage {
+      position: relative; overflow: hidden;
+      background:
+        radial-gradient(circle at 20% 10%, rgba(224, 0, 36, 0.08), transparent 40%),
+        linear-gradient(180deg, #0e1216, #171c22 55%, #101418);
     }
-    .tools input[type="number"] { width: 52px; text-align: center; }
-    .tools input[type="search"] { width: min(28vw, 140px); font-weight: 500; }
-    .tool-divider { width: 1px; height: 22px; background: var(--border); margin: 0 4px; flex-shrink: 0; }
-    #pdf-tools { display: flex; align-items: center; gap: 4px; flex-wrap: nowrap; }
-    #zoom { min-width: 46px; text-align: center; font-size: 12px; color: var(--muted); }
-
-    .stage { position: relative; overflow: hidden; min-height: 0; background: #0e1216; }
-    #viewport { position: absolute; inset: 0; overflow: hidden; touch-action: none; }
-    #pdf {
-      position: absolute; inset: 0; contain: paint; touch-action: none; overflow: hidden; cursor: grab;
-    }
-    #pdf canvas {
-      position: absolute; top: 0; left: 0; width: auto; height: auto;
-      max-width: none; max-height: none; will-change: transform;
-      transform-origin: 0 0; backface-visibility: hidden; pointer-events: none; user-select: none;
-    }
-    #anno-layer {
-      position: absolute; left: 0; top: 0; transform-origin: 0 0;
-      will-change: transform; pointer-events: none; z-index: 2;
-    }
-    #anno-layer.interactive { pointer-events: auto; cursor: crosshair; }
-    #anno-canvas { display: block; width: 100%; height: 100%; }
+    .viewport { width: 100%; height: 100%; overflow: hidden; position: relative; touch-action: none; }
+    .scene { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; }
+    #pdf-canvas, #anno-canvas { position: absolute; left: 0; top: 0; display: block; }
+    #anno-canvas { z-index: 2; }
+    /* Lightweight selection preview — CSS only during drag (no canvas/pdf.js on pointermove). */
     #select-preview {
-      position: absolute; left: 0; top: 0; z-index: 3; pointer-events: none;
-      border: 2px dashed #e00024; box-sizing: border-box; display: none;
-      transform: translate3d(0,0,0); will-change: transform, width, height;
+      position: absolute; left: 0; top: 0; z-index: 3;
+      width: 0; height: 0; pointer-events: none;
+      border: 2px dashed #e00024;
+      box-sizing: border-box;
+      will-change: transform, width, height;
+      transform: translate3d(0, 0, 0);
+      display: none;
     }
     #select-preview.on { display: block; }
     #select-preview.ok { border-color: #1f9d55; }
     #select-preview.risk { border-color: #e00024; }
-
-    /* Never cover chrome: stage-only, no hit-testing except Cancel. */
     .hint {
       position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
-      background: rgba(18,22,26,.88); border: 1px solid var(--border); padding: 12px 16px;
-      border-radius: 10px; color: var(--muted); font-size: 14px; pointer-events: none; z-index: 4;
-      max-width: 82vw; text-align: center;
+      background: rgba(18, 22, 26, 0.85); border: 1px solid var(--border);
+      padding: 12px 16px; border-radius: 10px; color: var(--muted);
+      font-size: 14px; pointer-events: none; z-index: 3; max-width: 80vw; text-align: center;
     }
     .hint[hidden] { display: none !important; }
-    .hint.busy { padding: 14px 16px 12px; pointer-events: none; }
-    .hint .hint-msg { display: block; margin-bottom: 10px; pointer-events: none; }
-    .hint .hint-actions { display: flex; gap: 8px; justify-content: center; pointer-events: auto; }
-    .hint .hint-actions button {
-      min-height: 40px; padding: 0 14px; border-radius: 10px;
-      border: 1px solid var(--border); background: var(--surface-2); color: var(--text); font-weight: 700;
-      pointer-events: auto; cursor: pointer;
-    }
-    .hint .hint-actions button.primary { background: var(--accent); border-color: #ff3b57; color: #fff; }
-    .top-bar { position: relative; z-index: 40; }
-    #doc-toolbar { position: relative; z-index: 40; }
-    /* During Abrir: block pan/tools hit-testing (file-picker click-through). Cancel stays usable. */
-    body.opening-pdf #pdf,
-    body.opening-pdf #anno-layer,
-    body.opening-pdf #doc-toolbar,
-    body.opening-pdf #tool-dock .dock-body,
-    body.opening-pdf #tool-dock .dock-handle {
-      pointer-events: none !important;
-    }
-    body.opening-pdf .hint .hint-actions,
-    body.opening-pdf .hint .hint-actions button {
-      pointer-events: auto !important;
-    }
-    .autosave-chip {
-      position: fixed; right: 12px; bottom: calc(12px + var(--safe-bottom)); z-index: 30;
-      font-size: 11px; color: var(--muted); background: rgba(18,22,26,.82);
-      border: 1px solid var(--border); border-radius: 999px; padding: 6px 10px;
-      pointer-events: none; opacity: 0; transition: opacity .25s ease;
-    }
-    .autosave-chip.on { opacity: 1; }
 
-    /* Floating conference dock — always above Prumo #doc-toolbar */
+    /* Floating icon dock */
     #tool-dock {
-      position: fixed !important;
-      z-index: 10050 !important;
+      position: fixed;
+      z-index: 35;
       left: 10px;
-      top: calc(12px + var(--safe-top) + var(--top-h) + 44px);
-      transform: none;
-      width: calc(var(--dock-size) + 12px);
-      max-height: calc(100dvh - var(--safe-top) - var(--safe-bottom) - var(--top-h) - 56px);
-      display: flex; flex-direction: column; gap: 6px; padding: 6px; border-radius: 16px;
-      background: rgba(21,26,31,.96); border: 1px solid var(--border);
-      box-shadow: 0 12px 32px rgba(0,0,0,.55); touch-action: none; user-select: none;
-      pointer-events: auto !important;
+      top: 50%;
+      transform: translateY(-50%);
+      width: calc(var(--dock-size) + 10px);
+      max-height: calc(100dvh - var(--top-h) - 24px - var(--safe-bottom));
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 6px;
+      border-radius: 16px;
+      background: rgba(21, 26, 31, 0.94);
+      border: 1px solid var(--border);
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+      touch-action: none;
+      user-select: none;
     }
     #tool-dock.collapsed {
-      width: calc(var(--dock-size) + 12px);
-      max-height: none;
+      width: var(--dock-size);
+      padding: 6px;
+      gap: 0;
     }
-    #tool-dock.collapsed .dock-body { display: none !important; }
+    #tool-dock.collapsed .dock-body { display: none; }
     .dock-handle {
-      display: flex; align-items: center; justify-content: center; min-height: 32px; flex-shrink: 0;
-      border-radius: 10px; color: var(--muted); font-size: 14px; letter-spacing: .12em; cursor: grab;
-      background: rgba(255,255,255,.06); border: 1px solid transparent;
-      pointer-events: auto; touch-action: none;
+      display: flex; align-items: center; justify-content: center; gap: 4px;
+      min-height: 28px; border-radius: 10px; color: var(--muted);
+      font-size: 14px; letter-spacing: 0.12em; cursor: grab;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid transparent;
     }
-    .dock-handle:active { cursor: grabbing; border-color: var(--border); }
-    .dock-body { display: flex; flex-direction: column; gap: 6px; overflow: auto; flex: 1; min-height: 0; }
-    .dock-btn, .tool.dock-btn {
-      width: var(--dock-size); height: var(--dock-size); border-radius: 14px;
-      display: grid; place-items: center; font-size: 20px; padding: 0;
+    #tool-dock.collapsed .dock-handle {
+      min-height: var(--dock-size);
+      width: 100%;
+      border-color: var(--border);
+      background: var(--surface-2);
+      color: var(--text);
+      font-size: 18px;
+      cursor: pointer;
     }
-    .tool[aria-pressed="true"] { background: #2c3640; border-color: #7f93a8; }
+    .dock-handle:active { cursor: grabbing; }
+    .dock-body {
+      display: flex; flex-direction: column; gap: 6px;
+      overflow-y: auto; overflow-x: hidden;
+      scrollbar-width: thin;
+      -webkit-overflow-scrolling: touch;
+      padding-bottom: 2px;
+    }
+    .dock-sep {
+      height: 1px; margin: 2px 6px; background: var(--border); flex: 0 0 auto;
+    }
+    .dock-btn, .tool.dock-btn, label.dock-btn {
+      width: 100%;
+      min-width: var(--dock-size);
+      min-height: var(--dock-size);
+      margin: 0;
+      padding: 0;
+      border-radius: 12px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      line-height: 1;
+      flex: 0 0 auto;
+    }
+    label.dock-btn { cursor: pointer; }
+    .tool[aria-pressed="true"] {
+      background: #2c3640; border-color: #7f93a8;
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+    }
     .tool[data-tool="ok"][aria-pressed="true"] { background: #184a2d; border-color: var(--ok); }
     .tool[data-tool="risk"][aria-pressed="true"] { background: #4a1818; border-color: #ff4d4d; }
+    .tool-icon { font-size: 20px; line-height: 1; }
     .tool-icon.ok { color: #7ddea8; }
     .tool-icon.risk { color: #ff6b6b; font-weight: 900; }
-    .dock-sep { height: 1px; background: var(--border); margin: 2px 8px; }
     .dock-btn.accent { background: var(--accent); border-color: #ff3b57; color: #fff; }
     .dock-btn.danger { color: #ffc9c9; border-color: #7a3030; }
-    label.dock-btn { cursor: pointer; }
-
+    .autosave-chip {
+      position: fixed; right: 12px; bottom: calc(12px + var(--safe-bottom));
+      z-index: 30; font-size: 11px; color: var(--muted);
+      background: rgba(18, 22, 26, 0.82); border: 1px solid var(--border);
+      border-radius: 999px; padding: 6px 10px; pointer-events: none;
+      opacity: 0; transition: opacity 0.25s ease;
+    }
+    .autosave-chip.on { opacity: 1; }
     .report-panel, .library-panel {
       position: fixed; left: 0; right: 0; bottom: 0; max-height: min(72vh, 640px);
       background: var(--surface); border-top: 1px solid var(--border); z-index: 40;
       display: flex; flex-direction: column; padding-bottom: var(--safe-bottom);
-      box-shadow: 0 -12px 40px rgba(0,0,0,.45);
+      box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.45);
     }
     .report-panel[hidden], .library-panel[hidden] { display: none !important; }
-    .report-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid var(--border); }
+    .library-panel .lib-item {
+      display: flex; gap: 10px; align-items: flex-start; justify-content: space-between;
+      padding: 10px 0; border-bottom: 1px solid var(--border);
+    }
+    .library-panel .lib-item button {
+      min-height: 40px; padding: 0 12px; border-radius: 10px;
+      border: 1px solid var(--border); background: var(--surface-2); color: var(--text);
+      font-weight: 700; cursor: pointer;
+    }
+    .library-panel .lib-meta { min-width: 0; flex: 1; }
+    .library-panel .lib-meta strong {
+      display: block; font-size: 14px; word-break: break-word;
+    }
+    .library-panel .lib-meta span { color: var(--muted); font-size: 12px; }
+    .library-panel .lib-actions { display: flex; gap: 6px; flex-shrink: 0; }
+    .report-head {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 14px; border-bottom: 1px solid var(--border);
+    }
     .report-head h2 { margin: 0; font-size: 18px; }
-    .report-body { overflow: auto; padding: 12px 14px; font-size: 14px; line-height: 1.45; flex: 1; }
-    .report-body .summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }
-    .report-body .stat { background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 10px; text-align: center; }
+    .report-body {
+      overflow: auto; padding: 12px 14px 8px; font-size: 14px;
+      line-height: 1.45; min-height: 140px; flex: 1;
+    }
+    .report-body .summary {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px;
+    }
+    .report-body .stat {
+      background: var(--surface-2); border: 1px solid var(--border);
+      border-radius: 10px; padding: 10px; text-align: center;
+    }
     .report-body .stat strong { display: block; font-size: 22px; }
     .report-body .stat span { color: var(--muted); font-size: 12px; }
     .report-body .stat.ok strong { color: #7ddea8; }
     .report-body .stat.risk strong { color: #ffcc66; }
-    .report-body h3 { margin: 12px 0 6px; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
-    .report-body h4 { margin: 10px 0 4px; font-size: 13px; color: var(--muted); }
+    .report-body h4 {
+      margin: 12px 0 6px; font-size: 13px; color: var(--muted); font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+    .report-body h4:first-child { margin-top: 4px; }
+    .report-body .group-empty { color: var(--muted); font-size: 13px; margin: 0 0 8px; }
+    .report-body h3 {
+      margin: 12px 0 6px; font-size: 13px; text-transform: uppercase;
+      letter-spacing: 0.06em; color: var(--muted);
+    }
     .report-body ul { margin: 0; padding-left: 18px; }
-    .report-actions { display: flex; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--border); flex-wrap: wrap; }
-    .primary, .secondary { min-height: 42px; padding: 0 14px; border-radius: 12px; }
-    .primary { background: var(--accent); border-color: #ff3b57; color: #fff; }
-    .library-panel .lib-item { display: flex; gap: 10px; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border); }
-    .library-panel .lib-meta strong { display: block; word-break: break-word; }
-    .library-panel .lib-meta span { color: var(--muted); font-size: 12px; }
-    .library-panel .lib-actions { display: flex; gap: 6px; }
-    .library-panel .lib-actions button { min-height: 40px; padding: 0 12px; border-radius: 10px; }
-
-    .modal { position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: 50; display: grid; place-items: end center; padding: 16px; }
+    .report-body li { margin-bottom: 6px; }
+    .report-actions { display: flex; gap: 8px; padding: 10px 14px 14px; }
+    .primary, .secondary {
+      min-height: 44px; border-radius: 10px; padding: 0 14px; font-size: 14px;
+    }
+    .primary { background: var(--accent); border-color: #ff3b57; color: #fff; flex: 1; }
+    .modal {
+      position: fixed; inset: 0; background: rgba(0, 0, 0, 0.55);
+      display: grid; place-items: end center; z-index: 50; padding: 16px;
+    }
     .modal[hidden] { display: none !important; }
-    .modal-card { width: min(520px, 100%); background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 14px; }
-    .modal-card h3 { margin: 0 0 8px; }
+    .modal-card {
+      width: min(480px, 100%); background: var(--surface); border: 1px solid var(--border);
+      border-radius: 14px; padding: 14px; margin-bottom: calc(24px + var(--safe-bottom));
+    }
+    .modal-card h3 { margin: 0 0 10px; font-size: 16px; }
     .modal-card textarea {
-      width: 100%; min-height: 90px; border-radius: 10px; border: 1px solid var(--border);
+      width: 100%; border-radius: 10px; border: 1px solid var(--border);
       background: #0f1317; color: var(--text); padding: 12px; font-size: 16px; resize: vertical;
     }
-    .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px; }
-    .group-empty { color: var(--muted); font-size: 13px; }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
   </style>
 </head>
 <body>
   <div id="app">
     <header class="top-bar">
       <div class="brand">
-        <div class="brand-mark" aria-hidden="true"></div>
+        <span class="brand-mark" aria-hidden="true"></span>
         <div class="brand-text">
           <strong>Conf. Armadura</strong>
-          <span id="doc-label">Nenhum PDF</span>
-          <span id="app-revision" class="rev-label" title="Versão do aplicativo">Revisão 1.0.4</span>
+          <span id="doc-label">Abra um PDF</span>
+          <span id="app-revision" class="rev-label" title="Visualizador pré-Prumo restaurado">Revisão 1.0.5</span>
         </div>
       </div>
       <div class="top-actions">
-        <button type="button" id="btn-about" class="chip" title="Sobre">Sobre</button>
         <button type="button" id="btn-wake" class="chip on" aria-pressed="true">Tela ligada</button>
-        <button type="button" id="btn-report-top" class="chip accent-chip">Relatório</button>
+        <button type="button" id="btn-rotate" class="icon-btn" title="Girar 90°">⟳</button>
+        <button type="button" id="btn-report-top" class="chip accent-chip" onclick="window.__openConfReport && window.__openConfReport(event)">Relatório</button>
       </div>
     </header>
 
-    <div id="doc-toolbar" aria-label="Controles do documento">
-      <div class="tools" id="viewer-tools">
-        <div id="pdf-tools">
-          <button type="button" id="pdf-prev" aria-label="Página anterior">‹</button>
-          <input id="pdf-page" type="number" min="1" value="1" aria-label="Número da página" />
-          <span id="pdf-total">/ 1</span>
-          <button type="button" id="pdf-next" aria-label="Próxima página">›</button>
-          <button type="button" id="pdf-rotate" title="Girar página">↻</button>
-          <input id="pdf-query" type="search" placeholder="Buscar no PDF" aria-label="Texto para buscar" />
-          <button type="button" id="pdf-search">Buscar</button>
-          <button type="button" id="pdf-match-prev" title="Ocorrência anterior">↑</button>
-          <button type="button" id="pdf-match" title="Próxima ocorrência">↓</button>
-          <span id="pdf-results" role="status" aria-live="polite"></span>
-        </div>
-        <span class="tool-divider" aria-hidden="true"></span>
-        <button type="button" id="minus" aria-label="Afastar" title="Afastar">−</button>
-        <span id="zoom">—</span>
-        <button type="button" id="plus" aria-label="Aproximar" title="Aproximar">＋</button>
-        <button type="button" id="fit" aria-label="Ajustar à tela" title="Ajustar">⛶</button>
-      </div>
-    </div>
-
     <main class="stage">
-      <section id="viewport" aria-label="Área de visualização">
-        <div id="pdf">
-          <canvas aria-label="Página PDF"></canvas>
-          <div id="anno-layer">
-            <canvas id="anno-canvas"></canvas>
-            <div id="select-preview" aria-hidden="true"></div>
-          </div>
-        </div>
-      </section>
-      <div id="hint" class="hint" hidden>
-        <span class="hint-msg" id="hint-msg"></span>
-        <div class="hint-actions" id="hint-actions" hidden>
-          <button type="button" id="btn-hint-cancel">Cancelar</button>
+      <div id="viewport" class="viewport">
+        <div id="scene" class="scene">
+          <canvas id="pdf-canvas"></canvas>
+          <canvas id="anno-canvas"></canvas>
+          <div id="select-preview" aria-hidden="true"></div>
         </div>
       </div>
+      <div id="hint" class="hint">Carregando…</div>
     </main>
-  </div>
 
-  <div id="autosave-chip" class="autosave-chip">Autosalvo</div>
+    <aside id="report-panel" class="report-panel" hidden>
+      <div class="report-head">
+        <h2>Relatório</h2>
+        <button type="button" id="btn-close-report" class="icon-btn" onclick="window.__closeConfReport && window.__closeConfReport()">✕</button>
+      </div>
+      <div id="report-body" class="report-body"></div>
+      <div class="report-actions">
+        <button type="button" id="btn-export-html" class="primary">Exportar HTML</button>
+        <button type="button" id="btn-export-text" class="secondary">Copiar texto</button>
+        <button type="button" id="btn-share" class="secondary">Compartilhar</button>
+      </div>
+    </aside>
 
-  <div id="tool-dock" aria-label="Ferramentas flutuantes">
-    <div class="dock-handle" id="dock-handle" role="button" tabindex="0" title="Recolher · Arrastar">⋮⋮</div>
-    <div class="dock-body" id="dock-body">
-      <button type="button" class="tool dock-btn" data-tool="pan" aria-pressed="true" title="Mover"><span class="tool-icon">✥</span></button>
-      <button type="button" class="tool dock-btn" data-tool="stroke" title="Riscar"><span class="tool-icon">╱</span></button>
-      <button type="button" class="tool dock-btn" data-tool="ok" title="OK — arrastar sobre rótulo"><span class="tool-icon ok">✓</span></button>
-      <button type="button" class="tool dock-btn" data-tool="risk" title="Não conforme"><span class="tool-icon risk">✕</span></button>
-      <button type="button" class="tool dock-btn" data-tool="arrow" title="Seta"><span class="tool-icon">➜</span></button>
-      <button type="button" class="tool dock-btn" data-tool="note" title="Nota"><span class="tool-icon">T</span></button>
-      <div class="dock-sep"></div>
-      <button type="button" id="btn-undo" class="dock-btn" title="Desfazer">↶</button>
-      <button type="button" id="btn-clear" class="dock-btn danger" title="Limpar">⌫</button>
-      <label class="dock-btn" title="Importar PDF">📄<input type="file" id="file-input" accept="application/pdf,.pdf" hidden /></label>
-      <button type="button" id="btn-library" class="dock-btn" title="Biblioteca">📚</button>
-      <button type="button" id="btn-demo" class="dock-btn" title="Demo">▣</button>
-      <button type="button" id="btn-report" class="dock-btn accent" title="Relatório">☰</button>
-    </div>
-  </div>
+    <aside id="library-panel" class="library-panel" hidden>
+      <div class="report-head">
+        <h2>Biblioteca de PDFs</h2>
+        <button type="button" id="btn-close-library" class="icon-btn" title="Fechar">✕</button>
+      </div>
+      <div id="library-body" class="report-body">
+        <p class="group-empty">Nenhum PDF importado ainda.</p>
+      </div>
+      <div class="report-actions">
+        <label class="primary" style="display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 14px;border-radius:12px;cursor:pointer;">
+          Importar PDF
+          <input type="file" id="file-input-library" accept="application/pdf,.pdf" hidden />
+        </label>
+        <button type="button" id="btn-library-demo" class="secondary">Demo</button>
+      </div>
+    </aside>
 
-  <aside id="report-panel" class="report-panel" hidden>
-    <div class="report-head">
-      <h2>Relatório</h2>
-      <button type="button" id="btn-close-report" class="icon-btn">✕</button>
+    <div id="text-modal" class="modal" hidden>
+      <div class="modal-card">
+        <h3 id="text-modal-title">Nota no PDF</h3>
+        <textarea id="text-input" rows="3" placeholder="Descreva o trecho ou o risco…" maxlength="500"></textarea>
+        <div class="modal-actions">
+          <button type="button" id="btn-text-cancel" class="secondary">Cancelar</button>
+          <button type="button" id="btn-text-ok" class="primary">Confirmar</button>
+        </div>
+      </div>
     </div>
-    <div id="report-body" class="report-body"></div>
-    <div class="report-actions">
-      <button type="button" id="btn-export-html" class="primary">Exportar HTML</button>
-      <button type="button" id="btn-export-text" class="secondary">Copiar texto</button>
-      <button type="button" id="btn-share" class="secondary">Compartilhar</button>
-    </div>
-  </aside>
 
-  <aside id="library-panel" class="library-panel" hidden>
-    <div class="report-head">
-      <h2>Biblioteca de PDFs</h2>
-      <button type="button" id="btn-close-library" class="icon-btn">✕</button>
-    </div>
-    <div id="library-body" class="report-body"><p class="group-empty">Nenhum PDF importado.</p></div>
-    <div class="report-actions">
-      <label class="primary" style="display:inline-flex;align-items:center;justify-content:center;padding:0 14px;border-radius:12px;min-height:42px;cursor:pointer;">
-        Importar PDF<input type="file" id="file-input-library" accept="application/pdf,.pdf" hidden />
-      </label>
-      <button type="button" id="btn-library-demo" class="secondary">Demo</button>
-    </div>
-  </aside>
+    <div id="autosave-chip" class="autosave-chip" aria-live="polite">Autosalvo</div>
 
-  <div id="text-modal" class="modal" hidden>
-    <div class="modal-card">
-      <h3 id="text-modal-title">Nota no PDF</h3>
-      <textarea id="text-input" rows="3" placeholder="Descreva o trecho ou o motivo…" maxlength="500"></textarea>
-      <div class="modal-actions">
-        <button type="button" id="btn-text-cancel" class="secondary">Cancelar</button>
-        <button type="button" id="btn-text-ok" class="primary">Confirmar</button>
+    <div id="tool-dock" aria-label="Ferramentas flutuantes">
+      <div class="dock-handle" id="dock-handle" role="button" tabindex="0" title="Recolher (clique) · Arrastar para mover">⋮⋮</div>
+      <div class="dock-body" id="dock-body">
+        <button type="button" class="tool dock-btn" data-tool="pan" aria-pressed="true" title="Mover"><span class="tool-icon" aria-hidden="true">✥</span></button>
+        <button type="button" class="tool dock-btn" data-tool="stroke" title="Riscar"><span class="tool-icon" aria-hidden="true">╱</span></button>
+        <button type="button" class="tool dock-btn" data-tool="ok" title="OK — arrastar sobre rótulo (verde)"><span class="tool-icon ok" aria-hidden="true">✓</span></button>
+        <button type="button" class="tool dock-btn" data-tool="risk" title="Não conforme — arrastar + motivo (vermelho)"><span class="tool-icon risk" aria-hidden="true">✕</span></button>
+        <button type="button" class="tool dock-btn" data-tool="arrow" title="Seta"><span class="tool-icon" aria-hidden="true">➜</span></button>
+        <button type="button" class="tool dock-btn" data-tool="note" title="Nota"><span class="tool-icon" aria-hidden="true">T</span></button>
+        <div class="dock-sep" aria-hidden="true"></div>
+        <button type="button" id="btn-undo" class="dock-btn" title="Desfazer">↶</button>
+        <button type="button" id="btn-clear" class="dock-btn danger" title="Limpar">⌫</button>
+        <label class="dock-btn" title="Importar PDF">📄<input type="file" id="file-input" accept="application/pdf,.pdf" hidden /></label>
+        <button type="button" id="btn-library" class="dock-btn" title="Biblioteca de PDFs">📚</button>
+        <button type="button" id="btn-demo" class="dock-btn" title="Demo">▣</button>
+        <button type="button" id="btn-report" class="dock-btn accent" title="Relatório" onclick="window.__openConfReport && window.__openConfReport(event)">☰</button>
       </div>
     </div>
   </div>
 
-  <script type="module" src="./conference-app.mjs"></script>
+  <!-- PDF.js local first (Capacitor/Android). CDN só fallback no browser. -->
+  <script src="vendor/pdfjs/pdf.min.js"></script>
+  <script>
+(function () {
+  "use strict";
+
+  var DEMO_PDF = "demo-pilares-vigas.pdf";
+  var DEMO_LABEL = "2330_GAR PILARES E VIGAS — Sanluzzi Selenza Rev01";
+  var PDFJS_VER = "3.11.174";
+  var PDFJS_LOCAL = "vendor/pdfjs/pdf.min.js";
+  var PDFJS_WORKER_LOCAL = "vendor/pdfjs/pdf.worker.min.js";
+  var PDFJS_CDN = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/" + PDFJS_VER + "/pdf.min.js";
+  var PDFJS_WORKER_CDN = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/" + PDFJS_VER + "/pdf.worker.min.js";
+  var pdfJsReady = null;
+  var openingPdf = false;
+
+  function uid() {
+    if (crypto && crypto.randomUUID) return crypto.randomUUID();
+    return "id-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 9);
+  }
+
+  var LIB_INDEX_KEY = "conf-armadura-library-v1";
+  var LIB_FOLDER = "Download/ConfArmadura";
+  var IDB_NAME = "conf-armadura-db";
+  var IDB_STORE = "pdfs";
+
+  function isNativeCapacitor() {
+    try {
+      return !!(window.Capacitor && Capacitor.isNativePlatform && Capacitor.isNativePlatform());
+    } catch (e) {
+      return !!(window.Capacitor && (Capacitor.getPlatform && Capacitor.getPlatform() !== "web"));
+    }
+  }
+
+  function capFilesystem() {
+    try {
+      return (window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.Filesystem) || null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function loadScript(src) {
+    return new Promise(function (resolve, reject) {
+      var s = document.createElement("script");
+      s.src = src;
+      s.async = true;
+      s.onload = function () { resolve(); };
+      s.onerror = function () { reject(new Error("Falha ao carregar " + src)); };
+      document.head.appendChild(s);
+    });
+  }
+
+  function setPdfWorkerFromText(workerJs) {
+    var blob = new Blob([workerJs], { type: "application/javascript" });
+    var url = URL.createObjectURL(blob);
+    pdfjsLib.GlobalWorkerOptions.workerSrc = url;
+    return url;
+  }
+
+  /** Capacitor WebView freezes if pdf.js waits on a CDN/CORS worker. Prefer local blob worker. */
+  function ensurePdfJs() {
+    if (pdfJsReady) return pdfJsReady;
+    pdfJsReady = (async function () {
+      if (!window.pdfjsLib) {
+        try {
+          await loadScript(PDFJS_LOCAL);
+        } catch (e1) {
+          await loadScript(PDFJS_CDN);
+        }
+      }
+      if (!window.pdfjsLib) throw new Error("pdf.js indisponível");
+
+      // Prefer same-origin / blob worker — never block on remote CDN worker inside the APK.
+      var workerOk = false;
+      try {
+        var res = await fetch(PDFJS_WORKER_LOCAL, { cache: "force-cache" });
+        if (res.ok) {
+          setPdfWorkerFromText(await res.text());
+          workerOk = true;
+        }
+      } catch (e) {}
+      if (!workerOk && !isNativeCapacitor()) {
+        try {
+          var resCdn = await fetch(PDFJS_WORKER_CDN, { cache: "force-cache" });
+          if (resCdn.ok) {
+            setPdfWorkerFromText(await resCdn.text());
+            workerOk = true;
+          }
+        } catch (e2) {}
+      }
+      if (!workerOk) {
+        // Last resort: main-thread fake worker (slow, but opens PDFs on WebView).
+        try {
+          pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER_LOCAL;
+        } catch (e3) {}
+        try { pdfjsLib.disableWorker = true; } catch (e4) {}
+      }
+      return pdfjsLib;
+    })();
+    return pdfJsReady;
+  }
+
+  function bytesToBase64(bytes) {
+    var u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+    var chunk = 0x8000;
+    var parts = [];
+    for (var i = 0; i < u8.length; i += chunk) {
+      parts.push(String.fromCharCode.apply(null, u8.subarray(i, i + chunk)));
+    }
+    return btoa(parts.join(""));
+  }
+
+  function base64ToBytes(b64) {
+    var bin = atob(b64);
+    var out = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  }
+
+  function openIdb() {
+    return new Promise(function (resolve, reject) {
+      if (!window.indexedDB) {
+        reject(new Error("IndexedDB indisponível"));
+        return;
+      }
+      var req = indexedDB.open(IDB_NAME, 1);
+      req.onupgradeneeded = function () {
+        var db = req.result;
+        if (!db.objectStoreNames.contains(IDB_STORE)) db.createObjectStore(IDB_STORE);
+      };
+      req.onsuccess = function () { resolve(req.result); };
+      req.onerror = function () { reject(req.error || new Error("IDB open failed")); };
+    });
+  }
+
+  function idbPut(key, value) {
+    return openIdb().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var tx = db.transaction(IDB_STORE, "readwrite");
+        tx.objectStore(IDB_STORE).put(value, key);
+        tx.oncomplete = function () { resolve(); };
+        tx.onerror = function () { reject(tx.error); };
+      });
+    });
+  }
+
+  function idbGet(key) {
+    return openIdb().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var tx = db.transaction(IDB_STORE, "readonly");
+        var req = tx.objectStore(IDB_STORE).get(key);
+        req.onsuccess = function () { resolve(req.result || null); };
+        req.onerror = function () { reject(req.error); };
+      });
+    });
+  }
+
+  function idbDelete(key) {
+    return openIdb().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var tx = db.transaction(IDB_STORE, "readwrite");
+        tx.objectStore(IDB_STORE).delete(key);
+        tx.oncomplete = function () { resolve(); };
+        tx.onerror = function () { reject(tx.error); };
+      });
+    }).catch(function () {});
+  }
+
+  function readLibraryIndex() {
+    try {
+      var raw = localStorage.getItem(LIB_INDEX_KEY);
+      var parsed = raw ? JSON.parse(raw) : { pdfs: [] };
+      if (!parsed || !Array.isArray(parsed.pdfs)) return { pdfs: [] };
+      return parsed;
+    } catch (e) {
+      return { pdfs: [] };
+    }
+  }
+
+  function writeLibraryIndex(index) {
+    localStorage.setItem(LIB_INDEX_KEY, JSON.stringify(index));
+  }
+
+  function annotsKeyFor(docId) {
+    return "conf-armadura-annots:" + docId;
+  }
+
+  function makeDocId(name, bytes) {
+    var u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+    var sample = (u8[0] || 0) + "-" + (u8[100] || 0) + "-" + (u8[Math.min(1000, u8.length - 1)] || 0);
+    return String(name || "pdf") + "|" + u8.byteLength + "|" + sample;
+  }
+
+  function safeFileStem(name) {
+    return String(name || "prancha")
+      .replace(/\.pdf$/i, "")
+      .replace(/[^A-Za-z0-9._\-À-ÿ]+/g, "_")
+      .slice(0, 80) || "prancha";
+  }
+
+  var NATIVE_DIRS = [
+    { directory: "EXTERNAL_STORAGE", folder: LIB_FOLDER },
+    { directory: "DOCUMENTS", folder: "ConfArmadura" },
+    { directory: "DATA", folder: "ConfArmadura" }
+  ];
+
+  async function ensureNativeFs() {
+    var fs = capFilesystem();
+    if (!fs || !isNativeCapacitor()) return null;
+    try {
+      if (typeof fs.requestPermissions === "function") await fs.requestPermissions();
+    } catch (e) {}
+    return fs;
+  }
+
+  async function writeNativePdfAndAnnots(entry, bytes, annotsJson) {
+    var fs = await ensureNativeFs();
+    if (!fs) return;
+    var stem = safeFileStem(entry.name);
+    var pdfData = bytesToBase64(bytes);
+    var jsonData = bytesToBase64(new TextEncoder().encode(annotsJson || "[]"));
+    var lastErr = null;
+    for (var d = 0; d < NATIVE_DIRS.length; d++) {
+      var dir = NATIVE_DIRS[d];
+      var pdfPath = dir.folder + "/" + stem + ".pdf";
+      var jsonPath = dir.folder + "/" + stem + ".annots.json";
+      try {
+        try {
+          await fs.mkdir({ path: dir.folder, directory: dir.directory, recursive: true });
+        } catch (e) {}
+        await fs.writeFile({
+          path: pdfPath,
+          data: pdfData,
+          directory: dir.directory,
+          recursive: true
+        });
+        await fs.writeFile({
+          path: jsonPath,
+          data: jsonData,
+          directory: dir.directory,
+          recursive: true
+        });
+        entry.nativePdfPath = pdfPath;
+        entry.nativeAnnotsPath = jsonPath;
+        entry.nativeDirectory = dir.directory;
+        entry.nativeFolder = dir.folder;
+        return;
+      } catch (err) {
+        lastErr = err;
+      }
+    }
+    if (lastErr) console.warn("Falha ao gravar PDF/annots nativo", lastErr);
+  }
+
+  async function savePdfToLibrary(bytes, name, opts) {
+    opts = opts || {};
+    var u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+    var docId = opts.docId || makeDocId(name, u8);
+    var index = readLibraryIndex();
+    var existing = null;
+    for (var i = 0; i < index.pdfs.length; i++) {
+      if (index.pdfs[i].id === docId) { existing = index.pdfs[i]; break; }
+    }
+    var entry = existing || {
+      id: docId,
+      name: name || "prancha.pdf",
+      size: u8.byteLength,
+      importedAt: new Date().toISOString()
+    };
+    entry.name = name || entry.name;
+    entry.size = u8.byteLength;
+    entry.updatedAt = new Date().toISOString();
+    try {
+      await idbPut(docId, { id: docId, name: entry.name, bytes: u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength) });
+      entry.storedIn = "idb";
+    } catch (err) {
+      console.warn("IndexedDB falhou; tentando só storage nativo", err);
+    }
+    var annots = localStorage.getItem(annotsKeyFor(docId)) || "[]";
+    await writeNativePdfAndAnnots(entry, u8, annots);
+    if (!existing) index.pdfs.unshift(entry);
+    else {
+      for (var j = 0; j < index.pdfs.length; j++) {
+        if (index.pdfs[j].id === docId) { index.pdfs[j] = entry; break; }
+      }
+    }
+    writeLibraryIndex(index);
+    return entry;
+  }
+
+  function loadAnnotsForDoc(docId) {
+    try {
+      var raw = localStorage.getItem(annotsKeyFor(docId));
+      var list = raw ? JSON.parse(raw) : [];
+      return Array.isArray(list) ? list : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function persistAnnotsNow() {
+    if (!state.docId) return;
+    var payload = JSON.stringify(annotations.list());
+    try {
+      localStorage.setItem(annotsKeyFor(state.docId), payload);
+    } catch (e) {
+      console.warn(e);
+    }
+    // Mirror JSON next to PDF when native FS is available (async, best-effort).
+    var index = readLibraryIndex();
+    var entry = null;
+    for (var i = 0; i < index.pdfs.length; i++) {
+      if (index.pdfs[i].id === state.docId) { entry = index.pdfs[i]; break; }
+    }
+    if (entry && state.pdfBytes) {
+      writeNativePdfAndAnnots(entry, state.pdfBytes, payload).then(function () {
+        writeLibraryIndex(index);
+      }).catch(function () {});
+    }
+    flashAutosave();
+  }
+
+  var autosaveTimer = 0;
+  function scheduleAutosave() {
+    clearTimeout(autosaveTimer);
+    autosaveTimer = setTimeout(persistAnnotsNow, 280);
+  }
+
+  function flashAutosave() {
+    var chip = document.getElementById("autosave-chip");
+    if (!chip) return;
+    chip.classList.add("on");
+    chip.textContent = "Autosalvo";
+    clearTimeout(flashAutosave._t);
+    flashAutosave._t = setTimeout(function () { chip.classList.remove("on"); }, 1400);
+  }
+
+  async function loadPdfFromLibrary(docId) {
+    var fromIdb = null;
+    try { fromIdb = await idbGet(docId); } catch (e) {}
+    if (fromIdb && fromIdb.bytes) {
+      return { bytes: new Uint8Array(fromIdb.bytes), name: fromIdb.name };
+    }
+    var index = readLibraryIndex();
+    var entry = null;
+    for (var i = 0; i < index.pdfs.length; i++) {
+      if (index.pdfs[i].id === docId) { entry = index.pdfs[i]; break; }
+    }
+    if (entry && entry.nativePdfPath && capFilesystem()) {
+      try {
+        var res = await capFilesystem().readFile({
+          path: entry.nativePdfPath,
+          directory: entry.nativeDirectory || "EXTERNAL_STORAGE"
+        });
+        return { bytes: base64ToBytes(res.data), name: entry.name };
+      } catch (err) {
+        console.warn(err);
+      }
+    }
+    throw new Error("PDF não encontrado na biblioteca");
+  }
+
+  async function removeFromLibrary(docId) {
+    var index = readLibraryIndex();
+    var entry = null;
+    index.pdfs = index.pdfs.filter(function (p) {
+      if (p.id === docId) { entry = p; return false; }
+      return true;
+    });
+    writeLibraryIndex(index);
+    try { localStorage.removeItem(annotsKeyFor(docId)); } catch (e) {}
+    await idbDelete(docId);
+    if (entry && entry.nativePdfPath && capFilesystem()) {
+      try {
+        var dir = entry.nativeDirectory || "EXTERNAL_STORAGE";
+        await capFilesystem().deleteFile({ path: entry.nativePdfPath, directory: dir });
+        if (entry.nativeAnnotsPath) {
+          await capFilesystem().deleteFile({ path: entry.nativeAnnotsPath, directory: dir });
+        }
+      } catch (e) {}
+    }
+  }
+
+  function createAnnotationStore() {
+    var items = [];
+    var draft = null;
+    function notify() { scheduleAutosave(); }
+    return {
+      list: function () { return items.slice(); },
+      clear: function () { items = []; draft = null; notify(); },
+      replaceAll: function (list) {
+        items = Array.isArray(list) ? list.slice() : [];
+        draft = null;
+      },
+      undo: function () {
+        if (draft) { draft = null; return true; }
+        if (!items.length) return false;
+        items.pop();
+        notify();
+        return true;
+      },
+      getDraft: function () { return draft; },
+      setDraft: function (v) { draft = v; },
+      commitDraft: function () {
+        if (!draft) return null;
+        var item = Object.assign({}, draft, { id: uid(), createdAt: new Date().toISOString() });
+        items.push(item);
+        draft = null;
+        notify();
+        return item;
+      },
+      add: function (item) {
+        var full = Object.assign({}, item, { id: uid(), createdAt: new Date().toISOString() });
+        items.push(full);
+        notify();
+        return full;
+      },
+      summarize: function () {
+        return {
+          ok: items.filter(function (i) { return i.kind === "ok"; }),
+          risk: items.filter(function (i) { return i.kind === "risk"; }),
+          notes: items.filter(function (i) { return i.kind === "note"; }),
+          arrows: items.filter(function (i) { return i.kind === "arrow"; }),
+          strokes: items.filter(function (i) { return i.kind === "stroke"; }),
+          total: items.length
+        };
+      }
+    };
+  }
+
+  function paintAnnotations(ctx, items, draft) {
+    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    var all = draft ? items.concat([draft]) : items;
+    for (var i = 0; i < all.length; i++) paintOne(ctx, all[i]);
+  }
+
+  function paintOne(ctx, item) {
+    var kind = item.kind;
+    ctx.save();
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    if (kind === "stroke") {
+      var points = item.points || [];
+      if (points.length < 2) { ctx.restore(); return; }
+      ctx.strokeStyle = item.mode === "risk" ? "#e8a317" : item.mode === "ok" ? "#1f9d55" : "#2f80ed";
+      ctx.lineWidth = Math.max(2, item.width || 3);
+      ctx.beginPath();
+      ctx.moveTo(points[0].x, points[0].y);
+      for (var p = 1; p < points.length; p++) ctx.lineTo(points[p].x, points[p].y);
+      ctx.stroke();
+    } else if (kind === "ok" || kind === "risk" || kind === "select") {
+      var x = item.x, y = item.y;
+      var rw = item.w || 0, rh = item.h || 0;
+      var isOk = kind === "ok" || (kind === "select" && item.mode === "ok");
+      var isSelect = kind === "select";
+      if (rw > 2 && rh > 2) {
+        ctx.strokeStyle = isOk ? "#1f9d55" : "#e00024";
+        ctx.lineWidth = isSelect ? 2 : 3;
+        if (isSelect) {
+          // Selection border only (snapped to text) — fill comes after commit.
+          ctx.setLineDash([5, 4]);
+          ctx.strokeRect(x, y, rw, rh);
+          ctx.setLineDash([]);
+        } else {
+          ctx.fillStyle = isOk ? "rgba(31,157,85,0.28)" : "rgba(224,0,36,0.22)";
+          ctx.fillRect(x, y, rw, rh);
+          ctx.strokeRect(x, y, rw, rh);
+        }
+      } else if (kind === "ok") {
+        var s = 14;
+        ctx.strokeStyle = "#1f9d55";
+        ctx.fillStyle = "rgba(31,157,85,0.18)";
+        ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.arc(x, y, s, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(x - 6, y); ctx.lineTo(x - 1, y + 6); ctx.lineTo(x + 8, y - 7);
+        ctx.stroke();
+      } else if (kind === "risk") {
+        s = 14;
+        ctx.fillStyle = "rgba(224,0,36,0.2)";
+        ctx.strokeStyle = "#e00024";
+        ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.arc(x, y, s, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        ctx.strokeStyle = "#e00024";
+        ctx.beginPath();
+        ctx.moveTo(x - 6, y - 6); ctx.lineTo(x + 6, y + 6);
+        ctx.moveTo(x + 6, y - 6); ctx.lineTo(x - 6, y + 6);
+        ctx.stroke();
+      }
+    } else if (kind === "arrow") {
+      var x1 = item.x1, y1 = item.y1, x2 = item.x2, y2 = item.y2;
+      var color = item.mode === "ok" ? "#1f9d55" : "#e8a317";
+      ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 3.5;
+      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+      var angle = Math.atan2(y2 - y1, x2 - x1), head = 12;
+      ctx.beginPath();
+      ctx.moveTo(x2, y2);
+      ctx.lineTo(x2 - head * Math.cos(angle - 0.4), y2 - head * Math.sin(angle - 0.4));
+      ctx.lineTo(x2 - head * Math.cos(angle + 0.4), y2 - head * Math.sin(angle + 0.4));
+      ctx.closePath(); ctx.fill();
+    } else if (kind === "note") {
+      x = item.x; y = item.y;
+      var text = String(item.text || "");
+      var bg = item.mode === "ok" ? "rgba(31,157,85,0.92)" : "rgba(232,163,23,0.95)";
+      var fg = item.mode === "ok" ? "#d8ffe8" : "#2a1f05";
+      ctx.font = "bold 12px sans-serif";
+      var pad = 6;
+      var w = Math.max(40, ctx.measureText(text || " ").width + pad * 2);
+      var h = 22;
+      ctx.fillStyle = bg;
+      roundRect(ctx, x, y - h, w, h, 4); ctx.fill();
+      ctx.fillStyle = fg; ctx.textBaseline = "middle";
+      ctx.fillText(text, x + pad, y - h / 2);
+    }
+    ctx.restore();
+  }
+
+  function roundRect(ctx, x, y, w, h, r) {
+    var radius = Math.min(r, w / 2, h / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + radius, y);
+    ctx.arcTo(x + w, y, x + w, y + h, radius);
+    ctx.arcTo(x + w, y + h, x, y + h, radius);
+    ctx.arcTo(x, y + h, x, y, radius);
+    ctx.arcTo(x, y, x + w, y, radius);
+    ctx.closePath();
+  }
+
+  function fmtTime(iso) {
+    try { return new Date(iso).toLocaleString("pt-BR"); } catch (e) { return iso || "—"; }
+  }
+
+  // Structural codes: letter(s) + number. Longer prefixes first (VG before V, LG before L).
+  // Do not swallow dimension "x" in tokens like VR-114x65 (that "x" is not a suffix letter).
+  var STRUCT_CODE_RE = /\b((?:VG|VR|VT|LG|LR|LA|P|R)[\-\s]?\d+)([A-Za-z])?(?=\b|[xX×]|$)/i;
+  var DIM_ONLY_RE = /^(?:\d{1,3}\s*[xX×]\s*\d{1,3}.*|h\s*=\s*\d)/i;
+
+  function extractStructuralCode(text) {
+    var m = String(text || "").match(STRUCT_CODE_RE);
+    if (!m) return "";
+    var code = String(m[1]).replace(/\s+/g, "");
+    if (m[2] && !/^[xX×]$/.test(m[2])) code += m[2];
+    return code;
+  }
+
+  function classifyLabel(text) {
+    var code = extractStructuralCode(text).toUpperCase();
+    var t = String(text || "").toUpperCase().replace(/\s+/g, " ").trim();
+    var key = code || t;
+    if (!key) return "elemento";
+    if (/^P[\-]?\d/.test(key) || /\bPILAR\b/.test(t) || /\bP[\s\-.]?\d/.test(t)) return "pilar";
+    if (/^(VG|VR|VT)/.test(key) || /\bVIGA\b/.test(t) || /\bV[GRT][\s\-]?\d/.test(t)) return "viga";
+    if (/^(LG|LR|LA)/.test(key) || /^R[\-]?\d/.test(key) || /\bLAJE\b/.test(t) || /\bLG[\s\-]?\d/.test(t)) return "laje";
+    return "elemento";
+  }
+
+  function elementTypeLabel(type) {
+    if (type === "pilar") return "Pilar";
+    if (type === "viga") return "Viga";
+    if (type === "laje") return "Laje";
+    return "Elemento";
+  }
+
+  function vplGroupKey(type) {
+    if (type === "viga") return "viga";
+    if (type === "pilar") return "pilar";
+    if (type === "laje") return "laje";
+    return "outro";
+  }
+
+  /** Collapse repeated dim phrases: "14x90 14x90 14x90" → "14x90". */
+  function dedupeDimTokens(text) {
+    var s = String(text || "").replace(/\s+/g, " ").trim();
+    if (!s) return "";
+    var phrases = [];
+    var re = /\d+\s*[xX×]\s*\d+(?:\s*\([^)]*\))?|h\s*=\s*[\d.,]+|[^\s]+/gi;
+    var m;
+    while ((m = re.exec(s))) phrases.push(String(m[0]).replace(/\s+/g, " ").trim());
+    if (!phrases.length) return s;
+    var seen = Object.create(null);
+    var out = [];
+    for (var i = 0; i < phrases.length; i++) {
+      var key = phrases[i].toLowerCase().replace(/\s+/g, "");
+      if (seen[key]) continue;
+      seen[key] = true;
+      out.push(phrases[i]);
+    }
+    return out.join(" ");
+  }
+
+  function splitLabelNameDims(label) {
+    var s = String(label || "")
+      .replace(/\s*[·•]\s*/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!s) return { name: "", dims: "", display: "" };
+
+    // Always prefer a letter+number code anywhere in the string (never lead with 25x50 / h=15).
+    var code = extractStructuralCode(s);
+    if (code) {
+      var rest = s
+        .replace(new RegExp(code.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "ig"), " ")
+        .replace(/\s+/g, " ")
+        .replace(/^[\s\-–—]+|[\s\-–—]+$/g, "")
+        .trim();
+      // VR-114x65 / VG114x90 glued into one token → name VR-114, dims 114x65
+      var glued = code.match(/^((?:VG|VR|VT|LG|LR|LA|P|R)[\-]?\d+)[xX×](\d+.*)$/i);
+      if (glued) {
+        var stem = glued[1];
+        var num = (stem.match(/\d+$/) || [""])[0];
+        code = stem;
+        rest = (num + "x" + glued[2] + (rest ? " " + rest : "")).replace(/\s+/g, " ").trim();
+      } else if (/^[xX×]/.test(rest)) {
+        var num2 = (code.match(/\d+$/) || [""])[0];
+        rest = (num2 + rest.replace(/^[xX×]/, "x") + "").trim();
+      }
+      rest = dedupeDimTokens(rest);
+      return {
+        name: code,
+        dims: rest,
+        display: code + (rest ? " · " + rest : "")
+      };
+    }
+
+    // No structural code found — keep raw, but never invent a "name" from pure dims.
+    if (DIM_ONLY_RE.test(s)) {
+      var onlyDims = dedupeDimTokens(s);
+      return { name: "", dims: onlyDims, display: onlyDims };
+    }
+    return { name: s, dims: "", display: s };
+  }
+
+  function labelFor(item) {
+    if (item.kind === "ok") {
+      var okParts = splitLabelNameDims(item.label || item.text || "");
+      return (elementTypeLabel(item.elementType || classifyLabel(okParts.display)) + " conferido")
+        + (okParts.display ? " (" + okParts.display + ")" : "");
+    }
+    if (item.kind === "risk") {
+      var riskParts = splitLabelNameDims(item.label || item.text || "");
+      return "Não conforme"
+        + (riskParts.display ? " — " + riskParts.display : "")
+        + (item.reason ? " · motivo: " + item.reason : "");
+    }
+    if (item.kind === "note") return item.mode === "ok" ? "Nota OK" : "Nota de risco";
+    if (item.kind === "arrow") return item.mode === "ok" ? "Seta OK" : "Seta risco";
+    if (item.kind === "stroke") {
+      if (item.mode === "ok") return "Traço OK";
+      if (item.mode === "risk") return "Traço problema";
+      return "Traço / risco no desenho";
+    }
+    return item.kind;
+  }
+
+  function escapeHtml(value) {
+    return String(value)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+
+  function buildReportModel(docName, annotations) {
+    var summary = annotations.summarize();
+    var items = annotations.list();
+    return {
+      title: "Relatório de conferência de armadura",
+      docName: docName || "PDF sem nome",
+      generatedAt: new Date().toISOString(),
+      counts: {
+        ok: summary.ok.length,
+        risk: summary.risk.length
+          + summary.notes.filter(function (n) { return n.mode !== "ok"; }).length
+          + summary.arrows.filter(function (a) { return a.mode !== "ok"; }).length
+          + summary.strokes.filter(function (s) { return s.mode === "risk"; }).length,
+        notes: summary.notes.length,
+        arrows: summary.arrows.length,
+        strokes: summary.strokes.length,
+        total: summary.total
+      },
+      risks: items.filter(function (i) {
+        return i.kind === "risk"
+          || (i.kind === "note" && i.mode !== "ok")
+          || (i.kind === "arrow" && i.mode !== "ok")
+          || (i.kind === "stroke" && i.mode === "risk");
+      }),
+      oks: items.filter(function (i) {
+        return i.kind === "ok"
+          || (i.kind === "note" && i.mode === "ok")
+          || (i.kind === "arrow" && i.mode === "ok")
+          || (i.kind === "stroke" && i.mode === "ok");
+      }),
+      notes: summary.notes,
+      arrows: summary.arrows
+    };
+  }
+
+  function reportNameDims(item) {
+    // Use one canonical string — joining name+dims+label+text tripled dims (14x90×3).
+    var label = String(item.label || item.text || "").trim();
+    var name = String(item.name || "").trim();
+    var dims = String(item.dims || "").trim();
+    var raw = label;
+    if (!raw) raw = [name, dims].filter(Boolean).join(" ");
+    else if (name && !extractStructuralCode(label) && extractStructuralCode(name)) {
+      raw = name + (dims ? " " + dims : "") + " " + label;
+    }
+    var parts = splitLabelNameDims(raw);
+    parts.dims = dedupeDimTokens(parts.dims);
+    parts.display = parts.name
+      ? (parts.name + (parts.dims ? " · " + parts.dims : ""))
+      : (parts.dims || parts.display || "");
+    return parts;
+  }
+
+  function itemVplType(item) {
+    var parts = reportNameDims(item);
+    return vplGroupKey(
+      item.elementType && item.elementType !== "elemento"
+        ? item.elementType
+        : classifyLabel(parts.name || parts.display || item.label || item.text || "")
+    );
+  }
+
+  function groupItemsByVpl(items) {
+    var groups = { viga: [], pilar: [], laje: [], outro: [] };
+    (items || []).forEach(function (item) {
+      groups[itemVplType(item)].push(item);
+    });
+    return groups;
+  }
+
+  function reportHeadHtml(item) {
+    var parts = reportNameDims(item);
+    if (parts.name) {
+      return "<strong>" + escapeHtml(parts.name) + "</strong>"
+        + (parts.dims ? " · " + escapeHtml(parts.dims) : "");
+    }
+    // Prefer any code still buried in display; never lead with bare dims if we can help it.
+    var code = extractStructuralCode(parts.display || item.label || item.text || "");
+    if (code) {
+      var rest = splitLabelNameDims((parts.display || "") + " " + code);
+      return "<strong>" + escapeHtml(code) + "</strong>"
+        + (rest.dims ? " · " + escapeHtml(rest.dims) : "");
+    }
+    return escapeHtml(parts.display || item.label || item.text || "—");
+  }
+
+  function reportHeadText(item) {
+    var parts = reportNameDims(item);
+    if (parts.name) return parts.name + (parts.dims ? " · " + parts.dims : "");
+    var code = extractStructuralCode(parts.display || item.label || item.text || "");
+    if (code) {
+      var rest = splitLabelNameDims((parts.display || "") + " " + code);
+      return code + (rest.dims ? " · " + rest.dims : "");
+    }
+    return parts.display || item.label || item.text || "—";
+  }
+
+  var VPL_SECTIONS = [
+    { key: "viga", title: "Vigas (V)" },
+    { key: "pilar", title: "Pilares (P)" },
+    { key: "laje", title: "Lajes (L)" },
+    { key: "outro", title: "Outros" }
+  ];
+
+  function renderGroupedLisHtml(items, lineFn) {
+    var groups = groupItemsByVpl(items);
+    var html = "";
+    var any = false;
+    VPL_SECTIONS.forEach(function (sec) {
+      var list = groups[sec.key] || [];
+      if (!list.length) {
+        if (sec.key === "outro") return;
+        html += "<h4>" + escapeHtml(sec.title) + "</h4><p class=\"group-empty\">Nenhum</p>";
+        return;
+      }
+      any = true;
+      html += "<h4>" + escapeHtml(sec.title) + "</h4><ul>";
+      list.forEach(function (item, idx) {
+        html += lineFn(item, idx);
+      });
+      html += "</ul>";
+    });
+    return { html: html, any: any || !!(items && items.length) };
+  }
+
+  function renderReportHtmlFragment(model) {
+    var riskBlock = renderGroupedLisHtml(model.risks, function (r, idx) {
+      var tail = " — Não conforme";
+      if (r.reason) tail += " · motivo: " + escapeHtml(String(r.reason));
+      return "<li><strong>#" + (idx + 1) + "</strong> " + reportHeadHtml(r) + tail
+        + " <em>(" + escapeHtml(fmtTime(r.createdAt)) + ")</em></li>";
+    });
+    var okBlock = renderGroupedLisHtml(model.oks, function (r, idx) {
+      return "<li><strong>#" + (idx + 1) + "</strong> " + reportHeadHtml(r) + " — conferido</li>";
+    });
+    var noteLis = model.notes.map(function (r) {
+      return "<li>" + escapeHtml(String(r.text || "(vazia)")) + " <em>(" + escapeHtml(labelFor(r)) + ")</em></li>";
+    }).join("");
+    var okGroups = groupItemsByVpl(model.oks);
+    var riskGroups = groupItemsByVpl(model.risks);
+    return ''
+      + '<div class="summary">'
+      + '<div class="stat ok"><strong>' + model.counts.ok + '</strong><span>Conferidos</span></div>'
+      + '<div class="stat risk"><strong>' + model.counts.risk + '</strong><span>Não conformes</span></div>'
+      + '<div class="stat"><strong>' + model.counts.total + '</strong><span>Marcações</span></div>'
+      + '</div>'
+      + '<p><strong>Documento:</strong> ' + escapeHtml(model.docName) + '<br/>'
+      + '<strong>Gerado em:</strong> ' + escapeHtml(fmtTime(model.generatedAt)) + '<br/>'
+      + '<strong>OK:</strong> V ' + okGroups.viga.length
+      + ' · P ' + okGroups.pilar.length
+      + ' · L ' + okGroups.laje.length
+      + ' &nbsp;|&nbsp; <strong>NC:</strong> V ' + riskGroups.viga.length
+      + ' · P ' + riskGroups.pilar.length
+      + ' · L ' + riskGroups.laje.length
+      + '</p>'
+      + '<h3>Não conformes / riscos</h3>'
+      + (model.risks.length ? riskBlock.html : '<p>Nenhum não conforme marcado.</p>')
+      + '<h3>Já conferidos (OK)</h3>'
+      + (model.oks.length ? okBlock.html : '<p>Nenhum elemento conferido.</p>')
+      + '<h3>Notas de texto</h3>'
+      + (noteLis ? '<ul>' + noteLis + '</ul>' : '<p>Sem notas.</p>')
+      + '<h3>Setas</h3>'
+      + '<p>' + model.counts.arrows + ' seta(s) · ' + model.counts.strokes + ' traço(s)</p>';
+  }
+
+  function appendGroupedPlain(lines, title, items, lineFn) {
+    lines.push("", title);
+    if (!items.length) {
+      lines.push("- Nenhum");
+      return;
+    }
+    var groups = groupItemsByVpl(items);
+    VPL_SECTIONS.forEach(function (sec) {
+      var list = groups[sec.key] || [];
+      if (!list.length && sec.key === "outro") return;
+      lines.push("", sec.title);
+      if (!list.length) {
+        lines.push("- Nenhum");
+        return;
+      }
+      list.forEach(function (item, idx) {
+        lines.push(lineFn(item, idx));
+      });
+    });
+  }
+
+  function buildPlainTextReport(model) {
+    var lines = [
+      model.title,
+      "Documento: " + model.docName,
+      "Gerado em: " + fmtTime(model.generatedAt),
+      "",
+      "Resumo: " + model.counts.ok + " conferidos · " + model.counts.risk + " não conformes · " + model.counts.total + " marcações"
+    ];
+    appendGroupedPlain(lines, "NÃO CONFORMES / RISCOS", model.risks, function (r, i) {
+      var line = (i + 1) + ". " + reportHeadText(r) + " — Não conforme";
+      if (r.reason) line += " · motivo: " + r.reason;
+      line += " (" + fmtTime(r.createdAt) + ")";
+      return line;
+    });
+    appendGroupedPlain(lines, "JÁ CONFERIDOS (OK)", model.oks, function (r, i) {
+      return (i + 1) + ". " + reportHeadText(r) + " — conferido";
+    });
+    lines.push("", "NOTAS");
+    if (!model.notes.length) lines.push("- Nenhuma");
+    model.notes.forEach(function (r) {
+      lines.push("- " + (r.text || "(vazia)") + " [" + labelFor(r) + "]");
+    });
+    lines.push("", "Setas: " + model.counts.arrows + " · Traços: " + model.counts.strokes);
+    return lines.join("\n");
+  }
+
+  function buildExportableHtmlDocument(model) {
+    return "<!DOCTYPE html><html lang=\"pt-BR\"><head><meta charset=\"UTF-8\" /><title>"
+      + escapeHtml(model.title) + "</title>"
+      + "<style>body{font-family:system-ui,sans-serif;margin:24px}h1{font-size:1.4rem}"
+      + ".cards{display:flex;gap:12px;flex-wrap:wrap}.card{border:1px solid #ccc;border-radius:8px;padding:12px 16px}"
+      + ".ok{color:#147a3d}.risk{color:#9a6b00}</style></head><body>"
+      + "<h1>" + escapeHtml(model.title) + "</h1>"
+      + "<p><strong>Documento:</strong> " + escapeHtml(model.docName) + "<br/>"
+      + "<strong>Gerado em:</strong> " + escapeHtml(fmtTime(model.generatedAt)) + "</p>"
+      + '<div class="cards">'
+      + '<div class="card ok"><strong>' + model.counts.ok + '</strong><br/>Trechos OK</div>'
+      + '<div class="card risk"><strong>' + model.counts.risk + '</strong><br/>Riscos</div>'
+      + '<div class="card"><strong>' + model.counts.total + '</strong><br/>Marcações</div>'
+      + "</div>"
+      + renderReportHtmlFragment(model).replace(/<div class="summary">[\s\S]*?<\/div>\s*<p><strong>Documento:[\s\S]*?<\/p>/, "")
+      + "</body></html>";
+  }
+
+  /* ---- Wake lock ---- */
+  var wakeEnabled = true;
+  var wakeLock = null;
+
+  function isWakeEnabled() { return wakeEnabled; }
+
+  function setWakeEnabled(on) {
+    wakeEnabled = !!on;
+    if (!wakeEnabled) {
+      if (wakeLock) {
+        try { wakeLock.release(); } catch (e) {}
+        wakeLock = null;
+      }
+      return Promise.resolve({ ok: true, mode: "off" });
+    }
+    if (!("wakeLock" in navigator)) {
+      return Promise.resolve({ ok: false, mode: "unsupported" });
+    }
+    return navigator.wakeLock.request("screen").then(function (lock) {
+      wakeLock = lock;
+      wakeLock.addEventListener("release", function () { wakeLock = null; });
+      return { ok: true, mode: "wake-lock" };
+    }).catch(function (err) {
+      return { ok: false, mode: "error", error: err };
+    });
+  }
+
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "visible" && wakeEnabled) setWakeEnabled(true);
+  });
+
+  /* ---- App state / UI ---- */
+  var els = {
+    viewport: document.getElementById("viewport"),
+    scene: document.getElementById("scene"),
+    pdfCanvas: document.getElementById("pdf-canvas"),
+    annoCanvas: document.getElementById("anno-canvas"),
+    selectPreview: document.getElementById("select-preview"),
+    hint: document.getElementById("hint"),
+    docLabel: document.getElementById("doc-label"),
+    btnWake: document.getElementById("btn-wake"),
+    btnRotate: document.getElementById("btn-rotate"),
+    btnUndo: document.getElementById("btn-undo"),
+    btnClear: document.getElementById("btn-clear"),
+    btnDemo: document.getElementById("btn-demo"),
+    btnLibrary: document.getElementById("btn-library"),
+    fileInput: document.getElementById("file-input"),
+    fileInputLibrary: document.getElementById("file-input-library"),
+    reportPanel: document.getElementById("report-panel"),
+    reportBody: document.getElementById("report-body"),
+    libraryPanel: document.getElementById("library-panel"),
+    libraryBody: document.getElementById("library-body"),
+    btnCloseLibrary: document.getElementById("btn-close-library"),
+    btnLibraryDemo: document.getElementById("btn-library-demo"),
+    btnExportHtml: document.getElementById("btn-export-html"),
+    btnExportText: document.getElementById("btn-export-text"),
+    btnShare: document.getElementById("btn-share"),
+    textModal: document.getElementById("text-modal"),
+    textInput: document.getElementById("text-input"),
+    textModalTitle: document.getElementById("text-modal-title"),
+    btnTextCancel: document.getElementById("btn-text-cancel"),
+    btnTextOk: document.getElementById("btn-text-ok"),
+    tools: Array.prototype.slice.call(document.querySelectorAll(".tool[data-tool]"))
+  };
+
+  var state = {
+    tool: "pan",
+    contentMode: "risk",
+    pdf: null,
+    pdfPage: null,
+    pdfViewport: null,
+    textItems: [],
+    docName: DEMO_LABEL,
+    docId: "",
+    pdfBytes: null,
+    skipLibrarySave: false,
+    pageInfo: null,
+    viewRotation: 0,
+    scale: 1,
+    tx: 0,
+    ty: 0,
+    pointers: new Map(),
+    pinching: false,
+    drawing: false,
+    panStart: null,
+    pinch: null,
+    notePending: null,
+    riskPending: null,
+    modalMode: "note",
+    lastReportModel: null,
+    recognizing: false,
+    pdfDocKey: "",
+    pageRasterCache: null,
+    selectDrag: null,
+    selectRaf: 0,
+    resizeTimer: 0
+  };
+
+  var annotations = createAnnotationStore();
+
+  function setHint(text) {
+    if (!text) { els.hint.hidden = true; els.hint.textContent = ""; return; }
+    els.hint.hidden = false;
+    els.hint.textContent = text;
+  }
+
+  function applySceneTransform() {
+    var rot = state.viewRotation || 0;
+    var pw = (state.pageInfo && state.pageInfo.cssWidth) || 0;
+    var ph = (state.pageInfo && state.pageInfo.cssHeight) || 0;
+    var cx = pw / 2, cy = ph / 2;
+    els.scene.style.transformOrigin = "0 0";
+    els.scene.style.transform =
+      "translate(" + state.tx + "px, " + state.ty + "px) scale(" + state.scale + ") "
+      + "translate(" + cx + "px, " + cy + "px) rotate(" + rot + "deg) "
+      + "translate(" + (-cx) + "px, " + (-cy) + "px)";
+  }
+
+  function redrawAnnotations() {
+    var ctx = els.annoCanvas.getContext("2d");
+    if (!ctx || !state.pageInfo) return;
+    paintAnnotations(ctx, annotations.list(), annotations.getDraft());
+  }
+
+  function syncAnnoCanvas() {
+    if (!state.pageInfo) return;
+    var cssWidth = state.pageInfo.cssWidth, cssHeight = state.pageInfo.cssHeight;
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    els.annoCanvas.width = Math.floor(cssWidth * dpr);
+    els.annoCanvas.height = Math.floor(cssHeight * dpr);
+    els.annoCanvas.style.width = cssWidth + "px";
+    els.annoCanvas.style.height = cssHeight + "px";
+    var ctx = els.annoCanvas.getContext("2d");
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    redrawAnnotations();
+  }
+
+  function setTool(tool) {
+    state.tool = tool;
+    if (tool === "ok") state.contentMode = "ok";
+    if (tool === "risk") state.contentMode = "risk";
+    els.tools.forEach(function (btn) {
+      btn.setAttribute("aria-pressed", String(btn.getAttribute("data-tool") === tool));
+    });
+  }
+
+  function clientToPage(clientX, clientY) {
+    var rect = els.viewport.getBoundingClientRect();
+    var vx = clientX - rect.left, vy = clientY - rect.top;
+    var pw = (state.pageInfo && state.pageInfo.cssWidth) || 0;
+    var ph = (state.pageInfo && state.pageInfo.cssHeight) || 1;
+    var cx = pw / 2, cy = ph / 2;
+    var lx = (vx - state.tx) / state.scale;
+    var ly = (vy - state.ty) / state.scale;
+    var dx = lx - cx, dy = ly - cy;
+    var rad = (-(state.viewRotation || 0) * Math.PI) / 180;
+    return {
+      x: cx + dx * Math.cos(rad) - dy * Math.sin(rad),
+      y: cy + dx * Math.sin(rad) + dy * Math.cos(rad)
+    };
+  }
+
+  function centerPage() {
+    if (!state.pageInfo) return;
+    var vw = els.viewport.clientWidth, vh = els.viewport.clientHeight;
+    var pw = state.pageInfo.cssWidth, ph = state.pageInfo.cssHeight;
+    var rotated = Math.abs(state.viewRotation % 180) === 90;
+    var visualW = rotated ? ph : pw;
+    var visualH = rotated ? pw : ph;
+    state.scale = Math.min(vw / visualW, vh / visualH) * 0.96;
+    state.tx = vw / 2 - (pw / 2) * state.scale;
+    state.ty = vh / 2 - (ph / 2) * state.scale;
+    applySceneTransform();
+  }
+
+  function clamp(n, min, max) { return Math.max(min, Math.min(max, n)); }
+
+  function textItemBounds(item, viewport) {
+    // pdf.js item.width is advance length in PDF user-space units.
+    // Text may be rotated 90° (common in CAD); build the glyph quad then AABB in viewport/CSS space.
+    var t = item.transform;
+    var hScale = Math.hypot(t[0], t[1]) || 1;
+    var tsAdvance = (item.width || 0) / hScale;
+    // Text-space corners: baseline 0→advance, ascent 0→1 em (font size baked into matrix).
+    var cornersPdf = [
+      pdfjsLib.Util.applyTransform([0, 0], t),
+      pdfjsLib.Util.applyTransform([tsAdvance, 0], t),
+      pdfjsLib.Util.applyTransform([0, 1], t),
+      pdfjsLib.Util.applyTransform([tsAdvance, 1], t)
+    ];
+    var xs = [], ys = [];
+    for (var i = 0; i < cornersPdf.length; i++) {
+      var vp = viewport.convertToViewportPoint(cornersPdf[i][0], cornersPdf[i][1]);
+      xs.push(vp[0]);
+      ys.push(vp[1]);
+    }
+    var minX = Math.min.apply(null, xs);
+    var maxX = Math.max.apply(null, xs);
+    var minY = Math.min.apply(null, ys);
+    var maxY = Math.max.apply(null, ys);
+    return {
+      x: minX,
+      y: minY,
+      w: Math.max(maxX - minX, 2),
+      h: Math.max(maxY - minY, 2),
+      str: String(item.str || ""),
+      angle: Math.atan2(
+        pdfjsLib.Util.transform(viewport.transform, t)[1],
+        pdfjsLib.Util.transform(viewport.transform, t)[0]
+      )
+    };
+  }
+
+  function rectsIntersect(a, b) {
+    return !(a.x + a.w < b.x || b.x + b.w < a.x || a.y + a.h < b.y || b.y + b.h < a.y);
+  }
+
+  function normalizeSel(x0, y0, x1, y1) {
+    var x = Math.min(x0, x1), y = Math.min(y0, y1);
+    return { x: x, y: y, w: Math.abs(x1 - x0), h: Math.abs(y1 - y0) };
+  }
+
+  function isStructuralToken(str) {
+    var s = String(str || "").trim();
+    return /^(VG|VR|VT|LG|LR|LA|P|R)[\s\-]?\d/i.test(s)
+      || /^P-\d/i.test(s)
+      || /\b(VG|VR|VT|LG|LR|LA|R)-\d/i.test(s)
+      || /^(PILAR|VIGA|LAJE)\b/i.test(s)
+      || /^\d{2,3}\s*[xX×]\s*\d{2,3}$/.test(s)
+      || /^h\s*=/i.test(s)
+      || /^e\s*=/i.test(s);
+  }
+
+  function unionTextBounds(items, pad) {
+    if (!items || !items.length) return null;
+    var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (var i = 0; i < items.length; i++) {
+      var it = items[i];
+      minX = Math.min(minX, it.x);
+      minY = Math.min(minY, it.y);
+      maxX = Math.max(maxX, it.x + it.w);
+      maxY = Math.max(maxY, it.y + it.h);
+    }
+    var p = pad == null ? 2 : pad;
+    return {
+      x: minX - p,
+      y: minY - p,
+      w: Math.max(4, maxX - minX + p * 2),
+      h: Math.max(4, maxY - minY + p * 2)
+    };
+  }
+
+  function clusterAroundSeed(seed, pool, pad) {
+    var box = unionTextBounds([seed], pad);
+    var cluster = [seed];
+    for (var i = 0; i < pool.length; i++) {
+      var it = pool[i];
+      if (it === seed) continue;
+      if (rectsIntersect(box, it)) {
+        cluster.push(it);
+      }
+    }
+    // Second pass: grow with dims near the expanded seed cluster
+    box = unionTextBounds(cluster, Math.max(8, pad * 0.45));
+    for (var j = 0; j < pool.length; j++) {
+      var extra = pool[j];
+      if (cluster.indexOf(extra) >= 0) continue;
+      if (rectsIntersect(box, extra)) cluster.push(extra);
+    }
+    cluster.sort(function (a, b) {
+      if (Math.abs(a.y - b.y) > Math.min(a.h, b.h) * 0.6) return a.y - b.y;
+      return a.x - b.x;
+    });
+    return cluster;
+  }
+
+  function packTextCluster(use) {
+    var parts = [];
+    for (var j = 0; j < use.length; j++) {
+      var s = String(use[j].str).trim();
+      if (s) parts.push(s);
+    }
+    var joined = parts.join(" ").replace(/\s+/g, " ").trim();
+    var ordered = splitLabelNameDims(joined);
+    return {
+      label: ordered.display || joined,
+      name: ordered.name,
+      dims: ordered.dims,
+      bbox: unionTextBounds(use, 2),
+      items: use
+    };
+  }
+
+  function extractPdfTextInRect(sel) {
+    var items = state.textItems || [];
+    var hits = [];
+    for (var i = 0; i < items.length; i++) {
+      var it = items[i];
+      if (!it.str || !String(it.str).trim()) continue;
+      if (rectsIntersect(sel, it)) hits.push(it);
+    }
+    if (!hits.length) {
+      return { label: "", name: "", dims: "", bbox: null, items: [] };
+    }
+    hits.sort(function (a, b) {
+      if (Math.abs(a.y - b.y) > Math.min(a.h, b.h) * 0.6) return a.y - b.y;
+      return a.x - b.x;
+    });
+    var structural = hits.filter(function (it) { return isStructuralToken(it.str); });
+    var cx = sel.x + sel.w / 2;
+    var cy = sel.y + sel.h / 2;
+
+    // Prefer the structural token closest to the selection center — keeps the
+    // red selection border tight even when the finger stroke is large.
+    if (structural.length) {
+      var best = null;
+      var bestDist = Infinity;
+      for (var s = 0; s < structural.length; s++) {
+        var st = structural[s];
+        // Prefer name-like tokens (P-2, VG-2) over pure dims (25x50)
+        var isName = /^(P|VG|VR|VT|LG)[\s\-]?\d/i.test(String(st.str).trim())
+          || /^(PILAR|VIGA)\b/i.test(String(st.str).trim());
+        var stx = st.x + st.w / 2;
+        var sty = st.y + st.h / 2;
+        var dist = Math.hypot(stx - cx, sty - cy) - (isName ? 40 : 0);
+        if (dist < bestDist) {
+          bestDist = dist;
+          best = st;
+        }
+      }
+      return packTextCluster(clusterAroundSeed(best, hits, 30));
+    }
+
+    // No structural token: take nearest hit + nearby neighbors
+    var nearest = hits[0];
+    var nearestDist = Infinity;
+    for (var h = 0; h < hits.length; h++) {
+      var hit = hits[h];
+      var d = Math.hypot(hit.x + hit.w / 2 - cx, hit.y + hit.h / 2 - cy);
+      if (d < nearestDist) {
+        nearestDist = d;
+        nearest = hit;
+      }
+    }
+    return packTextCluster(clusterAroundSeed(nearest, hits, 18));
+  }
+
+  function snapSelectToText(sel) {
+    if (!sel || sel.w < 6 || sel.h < 6) return null;
+    var padded = {
+      x: sel.x - 6,
+      y: sel.y - 6,
+      w: sel.w + 12,
+      h: sel.h + 12
+    };
+    var fromPdf = extractPdfTextInRect(padded);
+    if (!fromPdf.bbox || fromPdf.bbox.w < 2 || fromPdf.bbox.h < 2) return null;
+    if (!fromPdf.label) return null;
+    return fromPdf;
+  }
+
+  function cropSelectionToCanvas(sel) {
+    var cssW = state.pageInfo.cssWidth;
+    var dpr = els.pdfCanvas.width / cssW;
+    var sx = Math.max(0, Math.floor(sel.x * dpr));
+    var sy = Math.max(0, Math.floor(sel.y * dpr));
+    var sw = Math.min(els.pdfCanvas.width - sx, Math.ceil(sel.w * dpr));
+    var sh = Math.min(els.pdfCanvas.height - sy, Math.ceil(sel.h * dpr));
+    if (sw < 4 || sh < 4) return null;
+    var out = document.createElement("canvas");
+    // Upscale small crops for OCR
+    var scaleUp = Math.max(2, Math.min(4, Math.ceil(120 / Math.min(sw, sh))));
+    out.width = sw * scaleUp;
+    out.height = sh * scaleUp;
+    var ctx = out.getContext("2d");
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(els.pdfCanvas, sx, sy, sw, sh, 0, 0, out.width, out.height);
+    return out;
+  }
+
+  function cleanOcrText(raw) {
+    return String(raw || "")
+      .replace(/[|]/g, "I")
+      .replace(/\s+/g, " ")
+      .replace(/[^A-Za-z0-9ÁÉÍÓÚÂÊÔÃÕÇáéíóúâêôãõç\-xX./ ]/g, "")
+      .trim();
+  }
+
+  var tesseractLoadPromise = null;
+  function ensureTesseract() {
+    if (window.Tesseract) return Promise.resolve(window.Tesseract);
+    if (tesseractLoadPromise) return tesseractLoadPromise;
+    tesseractLoadPromise = new Promise(function (resolve, reject) {
+      var s = document.createElement("script");
+      s.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
+      s.async = true;
+      s.onload = function () {
+        if (window.Tesseract) resolve(window.Tesseract);
+        else reject(new Error("Tesseract não disponível"));
+      };
+      s.onerror = function () {
+        tesseractLoadPromise = null;
+        reject(new Error("Falha ao carregar Tesseract"));
+      };
+      document.head.appendChild(s);
+    });
+    return tesseractLoadPromise;
+  }
+
+  async function ocrSelection(sel) {
+    var crop = cropSelectionToCanvas(sel);
+    if (!crop) return { label: "", bbox: null };
+    try {
+      await ensureTesseract();
+      var result = await Tesseract.recognize(crop, "eng", {
+        logger: function () {}
+      });
+      var label = cleanOcrText(result && result.data && result.data.text);
+      var bbox = null;
+      var words = (result && result.data && result.data.words) || [];
+      var useful = words.filter(function (w) {
+        var t = cleanOcrText(w.text);
+        return t && (isStructuralToken(t) || /[A-Za-z0-9]/.test(t));
+      });
+      if (!useful.length) useful = words.filter(function (w) { return cleanOcrText(w.text); });
+      if (useful.length && crop.width > 0 && crop.height > 0) {
+        var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        for (var i = 0; i < useful.length; i++) {
+          var b = useful[i].bbox;
+          if (!b) continue;
+          minX = Math.min(minX, b.x0);
+          minY = Math.min(minY, b.y0);
+          maxX = Math.max(maxX, b.x1);
+          maxY = Math.max(maxY, b.y1);
+        }
+        if (isFinite(minX)) {
+          bbox = {
+            x: sel.x + (minX / crop.width) * sel.w,
+            y: sel.y + (minY / crop.height) * sel.h,
+            w: ((maxX - minX) / crop.width) * sel.w,
+            h: ((maxY - minY) / crop.height) * sel.h
+          };
+        }
+      }
+      return { label: label, bbox: bbox };
+    } catch (err) {
+      console.warn("OCR falhou", err);
+      return { label: "", bbox: null };
+    }
+  }
+
+  /** Sync fast path only (pdf.js text layer). Never calls Tesseract. */
+  function recognizeSelectionLabelFast(sel) {
+    var padded = {
+      x: sel.x - 8,
+      y: sel.y - 8,
+      w: sel.w + 16,
+      h: sel.h + 16
+    };
+    var fromPdf = extractPdfTextInRect(padded);
+    if (fromPdf.label) {
+      return {
+        label: fromPdf.label,
+        name: fromPdf.name,
+        dims: fromPdf.dims,
+        source: "pdf-text",
+        bbox: fromPdf.bbox || null
+      };
+    }
+    return { label: "", name: "", dims: "", source: "none", bbox: null };
+  }
+
+  function highlightBoxFromRecognition(sel, rec) {
+    if (rec && rec.bbox && rec.bbox.w > 2 && rec.bbox.h > 2) {
+      return { x: rec.bbox.x, y: rec.bbox.y, w: rec.bbox.w, h: rec.bbox.h };
+    }
+    return { x: sel.x, y: sel.y, w: sel.w, h: sel.h };
+  }
+
+  function finishToMove() {
+    setTool("pan");
+  }
+
+  function applyRasterToPdfCanvas(cache) {
+    els.pdfCanvas.width = cache.pixelW;
+    els.pdfCanvas.height = cache.pixelH;
+    els.pdfCanvas.style.width = cache.cssWidth + "px";
+    els.pdfCanvas.style.height = cache.cssHeight + "px";
+    var ctx = els.pdfCanvas.getContext("2d", { alpha: false });
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(cache.canvas, 0, 0);
+    state.pageInfo = {
+      cssWidth: cache.cssWidth,
+      cssHeight: cache.cssHeight,
+      baseScale: cache.baseScale
+    };
+    state.pdfPage = cache.page;
+    state.pdfViewport = cache.viewport;
+    state.textItems = cache.textItems;
+    els.scene.style.width = cache.cssWidth + "px";
+    els.scene.style.height = cache.cssHeight + "px";
+    syncAnnoCanvas();
+  }
+
+  async function renderPage(pdf, opts) {
+    opts = opts || {};
+    var pageNumber = 1;
+    // Lower raster budget on Capacitor WebView to avoid OOM/freeze on big CAD sheets.
+    var native = isNativeCapacitor();
+    var baseScale = native ? 1.25 : 1.75;
+    var outputScale = Math.min(window.devicePixelRatio || 1, native ? 1.25 : 2);
+    var cacheKey = (state.pdfDocKey || "doc") + "|" + pageNumber + "|" + baseScale + "|0|" + outputScale;
+    if (!opts.force && state.pageRasterCache && state.pageRasterCache.key === cacheKey) {
+      applyRasterToPdfCanvas(state.pageRasterCache);
+      return;
+    }
+
+    var page = await pdf.getPage(pageNumber);
+    var viewport = page.getViewport({ scale: baseScale, rotation: 0 });
+    var pixelW = Math.floor(viewport.width * outputScale);
+    var pixelH = Math.floor(viewport.height * outputScale);
+    var off = document.createElement("canvas");
+    off.width = pixelW;
+    off.height = pixelH;
+    var ctx = off.getContext("2d", { alpha: false });
+    var transform = outputScale !== 1 ? [outputScale, 0, 0, outputScale, 0, 0] : null;
+    await page.render({ canvasContext: ctx, viewport: viewport, transform: transform }).promise;
+
+    var textItems = [];
+    try {
+      var tc = await page.getTextContent();
+      textItems = (tc.items || []).map(function (it) {
+        return textItemBounds(it, viewport);
+      });
+    } catch (err) {
+      console.warn(err);
+    }
+
+    state.pageRasterCache = {
+      key: cacheKey,
+      canvas: off,
+      pixelW: pixelW,
+      pixelH: pixelH,
+      cssWidth: viewport.width,
+      cssHeight: viewport.height,
+      baseScale: baseScale,
+      page: page,
+      viewport: viewport,
+      textItems: textItems
+    };
+    applyRasterToPdfCanvas(state.pageRasterCache);
+  }
+
+  async function openPdfBytes(bytes, label, opts) {
+    opts = opts || {};
+    if (openingPdf) {
+      setHint("Aguarde — abrindo PDF…");
+      return;
+    }
+    openingPdf = true;
+    setHint("Carregando prancha…");
+    try {
+      await ensurePdfJs();
+      var u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+      // Own copies: pdf.js may transfer/detach the ArrayBuffer sent to the worker.
+      var forPdf = u8.slice(0);
+      var keep = u8.slice(0);
+      var docId = opts.docId || makeDocId(label, keep);
+      state.pdfDocKey = docId;
+      state.pageRasterCache = null;
+      if (state.pdf && typeof state.pdf.destroy === "function") {
+        try { await state.pdf.destroy(); } catch (e) {}
+      }
+      var loadingTask = pdfjsLib.getDocument({
+        data: forPdf,
+        useSystemFonts: true,
+        isEvalSupported: false,
+        disableAutoFetch: true,
+        disableStream: true,
+        verbosity: 0
+      });
+      // Guard against silent worker hangs on some WebViews.
+      var doc = await Promise.race([
+        loadingTask.promise,
+        new Promise(function (_, reject) {
+          setTimeout(function () {
+            reject(new Error("Tempo esgotado ao ler o PDF (worker). Tentando de novo…"));
+          }, 25000);
+        })
+      ]).catch(async function (err) {
+        try { loadingTask.destroy(); } catch (e) {}
+        // Retry once on main thread (no worker) if first attempt hung/failed.
+        try { pdfjsLib.disableWorker = true; } catch (e2) {}
+        return pdfjsLib.getDocument({
+          data: keep.slice(0),
+          useSystemFonts: true,
+          isEvalSupported: false,
+          disableAutoFetch: true,
+          disableStream: true,
+          verbosity: 0
+        }).promise;
+      });
+      state.pdf = doc;
+      state.docName = label;
+      state.docId = docId;
+      state.pdfBytes = keep;
+      els.docLabel.textContent = label;
+      var saved = loadAnnotsForDoc(docId);
+      annotations.replaceAll(saved);
+      state.viewRotation = 0;
+      await renderPage(state.pdf, { force: true });
+      centerPage();
+      setHint(
+        saved.length
+          ? ("Marcações restauradas (" + saved.length + "). ✓/✕ sobre o rótulo.")
+          : "✓/✕: arraste sobre o rótulo. Dois dedos: zoom."
+      );
+      setTimeout(function () { setHint(""); }, 2800);
+      renderLibraryList();
+      // Library/FS write AFTER first paint — never block open on storage permissions.
+      if (!opts.skipLibrarySave) {
+        setTimeout(function () {
+          savePdfToLibrary(keep, label, { docId: docId }).catch(function (err) {
+            console.warn("Não foi possível guardar na biblioteca", err);
+          });
+        }, 0);
+      }
+    } catch (err) {
+      console.error(err);
+      setHint("Falha ao abrir o PDF. Tente Importar novamente ou a Biblioteca.");
+      setTimeout(function () { setHint(""); }, 3500);
+    } finally {
+      openingPdf = false;
+    }
+  }
+
+  async function tryLoadDemo() {
+    setHint("Carregando PDF demo…");
+    try {
+      var res = await fetch(DEMO_PDF);
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      var buf = await res.arrayBuffer();
+      await openPdfBytes(new Uint8Array(buf), DEMO_LABEL);
+    } catch (err) {
+      console.warn(err);
+      setHint("Use 📄 Importar PDF ou 📚 Biblioteca. Demo não carregou.");
+    }
+  }
+
+  function fmtBytes(n) {
+    if (!n && n !== 0) return "";
+    if (n < 1024) return n + " B";
+    if (n < 1024 * 1024) return (n / 1024).toFixed(1) + " KB";
+    return (n / (1024 * 1024)).toFixed(1) + " MB";
+  }
+
+  function renderLibraryList() {
+    if (!els.libraryBody) return;
+    var index = readLibraryIndex();
+    if (!index.pdfs.length) {
+      els.libraryBody.innerHTML = "<p class=\"group-empty\">Nenhum PDF importado ainda. Use Importar PDF — arquivos vão para <strong>Download/ConfArmadura</strong> no app.</p>";
+      return;
+    }
+    els.libraryBody.innerHTML = index.pdfs.map(function (p) {
+      var when = p.updatedAt || p.importedAt || "";
+      var annotCount = loadAnnotsForDoc(p.id).length;
+      return ""
+        + "<div class=\"lib-item\" data-id=\"" + escapeHtml(p.id) + "\">"
+        + "<div class=\"lib-meta\">"
+        + "<strong>" + escapeHtml(p.name) + "</strong>"
+        + "<span>" + escapeHtml(fmtBytes(p.size))
+        + (when ? " · " + escapeHtml(fmtTime(when)) : "")
+        + " · " + annotCount + " marcação(ões)</span>"
+        + "</div>"
+        + "<div class=\"lib-actions\">"
+        + "<button type=\"button\" data-act=\"open\">Abrir</button>"
+        + "<button type=\"button\" data-act=\"del\" title=\"Remover\">⌫</button>"
+        + "</div></div>";
+    }).join("");
+  }
+
+  function openLibrary() {
+    try { closeReport(); } catch (e) {}
+    renderLibraryList();
+    if (els.libraryPanel) {
+      els.libraryPanel.hidden = false;
+      els.libraryPanel.removeAttribute("hidden");
+      els.libraryPanel.style.display = "flex";
+    }
+  }
+
+  function closeLibrary() {
+    if (!els.libraryPanel) return;
+    els.libraryPanel.hidden = true;
+    els.libraryPanel.setAttribute("hidden", "");
+    els.libraryPanel.style.display = "none";
+  }
+
+  window.__openConfLibrary = openLibrary;
+  window.__closeConfLibrary = closeLibrary;
+
+  async function importPdfFile(file) {
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function () {
+      openPdfBytes(new Uint8Array(reader.result), file.name || "prancha.pdf");
+      closeLibrary();
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+  function startStroke(point) {
+    annotations.setDraft({ kind: "stroke", mode: state.contentMode, width: 3, points: [point] });
+    state.drawing = true;
+    redrawAnnotations();
+  }
+  function extendStroke(point) {
+    var draft = annotations.getDraft();
+    if (!draft || draft.kind !== "stroke") return;
+    var pts = draft.points, last = pts[pts.length - 1];
+    if (!last || Math.hypot(point.x - last.x, point.y - last.y) < 1.2) return;
+    pts.push(point);
+    redrawAnnotations();
+  }
+  function endStroke() {
+    var draft = annotations.getDraft();
+    if (draft && draft.kind === "stroke" && draft.points && draft.points.length > 1) annotations.commitDraft();
+    else annotations.setDraft(null);
+    state.drawing = false;
+    redrawAnnotations();
+    finishToMove();
+  }
+  function hideSelectPreview() {
+    var el = els.selectPreview;
+    if (!el) return;
+    el.className = "";
+    el.style.width = "0";
+    el.style.height = "0";
+    el.style.transform = "translate3d(0,0,0)";
+  }
+
+  function paintSelectPreview(drag) {
+    var el = els.selectPreview;
+    if (!el || !drag) return;
+    var w = Math.max(0, drag.w);
+    var h = Math.max(0, drag.h);
+    el.className = "on " + (drag.mode === "ok" ? "ok" : "risk");
+    el.style.width = w + "px";
+    el.style.height = h + "px";
+    el.style.transform = "translate3d(" + drag.x + "px," + drag.y + "px,0)";
+  }
+
+  function clearSelectDrag() {
+    if (state.selectRaf) {
+      cancelAnimationFrame(state.selectRaf);
+      state.selectRaf = 0;
+    }
+    state.selectDrag = null;
+    hideSelectPreview();
+  }
+
+  function startSelect(point) {
+    // Preview only — never touch pdf.js / OCR / anno canvas during drag.
+    state.selectDrag = {
+      mode: state.tool === "ok" ? "ok" : "risk",
+      x0: point.x,
+      y0: point.y,
+      x: point.x,
+      y: point.y,
+      w: 0,
+      h: 0
+    };
+    state.drawing = true;
+    paintSelectPreview(state.selectDrag);
+  }
+
+  function updateSelect(point) {
+    var drag = state.selectDrag;
+    if (!drag) return;
+    var n = normalizeSel(drag.x0, drag.y0, point.x, point.y);
+    drag.x = n.x;
+    drag.y = n.y;
+    drag.w = n.w;
+    drag.h = n.h;
+    // Coalesce paints to one CSS update per frame — no canvas, no text scan.
+    if (!state.selectRaf) {
+      state.selectRaf = requestAnimationFrame(function () {
+        state.selectRaf = 0;
+        if (state.selectDrag) paintSelectPreview(state.selectDrag);
+      });
+    }
+  }
+
+  function commitSelectResult(sel, rec) {
+    var label = rec.label || "(sem texto)";
+    var parts = splitLabelNameDims(label);
+    var elementType = classifyLabel(label);
+    var box = highlightBoxFromRecognition(sel, rec);
+    if (sel.mode === "ok") {
+      annotations.add({
+        kind: "ok",
+        x: box.x, y: box.y, w: box.w, h: box.h,
+        label: parts.display || label,
+        text: parts.display || label,
+        name: parts.name,
+        dims: parts.dims,
+        elementType: elementType,
+        source: rec.source
+      });
+      redrawAnnotations();
+      setHint((parts.name || label).slice(0, 48) + " ✓");
+      setTimeout(function () { setHint(""); }, 1400);
+      finishToMove();
+    } else {
+      state.riskPending = {
+        x: box.x, y: box.y, w: box.w, h: box.h,
+        label: parts.display || label,
+        text: parts.display || label,
+        name: parts.name,
+        dims: parts.dims,
+        elementType: elementType,
+        source: rec.source
+      };
+      openRiskReasonModal();
+    }
+  }
+
+  function endSelect() {
+    state.drawing = false;
+    var drag = state.selectDrag;
+    if (state.selectRaf) {
+      cancelAnimationFrame(state.selectRaf);
+      state.selectRaf = 0;
+    }
+    clearSelectDrag();
+    if (!drag) {
+      finishToMove();
+      return;
+    }
+    var raw = { x: drag.x, y: drag.y, w: drag.w, h: drag.h };
+    var sel = { x: drag.x, y: drag.y, w: drag.w, h: drag.h, mode: drag.mode };
+    if (raw.w < 8 || raw.h < 8) {
+      setHint("Arraste sobre o rótulo (ex.: VG-114x90).");
+      setTimeout(function () { setHint(""); }, 1800);
+      finishToMove();
+      return;
+    }
+
+    // Recognize ONLY on pointerup (pdf.js text layer). Snap fill to glyph bbox here.
+    var rec = recognizeSelectionLabelFast(raw);
+    if (rec.bbox && rec.bbox.w > 2) {
+      sel.x = rec.bbox.x; sel.y = rec.bbox.y; sel.w = rec.bbox.w; sel.h = rec.bbox.h;
+    }
+    if (rec.label || (rec.bbox && rec.bbox.w > 2)) {
+      commitSelectResult(sel, rec);
+      return;
+    }
+
+    // Rare fallback: async OCR — provisional box, no drag involvement.
+    annotations.add({
+      kind: sel.mode === "ok" ? "ok" : "risk",
+      x: sel.x, y: sel.y, w: sel.w, h: sel.h,
+      label: "(lendo…)",
+      text: "(lendo…)",
+      elementType: "elemento",
+      source: "pending",
+      provisional: true
+    });
+    redrawAnnotations();
+    finishToMove();
+    setHint("Texto não encontrado na camada PDF — OCR em segundo plano…");
+    ocrSelection({
+      x: raw.x - 8, y: raw.y - 8, w: raw.w + 16, h: raw.h + 16
+    }).then(function (fromOcr) {
+      var list = annotations.list();
+      var last = list.length ? list[list.length - 1] : null;
+      if (!last || !last.provisional) return;
+      if (fromOcr.label) {
+        var parts = splitLabelNameDims(fromOcr.label);
+        var box = fromOcr.bbox && fromOcr.bbox.w > 2 ? fromOcr.bbox : { x: last.x, y: last.y, w: last.w, h: last.h };
+        last.label = parts.display || fromOcr.label;
+        last.text = last.label;
+        last.name = parts.name;
+        last.dims = parts.dims;
+        last.elementType = classifyLabel(last.label);
+        last.source = "ocr";
+        last.provisional = false;
+        last.x = box.x; last.y = box.y; last.w = box.w; last.h = box.h;
+        redrawAnnotations();
+        setHint((parts.name || last.label).slice(0, 48));
+        setTimeout(function () { setHint(""); }, 1400);
+        if (last.kind === "risk") {
+          state.riskPending = {
+            x: last.x, y: last.y, w: last.w, h: last.h,
+            label: last.label, text: last.label,
+            name: last.name, dims: last.dims,
+            elementType: last.elementType, source: "ocr"
+          };
+          annotations.undo();
+          openRiskReasonModal();
+        }
+      } else {
+        last.provisional = false;
+        last.label = "(sem texto)";
+        last.text = last.label;
+        redrawAnnotations();
+        setHint("Sem texto reconhecido nessa seleção.");
+        setTimeout(function () { setHint(""); }, 2000);
+      }
+    }).catch(function () {
+      setHint("OCR indisponível.");
+      setTimeout(function () { setHint(""); }, 1800);
+    });
+  }
+  function startArrow(point) {
+    annotations.setDraft({ kind: "arrow", mode: state.contentMode, x1: point.x, y1: point.y, x2: point.x, y2: point.y });
+    state.drawing = true;
+    redrawAnnotations();
+  }
+  function updateArrow(point) {
+    var draft = annotations.getDraft();
+    if (!draft || draft.kind !== "arrow") return;
+    draft.x2 = point.x; draft.y2 = point.y;
+    redrawAnnotations();
+  }
+  function endArrow() {
+    var draft = annotations.getDraft();
+    if (draft && draft.kind === "arrow") {
+      if (Math.hypot(draft.x2 - draft.x1, draft.y2 - draft.y1) > 8) annotations.commitDraft();
+      else annotations.setDraft(null);
+    }
+    state.drawing = false;
+    redrawAnnotations();
+    finishToMove();
+  }
+  function openNoteModal(point) {
+    state.modalMode = "note";
+    state.notePending = point;
+    state.riskPending = null;
+    els.textModalTitle.textContent = state.contentMode === "ok" ? "Nota OK no PDF" : "Nota de risco no PDF";
+    els.textInput.placeholder = "Descreva o trecho ou o risco…";
+    els.textInput.value = "";
+    els.textModal.hidden = false;
+    setTimeout(function () { els.textInput.focus(); }, 50);
+  }
+  function openRiskReasonModal() {
+    state.modalMode = "risk-reason";
+    var pending = state.riskPending || {};
+    els.textModalTitle.textContent = "Motivo do erro"
+      + (pending.label ? " — " + pending.label : "");
+    els.textInput.placeholder = "Digite o motivo da não conformidade…";
+    els.textInput.value = "";
+    els.textModal.hidden = false;
+    // Preview red highlight while editing reason
+    annotations.setDraft({
+      kind: "risk",
+      x: pending.x, y: pending.y, w: pending.w, h: pending.h,
+      label: pending.label
+    });
+    redrawAnnotations();
+    setTimeout(function () { els.textInput.focus(); }, 50);
+  }
+  function closeNoteModal() {
+    els.textModal.hidden = true;
+    state.notePending = null;
+    if (state.modalMode === "risk-reason") {
+      annotations.setDraft(null);
+      state.riskPending = null;
+      redrawAnnotations();
+    }
+    state.modalMode = "note";
+    finishToMove();
+  }
+  function saveNote() {
+    var text = els.textInput.value.trim();
+    if (state.modalMode === "risk-reason") {
+      if (!text || !state.riskPending) {
+        setHint("Informe o motivo do erro.");
+        setTimeout(function () { setHint(""); }, 1800);
+        return;
+      }
+      var p = state.riskPending;
+      annotations.setDraft(null);
+      annotations.add({
+        kind: "risk",
+        x: p.x, y: p.y, w: p.w, h: p.h,
+        label: p.label,
+        text: p.label,
+        name: p.name || "",
+        dims: p.dims || "",
+        elementType: p.elementType,
+        reason: text,
+        source: p.source
+      });
+      state.riskPending = null;
+      state.modalMode = "note";
+      els.textModal.hidden = true;
+      redrawAnnotations();
+      setHint("Não conforme registrado.");
+      setTimeout(function () { setHint(""); }, 1800);
+      finishToMove();
+      return;
+    }
+    if (!text || !state.notePending) { closeNoteModal(); return; }
+    annotations.add({ kind: "note", mode: state.contentMode, x: state.notePending.x, y: state.notePending.y, text: text });
+    closeNoteModal();
+    redrawAnnotations();
+  }
+
+  function onPointerDown(e) {
+    try { els.viewport.setPointerCapture(e.pointerId); } catch (err) {}
+    state.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (state.pointers.size === 2) {
+      state.pinching = true;
+      state.drawing = false;
+      annotations.setDraft(null);
+      clearSelectDrag();
+      var pts = Array.from(state.pointers.values());
+      var a = pts[0], b = pts[1];
+      state.pinch = {
+        dist: Math.hypot(a.x - b.x, a.y - b.y),
+        scale: state.scale,
+        tx: state.tx,
+        ty: state.ty
+      };
+      return;
+    }
+    if (state.tool === "pan" || e.button === 1) {
+      state.panStart = { x: e.clientX, y: e.clientY, tx: state.tx, ty: state.ty };
+      return;
+    }
+    var point = clientToPage(e.clientX, e.clientY);
+    if (state.tool === "stroke") startStroke(point);
+    else if (state.tool === "arrow") startArrow(point);
+    else if (state.tool === "ok" || state.tool === "risk") startSelect(point);
+    else if (state.tool === "note") openNoteModal(point);
+  }
+
+  function onPointerMove(e) {
+    if (!state.pointers.has(e.pointerId)) return;
+    state.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (state.pinching && state.pointers.size >= 2) {
+      var pts = Array.from(state.pointers.values());
+      var a = pts[0], b = pts[1];
+      var dist = Math.hypot(a.x - b.x, a.y - b.y);
+      var midX = (a.x + b.x) / 2, midY = (a.y + b.y) / 2;
+      var ratio = dist / Math.max(1, state.pinch.dist);
+      var nextScale = clamp(state.pinch.scale * ratio, 0.35, 8);
+      var rect = els.viewport.getBoundingClientRect();
+      var localMidX = midX - rect.left, localMidY = midY - rect.top;
+      var worldX = (localMidX - state.pinch.tx) / state.pinch.scale;
+      var worldY = (localMidY - state.pinch.ty) / state.pinch.scale;
+      state.scale = nextScale;
+      state.tx = localMidX - worldX * nextScale;
+      state.ty = localMidY - worldY * nextScale;
+      applySceneTransform();
+      return;
+    }
+    if (state.panStart && state.tool === "pan") {
+      state.tx = state.panStart.tx + (e.clientX - state.panStart.x);
+      state.ty = state.panStart.ty + (e.clientY - state.panStart.y);
+      applySceneTransform();
+      return;
+    }
+    if (!state.drawing) return;
+    var point = clientToPage(e.clientX, e.clientY);
+    if (state.tool === "stroke") extendStroke(point);
+    if (state.tool === "arrow") updateArrow(point);
+    if (state.tool === "ok" || state.tool === "risk") updateSelect(point);
+  }
+
+  function onPointerUp(e) {
+    state.pointers.delete(e.pointerId);
+    if (state.pointers.size < 2) state.pinching = false;
+    if (state.pointers.size === 0) state.panStart = null;
+    if (state.drawing) {
+      if (state.tool === "stroke") endStroke();
+      if (state.tool === "arrow") endArrow();
+      if (state.tool === "ok" || state.tool === "risk") endSelect();
+    }
+    try {
+      if (els.viewport.hasPointerCapture && els.viewport.hasPointerCapture(e.pointerId)) {
+        els.viewport.releasePointerCapture(e.pointerId);
+      }
+    } catch (err) {}
+  }
+
+  function onWheel(e) {
+    e.preventDefault();
+    var rect = els.viewport.getBoundingClientRect();
+    var localX = e.clientX - rect.left, localY = e.clientY - rect.top;
+    var worldX = (localX - state.tx) / state.scale;
+    var worldY = (localY - state.ty) / state.scale;
+    var factor = e.deltaY < 0 ? 1.12 : 0.9;
+    state.scale = clamp(state.scale * factor, 0.35, 8);
+    state.tx = localX - worldX * state.scale;
+    state.ty = localY - worldY * state.scale;
+    applySceneTransform();
+  }
+
+  function updateWakeUi() {
+    var on = isWakeEnabled();
+    els.btnWake.classList.toggle("on", on);
+    els.btnWake.setAttribute("aria-pressed", String(on));
+    els.btnWake.textContent = on ? "Tela ligada" : "Tela pode apagar";
+  }
+
+  function toggleWake() {
+    setWakeEnabled(!isWakeEnabled()).then(function (result) {
+      updateWakeUi();
+      if (isWakeEnabled() && !result.ok) {
+        setHint("Wake Lock indisponível neste contexto (tente http://localhost).");
+        setTimeout(function () { setHint(""); }, 3200);
+      }
+    });
+  }
+
+  function rotateView() {
+    state.viewRotation = (state.viewRotation + 90) % 360;
+    centerPage();
+    setHint("Visualização " + state.viewRotation + "°");
+    setTimeout(function () { setHint(""); }, 1200);
+  }
+
+  function openReport(event) {
+    try { if (event && event.preventDefault) event.preventDefault(); } catch (e) {}
+    try {
+      var panel = document.getElementById("report-panel");
+      var body = document.getElementById("report-body");
+      var model = buildReportModel(state.docName, annotations);
+      state.lastReportModel = model;
+      if (body) body.innerHTML = renderReportHtmlFragment(model);
+      if (panel) {
+        panel.hidden = false;
+        panel.removeAttribute("hidden");
+        panel.style.display = "flex";
+      }
+      setHint("");
+    } catch (err) {
+      console.error(err);
+      setHint("Não foi possível montar o relatório.");
+      setTimeout(function () { setHint(""); }, 2500);
+    }
+  }
+
+  function closeReport() {
+    var panel = document.getElementById("report-panel");
+    if (!panel) return;
+    panel.hidden = true;
+    panel.setAttribute("hidden", "");
+    panel.style.display = "none";
+  }
+
+  window.__openConfReport = openReport;
+  window.__closeConfReport = closeReport;
+
+  function downloadBlob(filename, blob) {
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function exportHtml() {
+    if (!state.lastReportModel) openReport();
+    downloadBlob(
+      "relatorio-conferencia-armadura-" + Date.now() + ".html",
+      new Blob([buildExportableHtmlDocument(state.lastReportModel)], { type: "text/html;charset=utf-8" })
+    );
+  }
+
+  function copyText() {
+    if (!state.lastReportModel) openReport();
+    var text = buildPlainTextReport(state.lastReportModel);
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () {
+        setHint("Relatório copiado.");
+        setTimeout(function () { setHint(""); }, 1800);
+      }).catch(function () { window.prompt("Copie o relatório:", text); });
+    } else {
+      window.prompt("Copie o relatório:", text);
+    }
+  }
+
+  function shareReport() {
+    if (!state.lastReportModel) openReport();
+    var text = buildPlainTextReport(state.lastReportModel);
+    if (navigator.share) {
+      navigator.share({ title: "Relatório Conf. Armadura", text: text }).catch(function () { copyText(); });
+    } else {
+      copyText();
+    }
+  }
+
+  function bindFloatingDock() {
+    var dock = document.getElementById("tool-dock");
+    var handle = document.getElementById("dock-handle");
+    if (!dock || !handle) return;
+
+    var collapsed = false;
+    var dragging = false;
+    var dragMoved = false;
+    var startX = 0, startY = 0, origLeft = 0, origTop = 0;
+    var posKey = "conf-armadura-dock-pos";
+
+    function applyCollapsed() {
+      dock.classList.toggle("collapsed", collapsed);
+      handle.title = collapsed
+        ? "Expandir ferramentas (clique) · Arrastar para mover"
+        : "Recolher (clique) · Arrastar para mover";
+      handle.setAttribute("aria-expanded", String(!collapsed));
+      handle.setAttribute("aria-label", collapsed ? "Expandir ferramentas" : "Recolher ferramentas");
+    }
+
+    function toggleCollapsed() {
+      collapsed = !collapsed;
+      applyCollapsed();
+      requestAnimationFrame(clampDock);
+    }
+
+    function clampDock() {
+      var rect = dock.getBoundingClientRect();
+      var maxL = Math.max(8, window.innerWidth - rect.width - 8);
+      var maxT = Math.max(8, window.innerHeight - rect.height - 8);
+      var left = Math.min(maxL, Math.max(8, rect.left));
+      var top = Math.min(maxT, Math.max(8, rect.top));
+      dock.style.left = left + "px";
+      dock.style.top = top + "px";
+      dock.style.right = "auto";
+      dock.style.bottom = "auto";
+      dock.style.transform = "none";
+      try {
+        localStorage.setItem(posKey, JSON.stringify({ left: left, top: top, collapsed: collapsed }));
+      } catch (e) {}
+    }
+
+    try {
+      var saved = JSON.parse(localStorage.getItem(posKey) || "null");
+      if (saved && typeof saved.left === "number" && typeof saved.top === "number") {
+        dock.style.left = saved.left + "px";
+        dock.style.top = saved.top + "px";
+        dock.style.transform = "none";
+        collapsed = !!saved.collapsed;
+        applyCollapsed();
+        requestAnimationFrame(clampDock);
+      }
+    } catch (e) {}
+
+    function onDragStart(e) {
+      if (e.button != null && e.button !== 0) return;
+      dragging = true;
+      dragMoved = false;
+      startX = e.clientX;
+      startY = e.clientY;
+      var rect = dock.getBoundingClientRect();
+      origLeft = rect.left;
+      origTop = rect.top;
+      dock.style.transform = "none";
+      try { handle.setPointerCapture(e.pointerId); } catch (err) {}
+      e.preventDefault();
+    }
+
+    function onDragMove(e) {
+      if (!dragging) return;
+      var dx = e.clientX - startX;
+      var dy = e.clientY - startY;
+      // Threshold: little movement = click; otherwise drag
+      if (Math.abs(dx) + Math.abs(dy) > 6) dragMoved = true;
+      if (!dragMoved) return;
+      dock.style.left = (origLeft + dx) + "px";
+      dock.style.top = (origTop + dy) + "px";
+      dock.style.right = "auto";
+      dock.style.bottom = "auto";
+    }
+
+    function onDragEnd(e) {
+      if (!dragging) return;
+      dragging = false;
+      try {
+        if (handle.hasPointerCapture && handle.hasPointerCapture(e.pointerId)) {
+          handle.releasePointerCapture(e.pointerId);
+        }
+      } catch (err) {}
+      if (!dragMoved) {
+        // Short click on ⋮⋮ → collapse / expand
+        toggleCollapsed();
+      } else {
+        clampDock();
+      }
+      setTimeout(function () { dragMoved = false; }, 40);
+    }
+
+    handle.addEventListener("pointerdown", onDragStart);
+    handle.addEventListener("pointermove", onDragMove);
+    handle.addEventListener("pointerup", onDragEnd);
+    handle.addEventListener("pointercancel", onDragEnd);
+    handle.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        toggleCollapsed();
+      }
+    });
+    window.addEventListener("resize", clampDock);
+    applyCollapsed();
+
+    // Long-press tip on touch (title/tooltip substitute)
+    var tipTimer = null;
+    dock.addEventListener("pointerdown", function (e) {
+      var t = e.target && e.target.closest ? e.target.closest("[title]") : null;
+      if (!t || t === handle) return;
+      var label = t.getAttribute("title");
+      if (!label) return;
+      clearTimeout(tipTimer);
+      tipTimer = setTimeout(function () {
+        setHint(label);
+        setTimeout(function () { setHint(""); }, 1400);
+      }, 420);
+    }, true);
+    dock.addEventListener("pointerup", function () { clearTimeout(tipTimer); }, true);
+    dock.addEventListener("pointercancel", function () { clearTimeout(tipTimer); }, true);
+    dock.addEventListener("pointermove", function (e) {
+      if (e.pointerType === "touch") clearTimeout(tipTimer);
+    }, true);
+  }
+
+  function bindUi() {
+    els.tools.forEach(function (btn) {
+      btn.addEventListener("click", function () { setTool(btn.getAttribute("data-tool")); });
+    });
+    els.btnWake.addEventListener("click", toggleWake);
+    els.btnRotate.addEventListener("click", rotateView);
+    els.btnUndo.addEventListener("click", function () { annotations.undo(); redrawAnnotations(); });
+    els.btnClear.addEventListener("click", function () {
+      if (!annotations.list().length) return;
+      if (window.confirm("Limpar todas as marcações desta conferência?")) {
+        annotations.clear();
+        redrawAnnotations();
+      }
+    });
+    els.btnDemo.addEventListener("click", tryLoadDemo);
+    if (els.btnLibrary) els.btnLibrary.addEventListener("click", openLibrary);
+    if (els.btnCloseLibrary) els.btnCloseLibrary.addEventListener("click", closeLibrary);
+    if (els.btnLibraryDemo) {
+      els.btnLibraryDemo.addEventListener("click", function () {
+        closeLibrary();
+        tryLoadDemo();
+      });
+    }
+    if (els.libraryBody) {
+      els.libraryBody.addEventListener("click", function (e) {
+        var btn = e.target && e.target.closest ? e.target.closest("button[data-act]") : null;
+        if (!btn) return;
+        var row = btn.closest(".lib-item");
+        if (!row) return;
+        var id = row.getAttribute("data-id");
+        var act = btn.getAttribute("data-act");
+        if (act === "open") {
+          setHint("Abrindo da biblioteca…");
+          loadPdfFromLibrary(id).then(function (doc) {
+            return openPdfBytes(doc.bytes, doc.name, { docId: id, skipLibrarySave: true });
+          }).then(function () {
+            closeLibrary();
+          }).catch(function (err) {
+            console.warn(err);
+            setHint("Não foi possível reabrir este PDF.");
+            setTimeout(function () { setHint(""); }, 2200);
+          });
+        } else if (act === "del") {
+          if (!window.confirm("Remover este PDF da biblioteca? As marcações também serão apagadas.")) return;
+          removeFromLibrary(id).then(function () {
+            if (state.docId === id) {
+              state.docId = "";
+              state.pdfBytes = null;
+            }
+            renderLibraryList();
+          });
+        }
+      });
+    }
+    els.btnExportHtml.addEventListener("click", exportHtml);
+    els.btnExportText.addEventListener("click", copyText);
+    els.btnShare.addEventListener("click", shareReport);
+    els.btnTextCancel.addEventListener("click", closeNoteModal);
+    els.btnTextOk.addEventListener("click", saveNote);
+    function onPickPdf(input) {
+      var file = input.files && input.files[0];
+      if (!file) return;
+      importPdfFile(file);
+      input.value = "";
+    }
+    els.fileInput.addEventListener("change", function () { onPickPdf(els.fileInput); });
+    if (els.fileInputLibrary) {
+      els.fileInputLibrary.addEventListener("change", function () { onPickPdf(els.fileInputLibrary); });
+    }
+    els.viewport.addEventListener("pointerdown", onPointerDown);
+    els.viewport.addEventListener("pointermove", onPointerMove);
+    els.viewport.addEventListener("pointerup", onPointerUp);
+    els.viewport.addEventListener("pointercancel", onPointerUp);
+    els.viewport.addEventListener("wheel", onWheel, { passive: false });
+    window.addEventListener("resize", function () {
+      clearTimeout(state.resizeTimer);
+      state.resizeTimer = setTimeout(function () {
+        if (!state.pageInfo || !state.pdf) return;
+        // Zoom/pan only — reuse cached raster (no pdf.js re-render).
+        centerPage();
+        if (state.pageRasterCache) applyRasterToPdfCanvas(state.pageRasterCache);
+      }, 120);
+    });
+    bindFloatingDock();
+  }
+
+  function boot() {
+    bindUi();
+    setTool("pan");
+    setWakeEnabled(true).then(updateWakeUi);
+    setHint("Preparando leitor de PDF…");
+    ensurePdfJs().then(function () {
+      // Defer native FS permission prompts until after first interactive frame.
+      setTimeout(function () { ensureNativeFs().catch(function () {}); }, 1500);
+      var index = readLibraryIndex();
+      if (index.pdfs && index.pdfs.length) {
+        var first = index.pdfs[0];
+        setHint("Reabrindo da biblioteca…");
+        return loadPdfFromLibrary(first.id).then(function (doc) {
+          return openPdfBytes(doc.bytes, doc.name || first.name, { docId: first.id, skipLibrarySave: true });
+        }).catch(function () {
+          return tryLoadDemo();
+        });
+      }
+      return tryLoadDemo();
+    }).catch(function (err) {
+      console.error(err);
+      setHint("PDF.js não carregou. Reinstale o app ou use o HTML com vendor/pdfjs.");
+    });
+  }
+
+  boot();
+})();
+  </script>
 </body>
 </html>
