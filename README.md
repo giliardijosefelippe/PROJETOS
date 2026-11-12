@@ -8,9 +8,9 @@ Dois módulos no mesmo app Next.js + Supabase:
 | Módulo | Rota | Função |
 |--------|------|--------|
 | **Conferência de Projetos** | `/projects`, `/templates`, … | Checklists, evidências, pendências e aprovação de pranchas |
-| **MapaConcreto** (Fase 1) | `/mapas` | Mapear concretagens em PDF, volumes, NFs, Slump e relatório |
+| **MapaConcreto** | `/mapas` | Mapear concretagens em PDF, volumes, NFs, Slump, gestão e relatório |
 
-> **Estado:** Conferência Etapas A–D no código + **MapaConcreto Fase 1 (MVP)** em desenvolvimento neste branch. Persistência real via Supabase — **requer chaves e migrations**. Dados de seed do MapaConcreto são **demonstração**, não obra real.
+> **Estado:** Conferência Etapas A–D no código + **MapaConcreto Fases 1–4 + polish/hardening** no tip da stack. Persistência real via Supabase — **requer chaves e migrations 00007–00013**. Seed MapaConcreto = **demonstração**, não obra real. Checklist §12: `/mapas/aceitacao`.
 
 Documentação:
 
@@ -56,7 +56,7 @@ Execute as migrations **na ordem** (não pule):
 | 00012 | `00012_mapaconcreto_gestao.sql` | Ocorrências, notificações, status |
 | 00013 | `00013_mapaconcreto_polish.sql` | Comp. executado por etapa (viga) |
 
-**Merge / stack sugerida:** `#11` Fase1 → `#12` DXF → `#14` boolean → `#15` revisões → `#16` DWG/IFC → `#17` gestão → polish tip.
+**Merge / stack sugerida:** `#11` Fase1 → `#12` DXF → `#14` boolean → `#15` revisões → `#16` DWG/IFC → `#17` gestão → `#18` polish → hardening tip.
 
 Buckets privados: `library`, `evidence`, `reports`.
 
@@ -92,51 +92,59 @@ npm run seed:mapas    # obra/planta/laje/região/NF/Slump de DEMONSTRAÇÃO
 | `npm run seed` | Seed conferência |
 | `npm run seed:mapas` | Seed MapaConcreto (demo) |
 
-## MapaConcreto — fluxo MVP
+## MapaConcreto — fluxo ponta a ponta (demo)
 
-1. Criar obra (`/mapas/nova`)
-2. Importar PDF da planta
-3. Calibrar escala (dois pontos + distância real em m)
-4. Desenhar região (retângulo / polígono / mão livre)
-5. Cadastrar laje (ex.: 8×5 m, esp. 0,15 m)
-6. Ver % e volume estimado (aceite: 40 m² ∩ 25 m² → **62,5% / 3,75 m³**)
-7. Concretagem + NF/caminhão + alocação + Slump + foto
-8. Comparativo teórico / mapeado / NF / alocado / sobras (**NF≠desperdício**)
-9. Relatório PDF (`/api/mapas/report/[pourId]`)
+Com Supabase configurado e migrations **00007–00013**:
+
+```bash
+npm run seed
+npm run seed:mapas
+npm run dev
+```
+
+1. Abrir `/mapas` → obra **DEMO-MC-001** (badge Demonstração)
+2. Planta **R00** já calibrada (barra 5 m); regiões A (25 m² + vazio demo) e B (sobreposição → união 40 m²)
+3. Laje **LJ-DEMO-40** — aceite **40∩25 → 62,5% / 3,75 m³** (interseção bruta documentada no seed)
+4. Concretagens **C-DEMO-01/02**, NFs **NF-DEMO-1001/1002** (N:N), Slump, viga multi-etapa, pilar sem altura (indeterminado)
+5. Painel · Rastreio · Campo · Auditoria · Relatório PDF · `/mapas/aceitacao` (§12)
+
+Fluxo manual (sem seed): `/mapas/nova` → PDF → calibrar → região → laje → concretagem → NF/Slump → relatório.
 
 ### Regra de volumes
 
 Distinguir sempre: **teórico** · **estimado mapeado** · **NF** · **lançado/alocado** · **sobras/devoluções/outros**.  
 A diferença NF − teórico **não** é classificada automaticamente como desperdício.
 
-### Limitações (Fase 1–4 + polish)
+### Limitações conscientes
 
 - PDF sem extração automática de elementos; calibração manual.
 - Lajes com espessura constante: cálculo automático; pilares exigem altura ou ficam indeterminados.
-- **Vazios/ilhas:** toolbar na planta + motor booleano; relatório desenha vazios no esquema.
-- **Vigas multi-etapa:** soma de comprimentos executados por concretagem (teto no eixo); sem dedupe geométrico de trechos sobrepostos.
-- **DXF / DWG / IFC:** ver Fases 2–3; sem SDK pago; IFC sem viewer 3D.
-- **Reconciliação:** overlay esquemático origem×alvo; sem auto-reposicionar.
-- Relatório PDF: quantitativos + **mapa esquemático** das regiões (não pixel-perfect do PDF original).
-- Gestão: avisos in-app apenas (sem e-mail/push pago).
+- **Vazios/ilhas:** toolbar + motor booleano; relatório desenha vazios no esquema.
+- **Vigas multi-etapa:** soma de comprimentos por etapa (teto no eixo); com intervalos `startM`/`endM` aplica união 1D.
+- **DXF / DWG / IFC:** sem SDK pago; DWG real exige ODA + `CAD_CONVERT_URL`; IFC sem viewer 3D.
+- **Reconciliação:** assistida + overlay; matching por geometria e nome normalizado; sem auto-reposicionar.
+- Relatório PDF: quantitativos + **mapa esquemático** (não raster do PDF original).
+- Gestão: avisos in-app (sem e-mail/push pago).
 
 ### Como testar (MapaConcreto)
 
 ```bash
 npm run test && npm run typecheck && npm run lint
 # Migrations 00007–00013 na ordem
+npm run seed && npm run seed:mapas
 npm run dev
-# Planta → Vazio/ilha · Concretagem (comp. viga) · Relatório PDF · /reconciliar overlay
+# /mapas → DEMO-MC-001 · /mapas/aceitacao · painel · rastreio · relatório
 
 # CAD opcional (DWG):
 cd services/cad-convert && pip install -r requirements.txt
+# ODA File Converter no PATH do host
 uvicorn app.main:app --port 8091
 # CAD_CONVERT_URL=http://127.0.0.1:8091
 ```
 
-## Critérios de aceite — MapaConcreto Fase 1
+## Critérios de aceite — MapaConcreto (§12)
 
-Ver checklist em `docs/plano-fase-1.md` (Agent Store) e spec §12. Validação mínima local:
+UI: `/mapas/aceitacao`. Spec no Agent Store. Validação mínima:
 
 ```bash
 npm run test
@@ -144,11 +152,12 @@ npm run typecheck
 npm run lint
 ```
 
-Com Supabase: migration `00007` → `seed` → `seed:mapas` → fluxo em `/mapas`.
+Com Supabase: migrations **00007–00013** → `seed` → `seed:mapas` → fluxo em `/mapas`.
 
 ## O que depende de configuração externa
 
 - Chaves Supabase e Auth redirects
-- Buckets + policies
+- Buckets + policies + migrations 00007–00013
 - Seed / usuários
+- ODA File Converter **somente** se for importar DWG real (alternativa local: exportar DXF/PDF)
 - Nenhuma SDK paga obrigatória para o MVP
