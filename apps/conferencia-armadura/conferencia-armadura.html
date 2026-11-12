@@ -73,8 +73,10 @@
         linear-gradient(180deg, #0e1216, #171c22 55%, #101418);
     }
     .viewport { width: 100%; height: 100%; overflow: hidden; position: relative; touch-action: none; }
-    .scene { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; }
-    #pdf-canvas, #anno-canvas { position: absolute; left: 0; top: 0; display: block; }
+    .scene { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; contain: layout style; }
+    #pdf-canvas, #anno-canvas, #detail-canvas { position: absolute; left: 0; top: 0; display: block; }
+    #pdf-canvas { z-index: 1; }
+    #detail-canvas { z-index: 1; pointer-events: none; display: none; image-rendering: auto; }
     #anno-canvas { z-index: 2; }
     /* Lightweight selection preview — CSS only during drag (no canvas/pdf.js on pointermove). */
     #select-preview {
@@ -268,7 +270,7 @@
         <div class="brand-text">
           <strong>Conf. Armadura</strong>
           <span id="doc-label">Abra um PDF</span>
-          <span id="app-revision" class="rev-label" title="Visualizador pré-Prumo restaurado">Revisão 1.0.5</span>
+          <span id="app-revision" class="rev-label" title="Pré-Prumo + raster com teto de memória">Revisão 1.0.6</span>
         </div>
       </div>
       <div class="top-actions">
@@ -282,6 +284,7 @@
       <div id="viewport" class="viewport">
         <div id="scene" class="scene">
           <canvas id="pdf-canvas"></canvas>
+          <canvas id="detail-canvas" aria-hidden="true"></canvas>
           <canvas id="anno-canvas"></canvas>
           <div id="select-preview" aria-hidden="true"></div>
         </div>
@@ -425,30 +428,36 @@
       }
       if (!window.pdfjsLib) throw new Error("pdf.js indisponível");
 
-      // Prefer same-origin / blob worker — never block on remote CDN worker inside the APK.
+      // Android WebView: same-origin worker URL (blob workers hang / freeze open on some devices).
+      // Browser: blob worker is fine as fallback after local URL.
       var workerOk = false;
       try {
-        var res = await fetch(PDFJS_WORKER_LOCAL, { cache: "force-cache" });
-        if (res.ok) {
-          setPdfWorkerFromText(await res.text());
-          workerOk = true;
-        }
-      } catch (e) {}
-      if (!workerOk && !isNativeCapacitor()) {
+        pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER_LOCAL;
+        workerOk = true;
+      } catch (e0) {}
+      if (!isNativeCapacitor()) {
         try {
-          var resCdn = await fetch(PDFJS_WORKER_CDN, { cache: "force-cache" });
-          if (resCdn.ok) {
-            setPdfWorkerFromText(await resCdn.text());
+          var res = await fetch(PDFJS_WORKER_LOCAL, { cache: "force-cache" });
+          if (res.ok) {
+            setPdfWorkerFromText(await res.text());
             workerOk = true;
           }
-        } catch (e2) {}
+        } catch (e) {}
+        if (!workerOk) {
+          try {
+            var resCdn = await fetch(PDFJS_WORKER_CDN, { cache: "force-cache" });
+            if (resCdn.ok) {
+              setPdfWorkerFromText(await resCdn.text());
+              workerOk = true;
+            }
+          } catch (e2) {}
+        }
       }
       if (!workerOk) {
-        // Last resort: main-thread fake worker (slow, but opens PDFs on WebView).
         try {
           pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER_LOCAL;
+          try { pdfjsLib.disableWorker = true; } catch (e4) {}
         } catch (e3) {}
-        try { pdfjsLib.disableWorker = true; } catch (e4) {}
       }
       return pdfjsLib;
     })();
@@ -1279,6 +1288,7 @@
     viewport: document.getElementById("viewport"),
     scene: document.getElementById("scene"),
     pdfCanvas: document.getElementById("pdf-canvas"),
+    detailCanvas: document.getElementById("detail-canvas"),
     annoCanvas: document.getElementById("anno-canvas"),
     selectPreview: document.getElementById("select-preview"),
     hint: document.getElementById("hint"),
@@ -1338,8 +1348,22 @@
     pageRasterCache: null,
     selectDrag: null,
     selectRaf: 0,
-    resizeTimer: 0
+    resizeTimer: 0,
+    refineTimer: 0,
+    refineToken: 0,
+    detailRect: null,
+    logicalViewport: null,
+    renderScale: 1,
+    openingBlockedTools: false
   };
+
+  // Huge CAD sheets (4×A0) blow WebView memory if rendered at print DPI.
+  var MAX_PAGE_PIXELS = isNativeCapacitor() ? 5.5e6 : 14e6;
+  var MAX_EDGE = isNativeCapacitor() ? 3600 : 6200;
+  var MAX_DETAIL_PIXELS = isNativeCapacitor() ? 3.5e6 : 8e6;
+  var ZOOM_MIN = 0.04;
+  var ZOOM_MAX = 96;
+
 
   var annotations = createAnnotationStore();
 
@@ -1356,7 +1380,7 @@
     var cx = pw / 2, cy = ph / 2;
     els.scene.style.transformOrigin = "0 0";
     els.scene.style.transform =
-      "translate(" + state.tx + "px, " + state.ty + "px) scale(" + state.scale + ") "
+      "translate3d(" + state.tx + "px, " + state.ty + "px, 0) scale(" + state.scale + ") "
       + "translate(" + cx + "px, " + cy + "px) rotate(" + rot + "deg) "
       + "translate(" + (-cx) + "px, " + (-cy) + "px)";
   }
@@ -1370,9 +1394,16 @@
   function syncAnnoCanvas() {
     if (!state.pageInfo) return;
     var cssWidth = state.pageInfo.cssWidth, cssHeight = state.pageInfo.cssHeight;
-    var dpr = Math.min(window.devicePixelRatio || 1, 2);
-    els.annoCanvas.width = Math.floor(cssWidth * dpr);
-    els.annoCanvas.height = Math.floor(cssHeight * dpr);
+    // Annotations stay in logical page CSS space; keep anno bitmap modest so ✓/✕ stay fluid.
+    var maxAnno = isNativeCapacitor() ? 2.2e6 : 6e6;
+    var dpr = Math.min(window.devicePixelRatio || 1, isNativeCapacitor() ? 1.25 : 1.5);
+    var pw = cssWidth * dpr, ph = cssHeight * dpr;
+    if (pw * ph > maxAnno) {
+      var k = Math.sqrt(maxAnno / Math.max(1, pw * ph));
+      dpr *= k;
+    }
+    els.annoCanvas.width = Math.max(1, Math.floor(cssWidth * dpr));
+    els.annoCanvas.height = Math.max(1, Math.floor(cssHeight * dpr));
     els.annoCanvas.style.width = cssWidth + "px";
     els.annoCanvas.style.height = cssHeight + "px";
     var ctx = els.annoCanvas.getContext("2d");
@@ -1380,7 +1411,105 @@
     redrawAnnotations();
   }
 
+  function clearDetailCanvas() {
+    if (!els.detailCanvas) return;
+    els.detailCanvas.style.display = "none";
+    els.detailCanvas.width = 1;
+    els.detailCanvas.height = 1;
+    state.detailRect = null;
+  }
+
+  function scheduleViewRefine(delay) {
+    clearTimeout(state.refineTimer);
+    state.refineTimer = setTimeout(function () {
+      refineVisibleDetail().catch(function (err) { console.warn(err); });
+    }, delay == null ? 220 : delay);
+  }
+
+  function visiblePageRect() {
+    if (!state.pageInfo) return null;
+    var rect = els.viewport.getBoundingClientRect();
+    var a = clientToPage(rect.left, rect.top);
+    var b = clientToPage(rect.right, rect.bottom);
+    var x0 = Math.min(a.x, b.x), y0 = Math.min(a.y, b.y);
+    var x1 = Math.max(a.x, b.x), y1 = Math.max(a.y, b.y);
+    var padX = (x1 - x0) * 0.12, padY = (y1 - y0) * 0.12;
+    x0 = clamp(x0 - padX, 0, state.pageInfo.cssWidth);
+    y0 = clamp(y0 - padY, 0, state.pageInfo.cssHeight);
+    x1 = clamp(x1 + padX, 0, state.pageInfo.cssWidth);
+    y1 = clamp(y1 + padY, 0, state.pageInfo.cssHeight);
+    return { x: x0, y: y0, w: Math.max(1, x1 - x0), h: Math.max(1, y1 - y0) };
+  }
+
+  /** High-res tile for the visible region after pan/zoom gesture ends (Prumo-style refine). */
+  async function refineVisibleDetail() {
+    if (!state.pdf || !state.pdfPage || !state.pageInfo || !els.detailCanvas) return;
+    if (openingPdf || state.drawing || state.pinching || state.panStart) return;
+    var overview = state.pageRasterCache;
+    if (!overview) return;
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    var screenPerCss = state.scale * dpr;
+    var overviewPerCss = overview.pixelW / Math.max(1, overview.cssWidth);
+    // Only refine when zoomed past overview sharpness.
+    if (screenPerCss <= overviewPerCss * 1.15) {
+      clearDetailCanvas();
+      return;
+    }
+    var vis = visiblePageRect();
+    if (!vis || vis.w < 8 || vis.h < 8) return;
+    var targetPerCss = Math.min(screenPerCss, isNativeCapacitor() ? 4 : 10);
+    var tileCssW = vis.w, tileCssH = vis.h;
+    var pxW = tileCssW * targetPerCss, pxH = tileCssH * targetPerCss;
+    if (pxW * pxH > MAX_DETAIL_PIXELS) {
+      var k = Math.sqrt(MAX_DETAIL_PIXELS / (pxW * pxH));
+      targetPerCss *= k;
+      pxW = tileCssW * targetPerCss;
+      pxH = tileCssH * targetPerCss;
+    }
+    pxW = Math.max(32, Math.floor(pxW));
+    pxH = Math.max(32, Math.floor(pxH));
+    var token = ++state.refineToken;
+    var page = state.pdfPage;
+    var hiScale = targetPerCss; // logical viewport is scale=1 → hiScale maps 1 CSS unit → hiScale px
+    var viewport = page.getViewport({ scale: hiScale, rotation: 0 });
+    var canvas = document.createElement("canvas");
+    canvas.width = pxW;
+    canvas.height = pxH;
+    var ctx = canvas.getContext("2d", { alpha: false });
+    // Shift so vis.x/vis.y (logical CSS @ scale 1) land at canvas origin.
+    var transform = [1, 0, 0, 1, -vis.x * hiScale, -vis.y * hiScale];
+    await page.render({ canvasContext: ctx, viewport: viewport, transform: transform }).promise;
+    if (token !== state.refineToken || openingPdf) return;
+    els.detailCanvas.width = pxW;
+    els.detailCanvas.height = pxH;
+    els.detailCanvas.style.display = "block";
+    els.detailCanvas.style.width = vis.w + "px";
+    els.detailCanvas.style.height = vis.h + "px";
+    els.detailCanvas.style.transform = "translate3d(" + vis.x + "px," + vis.y + "px,0)";
+    var dctx = els.detailCanvas.getContext("2d", { alpha: false });
+    dctx.setTransform(1, 0, 0, 1, 0, 0);
+    dctx.drawImage(canvas, 0, 0);
+    state.detailRect = vis;
+  }
+
+  function chooseRenderScale(pageWidthPt, pageHeightPt) {
+    // Logical page CSS uses scale=1 (PDF points as CSS px). Raster uses a lower scale when needed.
+    var out = Math.min(window.devicePixelRatio || 1, isNativeCapacitor() ? 1.15 : 1.5);
+    var scale = isNativeCapacitor() ? 0.85 : 1.15;
+    for (var i = 0; i < 24; i++) {
+      var w = pageWidthPt * scale * out;
+      var h = pageHeightPt * scale * out;
+      if (w <= MAX_EDGE && h <= MAX_EDGE && w * h <= MAX_PAGE_PIXELS) return { scale: scale, outputScale: out };
+      scale *= 0.82;
+    }
+    return { scale: Math.max(0.08, scale), outputScale: 1 };
+  }
+
   function setTool(tool) {
+    if ((openingPdf || state.openingBlockedTools) && tool !== "pan") {
+      setHint("Aguarde o PDF abrir…");
+      return;
+    }
     state.tool = tool;
     if (tool === "ok") state.contentMode = "ok";
     if (tool === "risk") state.contentMode = "risk";
@@ -1727,8 +1856,10 @@
   }
 
   function applyRasterToPdfCanvas(cache) {
+    clearDetailCanvas();
     els.pdfCanvas.width = cache.pixelW;
     els.pdfCanvas.height = cache.pixelH;
+    // Stretch budgeted raster into stable logical page size (scale=1 PDF pts).
     els.pdfCanvas.style.width = cache.cssWidth + "px";
     els.pdfCanvas.style.height = cache.cssHeight + "px";
     var ctx = els.pdfCanvas.getContext("2d", { alpha: false });
@@ -1737,33 +1868,62 @@
     state.pageInfo = {
       cssWidth: cache.cssWidth,
       cssHeight: cache.cssHeight,
-      baseScale: cache.baseScale
+      baseScale: 1,
+      renderScale: cache.renderScale
     };
     state.pdfPage = cache.page;
-    state.pdfViewport = cache.viewport;
-    state.textItems = cache.textItems;
+    state.pdfViewport = cache.logicalViewport;
+    state.logicalViewport = cache.logicalViewport;
+    state.renderScale = cache.renderScale;
+    state.textItems = cache.textItems || [];
     els.scene.style.width = cache.cssWidth + "px";
     els.scene.style.height = cache.cssHeight + "px";
     syncAnnoCanvas();
   }
 
+  async function loadTextItemsForPage(page, logicalViewport, token) {
+    try {
+      var tc = await page.getTextContent();
+      if (token != null && token !== state.refineToken && token !== state.pdfDocKey) {
+        /* still apply if same doc */
+      }
+      var items = (tc.items || []).map(function (it) {
+        return textItemBounds(it, logicalViewport);
+      });
+      if (!state.pageRasterCache || state.pageRasterCache.page !== page) return items;
+      state.pageRasterCache.textItems = items;
+      state.textItems = items;
+      return items;
+    } catch (err) {
+      console.warn(err);
+      return [];
+    }
+  }
+
   async function renderPage(pdf, opts) {
     opts = opts || {};
     var pageNumber = 1;
-    // Lower raster budget on Capacitor WebView to avoid OOM/freeze on big CAD sheets.
-    var native = isNativeCapacitor();
-    var baseScale = native ? 1.25 : 1.75;
-    var outputScale = Math.min(window.devicePixelRatio || 1, native ? 1.25 : 2);
-    var cacheKey = (state.pdfDocKey || "doc") + "|" + pageNumber + "|" + baseScale + "|0|" + outputScale;
+    var page = await pdf.getPage(pageNumber);
+    var logicalViewport = page.getViewport({ scale: 1, rotation: 0 });
+    var chosen = chooseRenderScale(logicalViewport.width, logicalViewport.height);
+    var renderScale = chosen.scale;
+    var outputScale = chosen.outputScale;
+    var cacheKey = (state.pdfDocKey || "doc") + "|" + pageNumber + "|" + renderScale.toFixed(4) + "|0|" + outputScale.toFixed(3);
     if (!opts.force && state.pageRasterCache && state.pageRasterCache.key === cacheKey) {
       applyRasterToPdfCanvas(state.pageRasterCache);
       return;
     }
 
-    var page = await pdf.getPage(pageNumber);
-    var viewport = page.getViewport({ scale: baseScale, rotation: 0 });
+    var viewport = page.getViewport({ scale: renderScale, rotation: 0 });
     var pixelW = Math.floor(viewport.width * outputScale);
     var pixelH = Math.floor(viewport.height * outputScale);
+    // Hard clamp edge (some WebViews die past ~4k textures).
+    if (pixelW > MAX_EDGE || pixelH > MAX_EDGE || pixelW * pixelH > MAX_PAGE_PIXELS) {
+      var k = Math.min(MAX_EDGE / Math.max(pixelW, 1), MAX_EDGE / Math.max(pixelH, 1), Math.sqrt(MAX_PAGE_PIXELS / Math.max(1, pixelW * pixelH)));
+      outputScale *= k;
+      pixelW = Math.max(64, Math.floor(viewport.width * outputScale));
+      pixelH = Math.max(64, Math.floor(viewport.height * outputScale));
+    }
     var off = document.createElement("canvas");
     off.width = pixelW;
     off.height = pixelH;
@@ -1771,29 +1931,33 @@
     var transform = outputScale !== 1 ? [outputScale, 0, 0, outputScale, 0, 0] : null;
     await page.render({ canvasContext: ctx, viewport: viewport, transform: transform }).promise;
 
-    var textItems = [];
-    try {
-      var tc = await page.getTextContent();
-      textItems = (tc.items || []).map(function (it) {
-        return textItemBounds(it, viewport);
-      });
-    } catch (err) {
-      console.warn(err);
-    }
-
     state.pageRasterCache = {
       key: cacheKey,
       canvas: off,
       pixelW: pixelW,
       pixelH: pixelH,
-      cssWidth: viewport.width,
-      cssHeight: viewport.height,
-      baseScale: baseScale,
+      cssWidth: logicalViewport.width,
+      cssHeight: logicalViewport.height,
+      renderScale: renderScale,
+      outputScale: outputScale,
       page: page,
       viewport: viewport,
-      textItems: textItems
+      logicalViewport: logicalViewport,
+      textItems: []
     };
     applyRasterToPdfCanvas(state.pageRasterCache);
+
+    // Text layer AFTER first paint — critical for APK open speed and to avoid ✓/✕ freeze during open.
+    if (!opts.skipText) {
+      var docKey = state.pdfDocKey;
+      Promise.resolve().then(function () {
+        return loadTextItemsForPage(page, logicalViewport, docKey);
+      }).then(function (items) {
+        if (state.pdfDocKey !== docKey) return;
+        state.textItems = items;
+        if (state.pageRasterCache) state.pageRasterCache.textItems = items;
+      });
+    }
   }
 
   async function openPdfBytes(bytes, label, opts) {
@@ -1803,7 +1967,13 @@
       return;
     }
     openingPdf = true;
+    state.openingBlockedTools = true;
+    setTool("pan");
+    clearDetailCanvas();
+    clearSelectDrag();
+    annotations.setDraft(null);
     setHint("Carregando prancha…");
+    var openMs = Date.now();
     try {
       await ensurePdfJs();
       var u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
@@ -1813,9 +1983,12 @@
       var docId = opts.docId || makeDocId(label, keep);
       state.pdfDocKey = docId;
       state.pageRasterCache = null;
+      state.textItems = [];
+      state.refineToken++;
       if (state.pdf && typeof state.pdf.destroy === "function") {
         try { await state.pdf.destroy(); } catch (e) {}
       }
+      var workerTimeout = isNativeCapacitor() ? 12000 : 20000;
       var loadingTask = pdfjsLib.getDocument({
         data: forPdf,
         useSystemFonts: true,
@@ -1830,7 +2003,7 @@
         new Promise(function (_, reject) {
           setTimeout(function () {
             reject(new Error("Tempo esgotado ao ler o PDF (worker). Tentando de novo…"));
-          }, 25000);
+          }, workerTimeout);
         })
       ]).catch(async function (err) {
         try { loadingTask.destroy(); } catch (e) {}
@@ -1855,13 +2028,15 @@
       state.viewRotation = 0;
       await renderPage(state.pdf, { force: true });
       centerPage();
+      var took = Date.now() - openMs;
       setHint(
         saved.length
           ? ("Marcações restauradas (" + saved.length + "). ✓/✕ sobre o rótulo.")
-          : "✓/✕: arraste sobre o rótulo. Dois dedos: zoom."
+          : ("Prancha pronta (" + took + " ms). ✓/✕: arraste o rótulo. Pinch: zoom.")
       );
       setTimeout(function () { setHint(""); }, 2800);
       renderLibraryList();
+      scheduleViewRefine(400);
       // Library/FS write AFTER first paint — never block open on storage permissions.
       if (!opts.skipLibrarySave) {
         setTimeout(function () {
@@ -1876,6 +2051,7 @@
       setTimeout(function () { setHint(""); }, 3500);
     } finally {
       openingPdf = false;
+      state.openingBlockedTools = false;
     }
   }
 
@@ -2091,36 +2267,60 @@
       return;
     }
 
-    // Recognize ONLY on pointerup (pdf.js text layer). Snap fill to glyph bbox here.
-    var rec = recognizeSelectionLabelFast(raw);
-    if (rec.bbox && rec.bbox.w > 2) {
-      sel.x = rec.bbox.x; sel.y = rec.bbox.y; sel.w = rec.bbox.w; sel.h = rec.bbox.h;
-    }
-    if (rec.label || (rec.bbox && rec.bbox.w > 2)) {
-      commitSelectResult(sel, rec);
-      return;
+    try {
+      // Recognize ONLY on pointerup (pdf.js text layer). Snap fill to glyph bbox here.
+      var rec = recognizeSelectionLabelFast(raw) || { label: "", bbox: null, source: "none" };
+      if (rec.bbox && rec.bbox.w > 2) {
+        sel.x = rec.bbox.x; sel.y = rec.bbox.y; sel.w = rec.bbox.w; sel.h = rec.bbox.h;
+      }
+      if (rec.label || (rec.bbox && rec.bbox.w > 2)) {
+        commitSelectResult(sel, rec);
+        return;
+      }
+    } catch (err) {
+      console.warn(err);
     }
 
-    // Rare fallback: async OCR — provisional box, no drag involvement.
-    annotations.add({
-      kind: sel.mode === "ok" ? "ok" : "risk",
-      x: sel.x, y: sel.y, w: sel.w, h: sel.h,
-      label: "(lendo…)",
-      text: "(lendo…)",
-      elementType: "elemento",
-      source: "pending",
-      provisional: true
-    });
-    redrawAnnotations();
-    finishToMove();
-    setHint("Texto não encontrado na camada PDF — OCR em segundo plano…");
-    ocrSelection({
-      x: raw.x - 8, y: raw.y - 8, w: raw.w + 16, h: raw.h + 16
-    }).then(function (fromOcr) {
-      var list = annotations.list();
-      var last = list.length ? list[list.length - 1] : null;
-      if (!last || !last.provisional) return;
-      if (fromOcr.label) {
+    // No PDF text hit: still place the box immediately (never freeze waiting on OCR).
+    // OCR only on desktop browsers and only in background without blocking tools.
+    if (sel.mode === "ok") {
+      annotations.add({
+        kind: "ok",
+        x: sel.x, y: sel.y, w: sel.w, h: sel.h,
+        label: "(sem texto)",
+        text: "(sem texto)",
+        elementType: "elemento",
+        source: "manual"
+      });
+      redrawAnnotations();
+      finishToMove();
+      setHint("Marcação OK sem texto PDF — confira o trecho.");
+      setTimeout(function () { setHint(""); }, 2000);
+    } else {
+      state.riskPending = {
+        x: sel.x, y: sel.y, w: sel.w, h: sel.h,
+        label: "(sem texto)",
+        text: "(sem texto)",
+        name: "",
+        dims: "",
+        elementType: "elemento",
+        source: "manual"
+      };
+      openRiskReasonModal();
+    }
+
+    if (!isNativeCapacitor()) {
+      var rawBox = { x: raw.x - 8, y: raw.y - 8, w: raw.w + 16, h: raw.h + 16 };
+      Promise.race([
+        ocrSelection(rawBox),
+        new Promise(function (resolve) {
+          setTimeout(function () { resolve({ label: "", bbox: null }); }, 4000);
+        })
+      ]).then(function (fromOcr) {
+        if (!fromOcr || !fromOcr.label) return;
+        var list = annotations.list();
+        var last = list.length ? list[list.length - 1] : null;
+        if (!last || last.source !== "manual") return;
         var parts = splitLabelNameDims(fromOcr.label);
         var box = fromOcr.bbox && fromOcr.bbox.w > 2 ? fromOcr.bbox : { x: last.x, y: last.y, w: last.w, h: last.h };
         last.label = parts.display || fromOcr.label;
@@ -2129,34 +2329,12 @@
         last.dims = parts.dims;
         last.elementType = classifyLabel(last.label);
         last.source = "ocr";
-        last.provisional = false;
         last.x = box.x; last.y = box.y; last.w = box.w; last.h = box.h;
         redrawAnnotations();
-        setHint((parts.name || last.label).slice(0, 48));
-        setTimeout(function () { setHint(""); }, 1400);
-        if (last.kind === "risk") {
-          state.riskPending = {
-            x: last.x, y: last.y, w: last.w, h: last.h,
-            label: last.label, text: last.label,
-            name: last.name, dims: last.dims,
-            elementType: last.elementType, source: "ocr"
-          };
-          annotations.undo();
-          openRiskReasonModal();
-        }
-      } else {
-        last.provisional = false;
-        last.label = "(sem texto)";
-        last.text = last.label;
-        redrawAnnotations();
-        setHint("Sem texto reconhecido nessa seleção.");
-        setTimeout(function () { setHint(""); }, 2000);
-      }
-    }).catch(function () {
-      setHint("OCR indisponível.");
-      setTimeout(function () { setHint(""); }, 1800);
-    });
+      }).catch(function () {});
+    }
   }
+
   function startArrow(point) {
     annotations.setDraft({ kind: "arrow", mode: state.contentMode, x1: point.x, y1: point.y, x2: point.x, y2: point.y });
     state.drawing = true;
@@ -2253,13 +2431,19 @@
   }
 
   function onPointerDown(e) {
+    if (openingPdf || state.openingBlockedTools) {
+      setHint("Aguarde — abrindo PDF…");
+      return;
+    }
     try { els.viewport.setPointerCapture(e.pointerId); } catch (err) {}
     state.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (state.pointers.size === 2) {
       state.pinching = true;
       state.drawing = false;
+      state.panStart = null;
       annotations.setDraft(null);
       clearSelectDrag();
+      clearDetailCanvas(); // CSS zoom only during gesture
       var pts = Array.from(state.pointers.values());
       var a = pts[0], b = pts[1];
       state.pinch = {
@@ -2271,6 +2455,7 @@
       return;
     }
     if (state.tool === "pan" || e.button === 1) {
+      clearDetailCanvas();
       state.panStart = { x: e.clientX, y: e.clientY, tx: state.tx, ty: state.ty };
       return;
     }
@@ -2290,7 +2475,7 @@
       var dist = Math.hypot(a.x - b.x, a.y - b.y);
       var midX = (a.x + b.x) / 2, midY = (a.y + b.y) / 2;
       var ratio = dist / Math.max(1, state.pinch.dist);
-      var nextScale = clamp(state.pinch.scale * ratio, 0.35, 8);
+      var nextScale = clamp(state.pinch.scale * ratio, ZOOM_MIN, ZOOM_MAX);
       var rect = els.viewport.getBoundingClientRect();
       var localMidX = midX - rect.left, localMidY = midY - rect.top;
       var worldX = (localMidX - state.pinch.tx) / state.pinch.scale;
@@ -2315,6 +2500,8 @@
   }
 
   function onPointerUp(e) {
+    var wasPinching = state.pinching;
+    var wasPanning = !!state.panStart;
     state.pointers.delete(e.pointerId);
     if (state.pointers.size < 2) state.pinching = false;
     if (state.pointers.size === 0) state.panStart = null;
@@ -2328,19 +2515,25 @@
         els.viewport.releasePointerCapture(e.pointerId);
       }
     } catch (err) {}
+    if (state.pointers.size === 0 && (wasPinching || wasPanning)) {
+      scheduleViewRefine(wasPinching ? 180 : 280);
+    }
   }
 
   function onWheel(e) {
     e.preventDefault();
+    if (openingPdf) return;
+    clearDetailCanvas();
     var rect = els.viewport.getBoundingClientRect();
     var localX = e.clientX - rect.left, localY = e.clientY - rect.top;
     var worldX = (localX - state.tx) / state.scale;
     var worldY = (localY - state.ty) / state.scale;
     var factor = e.deltaY < 0 ? 1.12 : 0.9;
-    state.scale = clamp(state.scale * factor, 0.35, 8);
+    state.scale = clamp(state.scale * factor, ZOOM_MIN, ZOOM_MAX);
     state.tx = localX - worldX * state.scale;
     state.ty = localY - worldY * state.scale;
     applySceneTransform();
+    scheduleViewRefine(200);
   }
 
   function updateWakeUi() {
@@ -2663,6 +2856,15 @@
       // Defer native FS permission prompts until after first interactive frame.
       setTimeout(function () { ensureNativeFs().catch(function () {}); }, 1500);
       var index = readLibraryIndex();
+      // On Capacitor, do not auto-open a huge CAD demo — user taps Importar/Demo (avoids boot freeze).
+      if (isNativeCapacitor()) {
+        if (index.pdfs && index.pdfs.length) {
+          setHint("Biblioteca pronta. Abra um PDF (📄) ou Demo.");
+        } else {
+          setHint("Toque em 📄 Importar ou Demo para abrir a prancha.");
+        }
+        return;
+      }
       if (index.pdfs && index.pdfs.length) {
         var first = index.pdfs[0];
         setHint("Reabrindo da biblioteca…");
