@@ -12,6 +12,9 @@ export type McReportPayload = {
   isDemo: boolean;
   generatedBy: string;
   generatedAt: Date;
+  /** Optional PNG raster of the plant PDF page (real preview — not invented). */
+  plantPreviewPng?: Buffer | null;
+  plantPreviewLabel?: string | null;
   regions: Array<{
     name: string;
     areaM2: number | null;
@@ -81,10 +84,25 @@ export async function buildMcPourReportPdf(
     );
 
     doc.moveDown();
+    doc.fontSize(12).fillColor("#E00024").text("Pré-visualização da planta");
+    doc.fontSize(9).fillColor("#5a5a5a");
+    if (payload.plantPreviewPng && payload.plantPreviewPng.length > 0) {
+      doc.text(
+        payload.plantPreviewLabel ||
+          "Raster da página do PDF original (sem inventar geometria).",
+      );
+      drawPlantPreview(doc, payload.plantPreviewPng);
+    } else {
+      doc.text(
+        "Pré-visualização raster indisponível — exibindo apenas o esquema das regiões.",
+      );
+    }
+
+    doc.moveDown();
     doc.fontSize(12).fillColor("#E00024").text("Mapa esquemático (anotações)");
     doc.fontSize(9).fillColor("#5a5a5a");
     doc.text(
-      "Esquema em planta das regiões desta concretagem (não substitui o PDF/DXF original).",
+      "Esquema em planta das regiões desta concretagem (complementa o raster acima).",
     );
     drawSchematicMap(doc, payload.regions);
 
@@ -169,11 +187,33 @@ export async function buildMcPourReportPdf(
       .fontSize(8)
       .fillColor("#5a5a5a")
       .text(
-        "Mapa esquemático das regiões + quantitativos. Overlay pixel-perfect do PDF original fica como evolução.",
+        "Relatório: raster da planta (quando disponível) + esquema das regiões + quantitativos. Sem inventar volumes ou geometria.",
       );
 
     doc.end();
   });
+}
+
+function drawPlantPreview(doc: PDFKit.PDFDocument, png: Buffer) {
+  const boxX = doc.page.margins.left;
+  const boxY = doc.y + 4;
+  const boxW = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+  const maxH = 220;
+  try {
+    doc.image(png, boxX, boxY, {
+      fit: [boxW, maxH],
+      align: "center",
+      valign: "center",
+    });
+    // pdfkit advances x but not always y predictably after image+fit
+    doc.y = boxY + maxH + 8;
+  } catch {
+    doc
+      .fontSize(9)
+      .fillColor("#9a6b00")
+      .text("Falha ao embutir pré-visualização da planta.", boxX, boxY);
+    doc.y = boxY + 24;
+  }
 }
 
 function drawSchematicMap(

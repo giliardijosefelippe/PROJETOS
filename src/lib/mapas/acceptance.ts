@@ -75,9 +75,9 @@ export const ACCEPTANCE_CHECKLIST: AcceptanceItem[] = [
     id: "12.9",
     criterion:
       "Emitir relatório PDF com mapa, volumes, anexos e avisos de dados insuficientes.",
-    status: "partial",
-    evidence: "PDF esquemático + quantitativos + warnings",
-    gap: "Mapa = esquema das regiões (não raster do PDF original); anexos listados se presentes",
+    status: "covered",
+    evidence:
+      "buildMcPourReportPdf + renderPdfPageToPng (raster da página do PDF) + esquema das regiões + quantitativos/warnings; pdf-raster.test.ts",
   },
   {
     id: "12.10",

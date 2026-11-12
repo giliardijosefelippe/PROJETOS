@@ -55,8 +55,9 @@ Execute as migrations **na ordem** (não pule):
 | 00011 | `00011_mapaconcreto_dwg_ifc.sql` | DWG intermediário + IFC |
 | 00012 | `00012_mapaconcreto_gestao.sql` | Ocorrências, notificações, status |
 | 00013 | `00013_mapaconcreto_polish.sql` | Comp. executado por etapa (viga) |
+| 00014 | `00014_mapaconcreto_seed_idempotent.sql` | Unique buildings/floors p/ seed idempotente |
 
-**Merge / stack sugerida:** `#11` Fase1 → `#12` DXF → `#14` boolean → `#15` revisões → `#16` DWG/IFC → `#17` gestão → `#18` polish → hardening tip.
+**Merge / stack sugerida:** `#11`→`#12`→`#14`→`#15`→`#16`→`#17`→`#18` polish → `#19` hardening → closeout tip.
 
 Buckets privados: `library`, `evidence`, `reports`.
 
@@ -76,8 +77,9 @@ Abra [http://localhost:3000](http://localhost:3000) → login → **MapaConcreto
 ### Seed
 
 ```bash
-npm run seed          # org + usuários + templates conferência
-npm run seed:mapas    # obra/planta/laje/região/NF/Slump de DEMONSTRAÇÃO
+npm run seed              # org + usuários + templates conferência
+npm run seed:mapas        # obra/planta/laje/região/NF/Slump (idempotente)
+npm run seed:mapas:check  # offline — gera PDF demo + valida plano (sem secrets)
 ```
 
 ### Scripts
@@ -123,8 +125,8 @@ A diferença NF − teórico **não** é classificada automaticamente como despe
 - **Vigas multi-etapa:** soma de comprimentos por etapa (teto no eixo); com intervalos `startM`/`endM` aplica união 1D.
 - **DXF / DWG / IFC:** sem SDK pago; DWG real exige ODA + `CAD_CONVERT_URL`; IFC sem viewer 3D.
 - **Reconciliação:** assistida + overlay; matching por geometria e nome normalizado; sem auto-reposicionar.
-- Relatório PDF: quantitativos + **mapa esquemático** (não raster do PDF original).
-- Gestão: avisos in-app (sem e-mail/push pago).
+- Relatório PDF: **raster da página do PDF** (quando disponível) + esquema das regiões + quantitativos.
+- Gestão: avisos in-app (sem e-mail/push pago). IFC 3D e e-mail/push pagos: fora de escopo.
 
 ### Como testar (MapaConcreto)
 

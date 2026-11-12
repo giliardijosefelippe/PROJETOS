@@ -69,7 +69,7 @@ Obra → Pavimento → Importar PDF → Calibrar escala
 - Vigas multi-etapa: `accumulateBeamStages` soma comprimentos (teto no eixo); com `startM`/`endM` aplica união 1D (`mergeAxisIntervals`) para evitar dupla contagem de trechos.
 - DXF/DWG/IFC: Fases 2–3; `services/cad-convert`; sem SDK pago.
 - Relatório: PDFKit com mapa esquemático das regiões (+ vazios); sem raster do PDF original.
-- Migrations MapaConcreto: **00007 → 00013** (ver README).
+- Migrations MapaConcreto: **00007 → 00014** (ver README). Relatório: raster PDF (`pdf-raster`) + esquema.
 
 ## 6. Segurança e multi-tenant
 
