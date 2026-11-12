@@ -270,7 +270,7 @@
         <div class="brand-text">
           <strong>Conf. Armadura</strong>
           <span id="doc-label">Abra um PDF</span>
-          <span id="app-revision" class="rev-label" title="Pré-Prumo + raster com teto de memória">Revisão 1.0.6</span>
+          <span id="app-revision" class="rev-label" title="Pré-Prumo + raster com teto de memória">Revisão 1.0.7</span>
         </div>
       </div>
       <div class="top-actions">
@@ -1354,7 +1354,8 @@
     detailRect: null,
     logicalViewport: null,
     renderScale: 1,
-    openingBlockedTools: false
+    openingBlockedTools: false,
+    savedView: null
   };
 
   // Huge CAD sheets (4×A0) blow WebView memory if rendered at print DPI.
@@ -1545,6 +1546,36 @@
     state.tx = vw / 2 - (pw / 2) * state.scale;
     state.ty = vh / 2 - (ph / 2) * state.scale;
     applySceneTransform();
+  }
+
+  /** Keep zoom/pan across tool finish + soft-keyboard resize (Android modal). */
+  function snapshotView() {
+    return {
+      scale: state.scale,
+      tx: state.tx,
+      ty: state.ty,
+      viewRotation: state.viewRotation || 0
+    };
+  }
+
+  function restoreView(snap) {
+    if (!snap || !state.pageInfo) return;
+    state.scale = snap.scale;
+    state.tx = snap.tx;
+    state.ty = snap.ty;
+    // Keep current rotation (rotate button owns that); only restore pan/zoom.
+    applySceneTransform();
+  }
+
+  function preserveViewAround(fn) {
+    var snap = snapshotView();
+    var result = fn();
+    // Restore after layout/keyboard settle (focus blur fires resize on WebView).
+    restoreView(snap);
+    setTimeout(function () { restoreView(snap); scheduleViewRefine(180); }, 0);
+    setTimeout(function () { restoreView(snap); }, 120);
+    setTimeout(function () { restoreView(snap); }, 320);
+    return result;
   }
 
   function clamp(n, min, max) { return Math.max(min, Math.min(max, n)); }
@@ -1852,7 +1883,9 @@
   }
 
   function finishToMove() {
+    var snap = state.savedView;
     setTool("pan");
+    if (snap) restoreView(snap);
   }
 
   function applyRasterToPdfCanvas(cache) {
@@ -2182,6 +2215,7 @@
 
   function startSelect(point) {
     // Preview only — never touch pdf.js / OCR / anno canvas during drag.
+    state.savedView = snapshotView();
     state.selectDrag = {
       mode: state.tool === "ok" ? "ok" : "risk",
       x0: point.x,
@@ -2231,7 +2265,11 @@
       redrawAnnotations();
       setHint((parts.name || label).slice(0, 48) + " ✓");
       setTimeout(function () { setHint(""); }, 1400);
+      var snap = state.savedView || snapshotView();
       finishToMove();
+      restoreView(snap);
+      state.savedView = null;
+      setTimeout(function () { restoreView(snap); scheduleViewRefine(180); }, 160);
     } else {
       state.riskPending = {
         x: box.x, y: box.y, w: box.w, h: box.h,
@@ -2336,6 +2374,7 @@
   }
 
   function startArrow(point) {
+    state.savedView = snapshotView();
     annotations.setDraft({ kind: "arrow", mode: state.contentMode, x1: point.x, y1: point.y, x2: point.x, y2: point.y });
     state.drawing = true;
     redrawAnnotations();
@@ -2347,6 +2386,7 @@
     redrawAnnotations();
   }
   function endArrow() {
+    var snap = state.savedView || snapshotView();
     var draft = annotations.getDraft();
     if (draft && draft.kind === "arrow") {
       if (Math.hypot(draft.x2 - draft.x1, draft.y2 - draft.y1) > 8) annotations.commitDraft();
@@ -2355,8 +2395,12 @@
     state.drawing = false;
     redrawAnnotations();
     finishToMove();
+    restoreView(snap);
+    state.savedView = null;
+    setTimeout(function () { restoreView(snap); scheduleViewRefine(180); }, 160);
   }
   function openNoteModal(point) {
+    state.savedView = snapshotView();
     state.modalMode = "note";
     state.notePending = point;
     state.riskPending = null;
@@ -2367,6 +2411,7 @@
     setTimeout(function () { els.textInput.focus(); }, 50);
   }
   function openRiskReasonModal() {
+    state.savedView = snapshotView();
     state.modalMode = "risk-reason";
     var pending = state.riskPending || {};
     els.textModalTitle.textContent = "Motivo do erro"
@@ -2384,6 +2429,7 @@
     setTimeout(function () { els.textInput.focus(); }, 50);
   }
   function closeNoteModal() {
+    var snap = state.savedView || snapshotView();
     els.textModal.hidden = true;
     state.notePending = null;
     if (state.modalMode === "risk-reason") {
@@ -2393,6 +2439,11 @@
     }
     state.modalMode = "note";
     finishToMove();
+    restoreView(snap);
+    state.savedView = null;
+    setTimeout(function () { restoreView(snap); }, 0);
+    setTimeout(function () { restoreView(snap); scheduleViewRefine(200); }, 160);
+    setTimeout(function () { restoreView(snap); }, 360);
   }
   function saveNote() {
     var text = els.textInput.value.trim();
@@ -2402,6 +2453,7 @@
         setTimeout(function () { setHint(""); }, 1800);
         return;
       }
+      var snap = state.savedView || snapshotView();
       var p = state.riskPending;
       annotations.setDraft(null);
       annotations.add({
@@ -2422,6 +2474,11 @@
       setHint("Não conforme registrado.");
       setTimeout(function () { setHint(""); }, 1800);
       finishToMove();
+      restoreView(snap);
+      state.savedView = null;
+      setTimeout(function () { restoreView(snap); }, 0);
+      setTimeout(function () { restoreView(snap); scheduleViewRefine(200); }, 160);
+      setTimeout(function () { restoreView(snap); }, 360);
       return;
     }
     if (!text || !state.notePending) { closeNoteModal(); return; }
@@ -2839,11 +2896,22 @@
       clearTimeout(state.resizeTimer);
       state.resizeTimer = setTimeout(function () {
         if (!state.pageInfo || !state.pdf) return;
-        // Zoom/pan only — reuse cached raster (no pdf.js re-render).
-        centerPage();
-        if (state.pageRasterCache) applyRasterToPdfCanvas(state.pageRasterCache);
+        // Soft keyboard / modal on Android fires resize — NEVER fit-to-page here.
+        if (state.savedView) restoreView(state.savedView);
+        else applySceneTransform();
+        scheduleViewRefine(220);
       }, 120);
     });
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener("resize", function () {
+        clearTimeout(state.resizeTimer);
+        state.resizeTimer = setTimeout(function () {
+          if (!state.pageInfo) return;
+          if (state.savedView) restoreView(state.savedView);
+          else applySceneTransform();
+        }, 80);
+      });
+    }
     bindFloatingDock();
   }
 
