@@ -53,6 +53,19 @@ describe("MapaConcreto revision reconcile", () => {
     assert.equal(report.proposals[0].suggestedAction, "reassociate");
   });
 
+  it("prefers same normalized name when two targets overlap similarly", () => {
+    const report = compareRevisionRegions({
+      sourceRevisionId: "src",
+      targetRevisionId: "tgt",
+      sourceRegions: [rectRegion("s1", "Região Norte", "src", 0, 0, 8, 5)],
+      targetRegions: [
+        rectRegion("t-other", "Outra", "tgt", 0.2, 0, 8, 5),
+        rectRegion("t-name", "Regiao Norte", "tgt", 0.1, 0, 8, 5),
+      ],
+    });
+    assert.equal(report.proposals[0].targetRegionId, "t-name");
+  });
+
   it("flags displaced candidate when overlap partial and shift small", () => {
     const report = compareRevisionRegions({
       sourceRevisionId: "src",

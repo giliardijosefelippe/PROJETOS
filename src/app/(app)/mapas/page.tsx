@@ -24,9 +24,39 @@ export default async function MapasPage() {
             de volumes (teórico ≠ NF ≠ desperdício).
           </p>
         </div>
-        <Link href="/mapas/nova">
-          <Button>Nova obra</Button>
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <Link href="/mapas/aceitacao">
+            <Button variant="secondary">Aceite §12</Button>
+          </Link>
+          <Link href="/mapas/nova">
+            <Button>Nova obra</Button>
+          </Link>
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-border bg-surface p-3 text-sm text-ink-muted">
+        <p className="font-medium text-ink">Fluxo ponta a ponta (demo)</p>
+        <ol className="mt-1 list-decimal space-y-1 pl-5">
+          <li>
+            Migrations 00007–00013 · <code>npm run seed</code> ·{" "}
+            <code>npm run seed:mapas</code>
+          </li>
+          <li>
+            Abrir obra <strong>DEMO-MC-001</strong> (badge Demonstração)
+          </li>
+          <li>
+            Planta R00 (escala já calibrada) · regiões A/B · laje 40 m² ·
+            concretagens/NFs/Slump
+          </li>
+          <li>
+            Painel · Rastreio · Relatório PDF · Campo · Aceite §12
+          </li>
+        </ol>
+        <p className="mt-2 text-xs">
+          Diferença NF − teórico <strong>não</strong> é desperdício automático.
+          DWG exige ODA local; IFC demo via fixture{" "}
+          <code>fixtures/mapas/demo-laje-40m2.ifc</code>.
+        </p>
       </div>
 
       <ul className="divide-y divide-divider rounded-lg border border-border bg-surface">
@@ -34,7 +64,7 @@ export default async function MapasPage() {
           <li className="p-4 text-sm text-ink-muted">
             Nenhuma obra cadastrada. Crie uma obra ou rode{" "}
             <code className="text-xs">npm run seed:mapas</code> (dados de
-            demonstração).
+            demonstração). Sem Supabase configurado o app não persiste.
           </li>
         )}
         {(sites || []).map((s) => (

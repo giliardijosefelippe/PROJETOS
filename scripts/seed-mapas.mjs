@@ -451,12 +451,157 @@ async function main() {
     created_by: userId,
   });
 
+  // Pilar sem altura → volume indeterminado (aceite §12.11)
+  await admin.from("mc_structural_elements").upsert(
+    {
+      site_id: site.id,
+      floor_id: floor.id,
+      drawing_revision_id: drawing.id,
+      organization_id: org.id,
+      code: "P-DEMO-01",
+      name: "Pilar demo sem altura",
+      kind: "pilar",
+      geometry: {
+        type: "Polygon",
+        coordinates: [
+          [
+            [0.5, 0.5],
+            [1.0, 0.5],
+            [1.0, 1.0],
+            [0.5, 1.0],
+            [0.5, 0.5],
+          ],
+        ],
+      },
+      area_m2: 0.25,
+      height_m: null,
+      volume_teorico_m3: null,
+      quantity_source: "demo",
+      reliability: "indeterminado_sem_altura",
+      is_demo: true,
+      created_by: userId,
+    },
+    { onConflict: "site_id,code" },
+  );
+
+  // Viga com duas etapas de comprimento (multi-etapa)
+  const { data: beam } = await admin
+    .from("mc_structural_elements")
+    .upsert(
+      {
+        site_id: site.id,
+        floor_id: floor.id,
+        drawing_revision_id: drawing.id,
+        organization_id: org.id,
+        code: "VG-DEMO-01",
+        name: "Viga demo multi-etapa",
+        kind: "viga",
+        geometry: {
+          type: "Polygon",
+          coordinates: [
+            [
+              [0, 4.7],
+              [8, 4.7],
+              [8, 5],
+              [0, 5],
+              [0, 4.7],
+            ],
+          ],
+        },
+        area_m2: 2.4,
+        section_area_m2: 0.12,
+        axis_length_m: 8,
+        executed_length_m: null,
+        volume_teorico_m3: 0.96,
+        quantity_source: "demo",
+        reliability: "demonstracao",
+        is_demo: true,
+        created_by: userId,
+      },
+      { onConflict: "site_id,code" },
+    )
+    .select("id")
+    .single();
+
+  if (beam?.id) {
+    await admin.from("mc_pour_elements").upsert(
+      {
+        pour_id: pour.id,
+        element_id: beam.id,
+        organization_id: org.id,
+        executed_length_m: 3.5,
+      },
+      { onConflict: "pour_id,element_id" },
+    );
+    await admin.from("mc_pour_elements").upsert(
+      {
+        pour_id: pour2.id,
+        element_id: beam.id,
+        organization_id: org.id,
+        executed_length_m: 2.5,
+      },
+      { onConflict: "pour_id,element_id" },
+    );
+  }
+
+  // Vazio/ilha demo na região A (1×1 m)
+  await admin
+    .from("mc_mapped_regions")
+    .update({
+      voids: [
+        {
+          type: "Polygon",
+          coordinates: [
+            [
+              [1, 1],
+              [2, 1],
+              [2, 2],
+              [1, 2],
+              [1, 1],
+            ],
+          ],
+        },
+      ],
+      area_m2: 24,
+      notes:
+        "Demonstração — interseção 25 m² com vazio 1 m² (ilha); aceite base 62,5%/3,75 m³ na interseção bruta documentada",
+    })
+    .eq("id", region.id);
+
+  // Ocorrência + nota de campo (Fase 4)
+  await admin.from("mc_site_occurrences").delete().eq("site_id", site.id).eq("is_demo", true);
+  await admin.from("mc_site_occurrences").insert({
+    organization_id: org.id,
+    site_id: site.id,
+    pour_id: pour.id,
+    title: "Ocorrência demo — verificação de cimbramento",
+    description: "Dados fictícios de demonstração.",
+    severity: "media",
+    status: "aberta",
+    responsible_name: "Eng. Demo",
+    due_date: new Date(Date.now() + 7 * 864e5).toISOString().slice(0, 10),
+    is_demo: true,
+    created_by: userId,
+  });
+  await admin.from("mc_field_notes").delete().eq("site_id", site.id).eq("is_demo", true);
+  await admin.from("mc_field_notes").insert({
+    organization_id: org.id,
+    site_id: site.id,
+    pour_id: pour.id,
+    note: "Nota de campo demo — frente N liberada para descarga.",
+    is_demo: true,
+    created_by: userId,
+  });
+
   console.log("Seed MapaConcreto (DEMONSTRAÇÃO) concluído.");
   console.log(`  Org: ${org.name} (${org.id})`);
   console.log(`  Obra: DEMO-MC-001 (${site.id})`);
   console.log(`  Planta: ${drawing.id}`);
   console.log(`  PDF local: public/demo/mapaconcreto-demo.pdf`);
-  console.log("  Aceite: 40∩25×0,15 → 62,5%/3,75 m³; união A∪B=40 m²; NF↔regiões N:N");
+  console.log(
+    "  Aceite: 40∩25×0,15 → 62,5%/3,75 m³; união A∪B; NF N:N; Slump; pilar indeterminado; viga multi-etapa; vazio; ocorrência",
+  );
+  console.log("  UI: /mapas → DEMO-MC-001 · /mapas/aceitacao · /painel · /rastreio");
 }
 
 main().catch((e) => {

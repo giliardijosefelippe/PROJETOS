@@ -370,12 +370,38 @@ export type BeamStageLength = {
   pourId?: string;
   label?: string;
   executedLengthM: number | null;
+  /** Optional axis interval [start, end] in meters for geometric dedupe */
+  startM?: number | null;
+  endM?: number | null;
 };
+
+/** Merge [start,end] intervals on a 1D axis (sorted, overlapping collapsed). */
+export function mergeAxisIntervals(
+  intervals: Array<[number, number]>,
+): { merged: Array<[number, number]>; length: number } {
+  const norm = intervals
+    .map(([a, b]) => (a <= b ? ([a, b] as [number, number]) : ([b, a] as [number, number])))
+    .filter(([a, b]) => Number.isFinite(a) && Number.isFinite(b) && b > a)
+    .sort((x, y) => x[0] - y[0] || x[1] - y[1]);
+  if (!norm.length) return { merged: [], length: 0 };
+  const merged: Array<[number, number]> = [[norm[0][0], norm[0][1]]];
+  for (let i = 1; i < norm.length; i++) {
+    const last = merged[merged.length - 1];
+    const cur = norm[i];
+    if (cur[0] <= last[1] + 1e-9) {
+      last[1] = Math.max(last[1], cur[1]);
+    } else {
+      merged.push([cur[0], cur[1]]);
+    }
+  }
+  const length = merged.reduce((s, [a, b]) => s + (b - a), 0);
+  return { merged, length };
+}
 
 /**
  * Multi-stage beam accumulation: SUM executed lengths (capped at axis).
- * Does NOT invent missing stage lengths; overlapping axis segments are not
- * geometrically deduped (warn) — only length sum with axis cap.
+ * Does NOT invent missing stage lengths. When stages include startM/endM,
+ * overlaps are collapsed via 1D interval union; otherwise raw length sum + cap.
  */
 export function accumulateBeamStages(args: {
   sectionAreaM2: number | null;
@@ -387,22 +413,46 @@ export function accumulateBeamStages(args: {
 } {
   const warnings: GeometryWarning[] = [];
   const steps: CalcStep[] = [];
+
+  const intervalPairs: Array<[number, number]> = [];
+  for (const s of args.stages) {
+    if (
+      s.startM != null &&
+      s.endM != null &&
+      Number.isFinite(s.startM) &&
+      Number.isFinite(s.endM)
+    ) {
+      intervalPairs.push([s.startM, s.endM]);
+    }
+  }
+  const fromIntervals =
+    intervalPairs.length > 0 ? mergeAxisIntervals(intervalPairs) : null;
+
   const lengths = args.stages
     .map((s) => s.executedLengthM)
     .filter((n): n is number => n != null && Number.isFinite(n) && n > 0);
 
+  const rawSum = fromIntervals
+    ? fromIntervals.length
+    : lengths.reduce((a, b) => a + b, 0);
+
   steps.push({
     label: "Etapas informadas",
-    formula: "soma dos comprimentos_executados por concretagem",
+    formula: fromIntervals
+      ? "união de intervalos no eixo (dedupe de sobreposição)"
+      : "soma dos comprimentos_executados por concretagem",
     inputs: {
       stageCount: args.stages.length,
-      positiveStages: lengths.length,
-      rawSum: lengths.reduce((a, b) => a + b, 0),
+      positiveStages: fromIntervals
+        ? fromIntervals.merged.length
+        : lengths.length,
+      rawSum,
+      usedIntervals: fromIntervals ? 1 : 0,
     },
-    result: lengths.reduce((a, b) => a + b, 0),
+    result: rawSum,
   });
 
-  if (!lengths.length) {
+  if (!fromIntervals && !lengths.length) {
     warnings.push({
       code: "beam_stages_empty",
       message:
@@ -426,19 +476,25 @@ export function accumulateBeamStages(args: {
     };
   }
 
-  const summed = lengths.reduce((a, b) => a + b, 0);
+  const summed = rawSum;
   let capped = summed;
   if (args.axisLengthM != null && args.axisLengthM > 0 && summed > args.axisLengthM) {
     capped = args.axisLengthM;
     warnings.push({
       code: "beam_stages_capped",
-      message: `Soma das etapas (${summed.toFixed(3)} m) > eixo (${args.axisLengthM.toFixed(3)} m) — limitada ao eixo. Sobreposição geométrica de trechos não é deduplicada automaticamente.`,
+      message: `Comprimento acumulado (${summed.toFixed(3)} m) > eixo (${args.axisLengthM.toFixed(3)} m) — limitado ao eixo.`,
+    });
+  } else if (fromIntervals) {
+    warnings.push({
+      code: "beam_stages_interval_union",
+      message:
+        "Trechos com start/end no eixo foram unidos (sobreposição deduplicada).",
     });
   } else {
     warnings.push({
       code: "beam_stages_no_geom_dedupe",
       message:
-        "Acúmulo por soma de comprimentos informados; união geométrica de trechos no eixo exige cadastro de segmentos (fora deste polish).",
+        "Sem intervalos start/end — soma simples de comprimentos (informe start/end por etapa para dedupe).",
     });
   }
 

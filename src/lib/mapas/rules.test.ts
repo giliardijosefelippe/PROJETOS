@@ -5,6 +5,7 @@ import {
   computeBeamMappedQuantity,
   computeColumnMappedQuantity,
   computeFoundationMappedQuantity,
+  mergeAxisIntervals,
 } from "./rules";
 
 describe("MapaConcreto parameterized rules", () => {
@@ -115,5 +116,28 @@ describe("MapaConcreto parameterized rules", () => {
     assert.ok(
       capped.method.warnings.some((w) => w.code === "beam_stages_capped"),
     );
+
+    const deduped = accumulateBeamStages({
+      sectionAreaM2: 0.2,
+      axisLengthM: 20,
+      stages: [
+        { executedLengthM: 5, startM: 0, endM: 5 },
+        { executedLengthM: 5, startM: 3, endM: 8 },
+      ],
+    });
+    assert.ok(Math.abs((deduped.summedExecutedM || 0) - 8) < 1e-9);
+    assert.ok(
+      deduped.method.warnings.some((w) => w.code === "beam_stages_interval_union"),
+    );
+  });
+
+  it("mergeAxisIntervals collapses overlaps", () => {
+    const { length, merged } = mergeAxisIntervals([
+      [0, 5],
+      [3, 8],
+      [10, 12],
+    ]);
+    assert.equal(merged.length, 2);
+    assert.ok(Math.abs(length - 10) < 1e-9);
   });
 });

@@ -10,7 +10,11 @@ export type Resource =
   | "approvals_insert"
   | "memberships_admin"
   | "consulta_read"
-  | "branding_logo";
+  | "branding_logo"
+  | "mapas_write"
+  | "mapas_pour_status"
+  | "mapas_field"
+  | "mapas_audit_read";
 
 const MATRIX: Record<Resource, MembershipRole[]> = {
   projects_write: ["admin", "coordenador"],
@@ -21,6 +25,10 @@ const MATRIX: Record<Resource, MembershipRole[]> = {
   memberships_admin: ["admin"],
   consulta_read: ["admin", "coordenador", "desenhista", "conferente", "consulta"],
   branding_logo: ["admin"],
+  mapas_write: ["admin", "coordenador", "desenhista"],
+  mapas_pour_status: ["admin", "coordenador", "conferente"],
+  mapas_field: ["admin", "coordenador", "desenhista", "conferente"],
+  mapas_audit_read: ["admin", "coordenador", "conferente"],
 };
 
 export function roleCan(role: MembershipRole, resource: Resource) {
