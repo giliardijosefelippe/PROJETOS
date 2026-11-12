@@ -10,15 +10,15 @@ Dois módulos no mesmo app Next.js + Supabase:
 | **Conferência de Projetos** | `/projects`, `/templates`, … | Checklists, evidências, pendências e aprovação de pranchas |
 | **MapaConcreto** | `/mapas` | Mapear concretagens em PDF, volumes, NFs, Slump, gestão e relatório |
 
-> **Estado:** Conferência Etapas A–D no código + **MapaConcreto Fases 1–4 + polish/hardening** no tip da stack. Persistência real via Supabase — **requer chaves e migrations 00007–00013**. Seed MapaConcreto = **demonstração**, não obra real. Checklist §12: `/mapas/aceitacao`.
+> **Estado:** Conferência Etapas A–D + **MapaConcreto pronto para merge** (tip PR **#20** closeout). Persistência via Supabase — **migrations 00007–00014**. Seed = **demonstração**. Checklist §12: `/mapas/aceitacao`. Guia merge/smoke: [`docs/MAPACONCRETO_MERGE.md`](./docs/MAPACONCRETO_MERGE.md).
 
 Documentação:
 
 - Produto conferência: [`docs/PRODUCT_SPEC.md`](./docs/PRODUCT_SPEC.md)
 - Arquitetura (inclui MapaConcreto): [`docs/architecture.md`](./docs/architecture.md)
 - Modelo de dados conferência: [`docs/DATA_MODEL.md`](./docs/DATA_MODEL.md)
-- Spec MapaConcreto (Project store): `docs/especificacao-mapeamento-concreto.md` no Agent Store
-- Plano Fase 1: `docs/plano-fase-1.md` no Agent Store
+- **Merge + smoke MapaConcreto:** [`docs/MAPACONCRETO_MERGE.md`](./docs/MAPACONCRETO_MERGE.md)
+- Spec / guia expandido (Project store): `docs/especificacao-mapeamento-concreto.md`, `docs/guia-merge-smoke.md`
 
 ## Stack
 
@@ -57,7 +57,7 @@ Execute as migrations **na ordem** (não pule):
 | 00013 | `00013_mapaconcreto_polish.sql` | Comp. executado por etapa (viga) |
 | 00014 | `00014_mapaconcreto_seed_idempotent.sql` | Unique buildings/floors p/ seed idempotente |
 
-**Merge / stack sugerida:** `#11`→`#12`→`#14`→`#15`→`#16`→`#17`→`#18` polish → `#19` hardening → closeout tip.
+**Merge (ordem fixa):** `#11`→`#12`→`#14`→`#15`→`#16`→`#17`→`#18`→`#19`→`#20` — detalhes em [`docs/MAPACONCRETO_MERGE.md`](./docs/MAPACONCRETO_MERGE.md).
 
 Buckets privados: `library`, `evidence`, `reports`.
 
@@ -92,11 +92,23 @@ npm run seed:mapas:check  # offline — gera PDF demo + valida plano (sem secret
 | `npm run test` | Testes (workflow + geometria MapaConcreto) |
 | `npm run typecheck` | TypeScript |
 | `npm run seed` | Seed conferência |
-| `npm run seed:mapas` | Seed MapaConcreto (demo) |
+| `npm run seed:mapas` | Seed MapaConcreto (demo, idempotente) |
+| `npm run seed:mapas:check` | Offline — PDF demo + plano §12 |
+| `npm run smoke:mapas` | Offline — test + typecheck + check + checklist manual |
+
+## MapaConcreto — merge e smoke (produção/local)
+
+```bash
+npm run smoke:mapas          # offline, sem secrets
+# Com Supabase: migrations 00001–00014 → seed → seed:mapas → npm run dev
+# Browser: login → /mapas → PDF → escala → região → laje → concretagem → relatório
+```
+
+Ordem de merge e troubleshooting: [`docs/MAPACONCRETO_MERGE.md`](./docs/MAPACONCRETO_MERGE.md).
 
 ## MapaConcreto — fluxo ponta a ponta (demo)
 
-Com Supabase configurado e migrations **00007–00013**:
+Com Supabase configurado e migrations **00007–00014**:
 
 ```bash
 npm run seed
@@ -131,10 +143,8 @@ A diferença NF − teórico **não** é classificada automaticamente como despe
 ### Como testar (MapaConcreto)
 
 ```bash
-npm run test && npm run typecheck && npm run lint
-# Migrations 00007–00013 na ordem
-npm run seed && npm run seed:mapas
-npm run dev
+npm run smoke:mapas
+# Com Supabase: migrations 00007–00014 → seed → seed:mapas → npm run dev
 # /mapas → DEMO-MC-001 · /mapas/aceitacao · painel · rastreio · relatório
 
 # CAD opcional (DWG):
@@ -146,20 +156,14 @@ uvicorn app.main:app --port 8091
 
 ## Critérios de aceite — MapaConcreto (§12)
 
-UI: `/mapas/aceitacao`. Spec no Agent Store. Validação mínima:
+UI: `/mapas/aceitacao`. Spec no Agent Store. Validação mínima: `npm run smoke:mapas`.
 
-```bash
-npm run test
-npm run typecheck
-npm run lint
-```
-
-Com Supabase: migrations **00007–00013** → `seed` → `seed:mapas` → fluxo em `/mapas`.
+Com Supabase: migrations **00007–00014** → `seed` → `seed:mapas` → fluxo em `/mapas`.
 
 ## O que depende de configuração externa
 
 - Chaves Supabase e Auth redirects
-- Buckets + policies + migrations 00007–00013
+- Buckets + policies + migrations **00001–00014**
 - Seed / usuários
-- ODA File Converter **somente** se for importar DWG real (alternativa local: exportar DXF/PDF)
-- Nenhuma SDK paga obrigatória para o MVP
+- ODA File Converter **somente** se for importar DWG real (alternativa local: DXF/PDF)
+- Nenhuma SDK paga obrigatória — **nada bloqueante de produto além do ambiente**
