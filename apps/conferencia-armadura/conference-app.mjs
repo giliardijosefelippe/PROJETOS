@@ -15,9 +15,9 @@ import {
 patchPdfViewerForAndroid();
 
 /** App revision shown in header / Sobre (keep in sync with Android versionName). */
-export const APP_VERSION = "1.0.2";
-export const APP_REVISION_LABEL = "Revisão 1.0.2";
-export const APP_VERSION_CODE = 102;
+export const APP_VERSION = "1.0.3";
+export const APP_REVISION_LABEL = "Revisão 1.0.3";
+export const APP_VERSION_CODE = 103;
 
 const DEMO_PDF = "demo-pilares-vigas.pdf";
 const DEMO_LABEL = "2330_GAR PILARES E VIGAS — Sanluzzi Selenza Rev01";
@@ -1091,6 +1091,7 @@ async function setWake(on) {
 function bindDock() {
   const dock = $("tool-dock");
   const handle = $("dock-handle");
+  if (!dock || !handle) return;
   let collapsed = false;
   let dragging = false;
   let moved = false;
@@ -1098,8 +1099,23 @@ function bindDock() {
     sy = 0,
     ol = 0,
     ot = 0;
+  const clamp = () => {
+    const r = dock.getBoundingClientRect();
+    const pad = 6;
+    let left = r.left;
+    let top = r.top;
+    left = Math.max(pad, Math.min(left, window.innerWidth - r.width - pad));
+    top = Math.max(pad + (window.visualViewport?.offsetTop || 0), Math.min(top, window.innerHeight - 48));
+    dock.style.left = left + "px";
+    dock.style.top = top + "px";
+    dock.style.right = "auto";
+    dock.style.bottom = "auto";
+    dock.style.transform = "none";
+  };
   const apply = () => {
     dock.classList.toggle("collapsed", collapsed);
+    handle.setAttribute("aria-expanded", String(!collapsed));
+    handle.title = collapsed ? "Expandir · Arrastar" : "Recolher · Arrastar";
   };
   handle.addEventListener("pointerdown", (e) => {
     if (e.button != null && e.button !== 0) return;
@@ -1111,31 +1127,48 @@ function bindDock() {
     ol = r.left;
     ot = r.top;
     dock.style.transform = "none";
+    dock.style.zIndex = "10050";
     try {
       handle.setPointerCapture(e.pointerId);
     } catch {}
     e.preventDefault();
+    e.stopPropagation();
   });
   handle.addEventListener("pointermove", (e) => {
     if (!dragging) return;
     const dx = e.clientX - sx;
     const dy = e.clientY - sy;
-    if (Math.abs(dx) + Math.abs(dy) > 6) moved = true;
+    if (Math.abs(dx) + Math.abs(dy) > 8) moved = true;
     if (!moved) return;
     dock.style.left = ol + dx + "px";
     dock.style.top = ot + dy + "px";
     dock.style.right = "auto";
     dock.style.bottom = "auto";
   });
-  handle.addEventListener("pointerup", () => {
+  const endDrag = (e) => {
     if (!dragging) return;
     dragging = false;
+    try {
+      if (e?.pointerId != null) handle.releasePointerCapture(e.pointerId);
+    } catch {}
     if (!moved) {
+      collapsed = !collapsed;
+      apply();
+    } else {
+      clamp();
+    }
+  };
+  handle.addEventListener("pointerup", endDrag);
+  handle.addEventListener("pointercancel", endDrag);
+  handle.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
       collapsed = !collapsed;
       apply();
     }
   });
   apply();
+  clamp();
 }
 
 function showAbout() {
@@ -1233,19 +1266,54 @@ function bindUi() {
     } else $("btn-export-text").click();
   };
 
-  const onFile = (input) => {
-    const file = input.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      openPdfBytes(new Uint8Array(reader.result), file.name);
+  async function readPickedFile(file) {
+    if (!file) throw new Error("Nenhum arquivo selecionado");
+    let buf;
+    if (typeof file.arrayBuffer === "function") {
+      buf = await file.arrayBuffer();
+    } else {
+      buf = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(reader.error || new Error("Falha ao ler o arquivo"));
+        reader.readAsArrayBuffer(file);
+      });
+    }
+    const bytes = new Uint8Array(buf).slice(0);
+    if (!bytes.byteLength) throw new Error("Arquivo vazio (" + (file.name || "sem nome") + ")");
+    return { bytes, name: file.name || "documento.pdf", size: file.size || bytes.byteLength };
+  }
+
+  const onFile = async (input) => {
+    const file = input?.files?.[0];
+    if (!file) {
+      setHint("Nenhum PDF selecionado.");
+      return;
+    }
+    // Read BEFORE clearing input.value — clearing first invalidates File on WebView/Chrome.
+    setHint("Lendo " + (file.name || "PDF") + "…", { busy: true, cancellable: true });
+    try {
+      const picked = await readPickedFile(file);
+      try {
+        input.value = "";
+      } catch {}
       closeLibrary();
-    };
-    reader.readAsArrayBuffer(file);
-    input.value = "";
+      const ok = await openPdfBytes(picked.bytes, picked.name);
+      if (!ok) console.warn("[open] falhou após seleção", picked.name, picked.size);
+    } catch (err) {
+      console.error(err);
+      try {
+        input.value = "";
+      } catch {}
+      setHint("Falha ao ler arquivo: " + (err?.message || String(err)).slice(0, 120), {
+        busy: false,
+        cancellable: true,
+      });
+      if (els.btnHintCancel) els.btnHintCancel.textContent = "Fechar";
+    }
   };
-  els.fileInput.addEventListener("change", () => onFile(els.fileInput));
-  els.fileInputLibrary.addEventListener("change", () => onFile(els.fileInputLibrary));
+  els.fileInput?.addEventListener("change", () => onFile(els.fileInput));
+  els.fileInputLibrary?.addEventListener("change", () => onFile(els.fileInputLibrary));
 
   els.libraryBody.addEventListener("click", async (e) => {
     const btn = e.target.closest?.("button[data-act]");

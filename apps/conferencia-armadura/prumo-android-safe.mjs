@@ -10,8 +10,11 @@ import { PdfViewer } from "./prumo/pdf-view.js";
 const PDF_JS = new URL("./prumo/vendor/pdf/pdf.js", import.meta.url).href;
 const PDF_WORKER = new URL("./prumo/vendor/pdf/pdf.worker.js", import.meta.url).href;
 
-/** Soft open budget — keep UI recoverable (Cancel works while Worker runs). */
-export const OPEN_TIMEOUT_MS = 5000;
+/**
+ * Open budget. Keep Cancel visible from the start; 5s was aborting valid large
+ * CAD sheets before getDocument/paint finished. Worker runs off-main so UI stays live.
+ */
+export const OPEN_TIMEOUT_MS = 25000;
 
 let pdfLibPromise = null;
 let patched = false;
