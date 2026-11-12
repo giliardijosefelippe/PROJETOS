@@ -7,6 +7,10 @@ import { PdfViewer, patchPdfViewerForAndroid, isNativeCapacitor } from "./prumo-
 
 patchPdfViewerForAndroid();
 
+/** App revision shown in header / Sobre (keep in sync with Android versionName). */
+export const APP_VERSION = "1.0.1";
+export const APP_REVISION_LABEL = "Revisão 1.0.1";
+
 const DEMO_PDF = "demo-pilares-vigas.pdf";
 const DEMO_LABEL = "2330_GAR PILARES E VIGAS — Sanluzzi Selenza Rev01";
 const LIB_INDEX_KEY = "conf-armadura-library-v1";
@@ -1058,8 +1062,22 @@ function bindDock() {
   apply();
 }
 
+function showAbout() {
+  window.alert(
+    [
+      "Conf. Armadura — " + APP_REVISION_LABEL,
+      "versionName " + APP_VERSION + " · versionCode 101",
+      "PdfViewer Prumo + marcações de campo",
+    ].join("\n")
+  );
+}
+
 function bindUi() {
+  const rev = $("app-revision");
+  if (rev) rev.textContent = APP_REVISION_LABEL;
+  document.title = "Conf. Armadura · " + APP_REVISION_LABEL;
   els.tools.forEach((btn) => btn.addEventListener("click", () => setTool(btn.getAttribute("data-tool"))));
+  $("btn-about").onclick = () => showAbout();
   $("btn-wake").onclick = () => setWake(!state.wakeEnabled);
   $("btn-undo").onclick = () => {
     annotations.pop();

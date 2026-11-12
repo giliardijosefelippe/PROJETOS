@@ -31,6 +31,7 @@
     .brand-text { display: flex; flex-direction: column; min-width: 0; }
     .brand-text strong { font-size: 14px; line-height: 1.1; }
     .brand-text span { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 46vw; }
+    .brand-text .rev-label { font-size: 10px; color: #8fa0ae; letter-spacing: .02em; max-width: none; }
     .top-actions { display: flex; gap: 6px; align-items: center; }
     .chip, .icon-btn, .dock-btn, .primary, .secondary, .pdf-bar button, .pdf-bar input {
       border: 1px solid var(--border); background: var(--surface-2); color: var(--text); font-weight: 700; cursor: pointer;
@@ -174,9 +175,11 @@
         <div class="brand-text">
           <strong>Conf. Armadura</strong>
           <span id="doc-label">Nenhum PDF</span>
+          <span id="app-revision" class="rev-label" title="Versão do aplicativo">Revisão 1.0.1</span>
         </div>
       </div>
       <div class="top-actions">
+        <button type="button" id="btn-about" class="chip" title="Sobre">Sobre</button>
         <button type="button" id="btn-wake" class="chip on" aria-pressed="true">Tela ligada</button>
         <button type="button" id="btn-report-top" class="chip accent-chip">Relatório</button>
       </div>
