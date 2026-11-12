@@ -270,7 +270,7 @@
         <div class="brand-text">
           <strong>Conf. Armadura</strong>
           <span id="doc-label">Abra um PDF</span>
-          <span id="app-revision" class="rev-label" title="Pré-Prumo + raster com teto de memória">Revisão 1.0.7</span>
+          <span id="app-revision" class="rev-label" title="Pré-Prumo + raster com teto de memória">Revisão 1.0.8</span>
         </div>
       </div>
       <div class="top-actions">
@@ -339,18 +339,11 @@
       <div class="dock-handle" id="dock-handle" role="button" tabindex="0" title="Recolher (clique) · Arrastar para mover">⋮⋮</div>
       <div class="dock-body" id="dock-body">
         <button type="button" class="tool dock-btn" data-tool="pan" aria-pressed="true" title="Mover"><span class="tool-icon" aria-hidden="true">✥</span></button>
-        <button type="button" class="tool dock-btn" data-tool="stroke" title="Riscar"><span class="tool-icon" aria-hidden="true">╱</span></button>
         <button type="button" class="tool dock-btn" data-tool="ok" title="OK — arrastar sobre rótulo (verde)"><span class="tool-icon ok" aria-hidden="true">✓</span></button>
         <button type="button" class="tool dock-btn" data-tool="risk" title="Não conforme — arrastar + motivo (vermelho)"><span class="tool-icon risk" aria-hidden="true">✕</span></button>
-        <button type="button" class="tool dock-btn" data-tool="arrow" title="Seta"><span class="tool-icon" aria-hidden="true">➜</span></button>
-        <button type="button" class="tool dock-btn" data-tool="note" title="Nota"><span class="tool-icon" aria-hidden="true">T</span></button>
         <div class="dock-sep" aria-hidden="true"></div>
         <button type="button" id="btn-undo" class="dock-btn" title="Desfazer">↶</button>
-        <button type="button" id="btn-clear" class="dock-btn danger" title="Limpar">⌫</button>
-        <label class="dock-btn" title="Importar PDF">📄<input type="file" id="file-input" accept="application/pdf,.pdf" hidden /></label>
-        <button type="button" id="btn-library" class="dock-btn" title="Biblioteca de PDFs">📚</button>
-        <button type="button" id="btn-demo" class="dock-btn" title="Demo">▣</button>
-        <button type="button" id="btn-report" class="dock-btn accent" title="Relatório" onclick="window.__openConfReport && window.__openConfReport(event)">☰</button>
+        <label class="dock-btn" title="Abrir PDF / documento"><span class="tool-icon" aria-hidden="true">📄</span><input type="file" id="file-input" accept="application/pdf,.pdf" hidden /></label>
       </div>
     </div>
   </div>
@@ -1299,6 +1292,7 @@
     btnClear: document.getElementById("btn-clear"),
     btnDemo: document.getElementById("btn-demo"),
     btnLibrary: document.getElementById("btn-library"),
+    btnReportDock: document.getElementById("btn-report"),
     fileInput: document.getElementById("file-input"),
     fileInputLibrary: document.getElementById("file-input-library"),
     reportPanel: document.getElementById("report-panel"),
@@ -2517,10 +2511,7 @@
       return;
     }
     var point = clientToPage(e.clientX, e.clientY);
-    if (state.tool === "stroke") startStroke(point);
-    else if (state.tool === "arrow") startArrow(point);
-    else if (state.tool === "ok" || state.tool === "risk") startSelect(point);
-    else if (state.tool === "note") openNoteModal(point);
+    if (state.tool === "ok" || state.tool === "risk") startSelect(point);
   }
 
   function onPointerMove(e) {
@@ -2551,8 +2542,6 @@
     }
     if (!state.drawing) return;
     var point = clientToPage(e.clientX, e.clientY);
-    if (state.tool === "stroke") extendStroke(point);
-    if (state.tool === "arrow") updateArrow(point);
     if (state.tool === "ok" || state.tool === "risk") updateSelect(point);
   }
 
@@ -2563,8 +2552,6 @@
     if (state.pointers.size < 2) state.pinching = false;
     if (state.pointers.size === 0) state.panStart = null;
     if (state.drawing) {
-      if (state.tool === "stroke") endStroke();
-      if (state.tool === "arrow") endArrow();
       if (state.tool === "ok" || state.tool === "risk") endSelect();
     }
     try {
@@ -2825,14 +2812,13 @@
     els.btnWake.addEventListener("click", toggleWake);
     els.btnRotate.addEventListener("click", rotateView);
     els.btnUndo.addEventListener("click", function () { annotations.undo(); redrawAnnotations(); });
-    els.btnClear.addEventListener("click", function () {
-      if (!annotations.list().length) return;
+    if (els.btnClear) els.btnClear.addEventListener("click", function () {
       if (window.confirm("Limpar todas as marcações desta conferência?")) {
         annotations.clear();
         redrawAnnotations();
       }
     });
-    els.btnDemo.addEventListener("click", tryLoadDemo);
+    if (els.btnDemo) els.btnDemo.addEventListener("click", tryLoadDemo);
     if (els.btnLibrary) els.btnLibrary.addEventListener("click", openLibrary);
     if (els.btnCloseLibrary) els.btnCloseLibrary.addEventListener("click", closeLibrary);
     if (els.btnLibraryDemo) {
