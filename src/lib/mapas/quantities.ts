@@ -16,9 +16,11 @@ import {
   subtractVoids,
 } from "./boolean";
 import {
+  accumulateBeamStages,
   computeBeamMappedQuantity,
   computeColumnMappedQuantity,
   computeFoundationMappedQuantity,
+  type BeamStageLength,
   type CalculationMemory,
 } from "./rules";
 import type { McElementKind } from "./types";
@@ -291,6 +293,7 @@ export function computeRegionElementIntersection(
 export function computeAccumulatedForElement(
   element: ElementRecord,
   regions: RegionRecord[],
+  opts?: { beamStages?: BeamStageLength[] },
 ) {
   const elementPoly = polygonFromGeoJson(element.geometry);
   if (!elementPoly) return null;
@@ -299,8 +302,30 @@ export function computeAccumulatedForElement(
     return null;
   }
   if (element.kind === "viga") {
-    // Accumulated beam % needs executed lengths summed carefully — not plan union
-    return null;
+    const stages =
+      opts?.beamStages && opts.beamStages.length
+        ? opts.beamStages
+        : [
+            {
+              executedLengthM: element.executed_length_m ?? null,
+              label: "elemento",
+            },
+          ];
+    const acc = accumulateBeamStages({
+      sectionAreaM2: element.section_area_m2 ?? null,
+      axisLengthM: element.axis_length_m ?? null,
+      stages,
+    });
+    return {
+      percent: acc.percent ?? 0,
+      volumeMappedM3: acc.volumeEstimadoM3 ?? 0,
+      indeterminate: acc.indeterminate,
+      unionAreaM2: 0,
+      sumIntersectionAreaM2: 0,
+      conflictWarnings: acc.method.warnings,
+      calcMemory: acc,
+      meta: acc.method,
+    };
   }
 
   const prepared = regions.map((r) => {

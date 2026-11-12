@@ -16,6 +16,10 @@ export type McReportPayload = {
     name: string;
     areaM2: number | null;
     tool: string;
+    /** Outer ring in meters (world), for schematic only */
+    ringM?: Array<[number, number]>;
+    voids?: Array<Array<[number, number]>>;
+    color?: string | null;
   }>;
   elements: Array<{
     code: string;
@@ -75,6 +79,14 @@ export async function buildMcPourReportPdf(
     doc.text(
       `Emitido por ${payload.generatedBy} em ${payload.generatedAt.toISOString()}`,
     );
+
+    doc.moveDown();
+    doc.fontSize(12).fillColor("#E00024").text("Mapa esquemático (anotações)");
+    doc.fontSize(9).fillColor("#5a5a5a");
+    doc.text(
+      "Esquema em planta das regiões desta concretagem (não substitui o PDF/DXF original).",
+    );
+    drawSchematicMap(doc, payload.regions);
 
     doc.moveDown();
     doc.fontSize(12).fillColor("#E00024").text("Regiões mapeadas");
@@ -157,11 +169,103 @@ export async function buildMcPourReportPdf(
       .fontSize(8)
       .fillColor("#5a5a5a")
       .text(
-        "Mapa esquemático: exportação vetorial completa da planta fica para incremento futuro; este PDF consolida quantitativos e rastreabilidade.",
+        "Mapa esquemático das regiões + quantitativos. Overlay pixel-perfect do PDF original fica como evolução.",
       );
 
     doc.end();
   });
+}
+
+function drawSchematicMap(
+  doc: PDFKit.PDFDocument,
+  regions: McReportPayload["regions"],
+) {
+  const withGeom = regions.filter((r) => r.ringM && r.ringM.length >= 3);
+  const boxX = doc.page.margins.left;
+  const boxY = doc.y + 4;
+  const boxW = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+  const boxH = 160;
+
+  doc.save();
+  doc.rect(boxX, boxY, boxW, boxH).stroke("#cccccc");
+
+  if (!withGeom.length) {
+    doc
+      .fontSize(9)
+      .fillColor("#5a5a5a")
+      .text("Sem geometria para desenhar o esquema.", boxX + 8, boxY + 8, {
+        width: boxW - 16,
+      });
+    doc.restore();
+    doc.y = boxY + boxH + 8;
+    return;
+  }
+
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const r of withGeom) {
+    for (const [x, y] of r.ringM!) {
+      minX = Math.min(minX, x);
+      minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x);
+      maxY = Math.max(maxY, y);
+    }
+  }
+  const pad = 0.05 * Math.max(maxX - minX, maxY - minY, 1);
+  minX -= pad;
+  minY -= pad;
+  maxX += pad;
+  maxY += pad;
+  const sx = boxW / Math.max(maxX - minX, 1e-9);
+  const sy = boxH / Math.max(maxY - minY, 1e-9);
+  const s = Math.min(sx, sy) * 0.92;
+  const ox = boxX + (boxW - (maxX - minX) * s) / 2;
+  const oy = boxY + (boxH - (maxY - minY) * s) / 2;
+
+  const project = (x: number, y: number) => [
+    ox + (x - minX) * s,
+    oy + (maxY - y) * s,
+  ];
+
+  for (const r of withGeom) {
+    const color = r.color || "#E00024";
+    doc.save();
+    doc.fillColor(color).fillOpacity(0.25).strokeColor(color).lineWidth(1.2);
+    const ring = r.ringM!;
+    const [x0, y0] = project(ring[0][0], ring[0][1]);
+    doc.moveTo(x0, y0);
+    for (let i = 1; i < ring.length; i++) {
+      const [x, y] = project(ring[i][0], ring[i][1]);
+      doc.lineTo(x, y);
+    }
+    doc.closePath().fillAndStroke();
+    doc.restore();
+
+    for (const voidRing of r.voids || []) {
+      if (voidRing.length < 3) continue;
+      doc.save();
+      doc
+        .fillColor("#ffffff")
+        .fillOpacity(0.9)
+        .strokeColor("#b45309")
+        .dash(3, { space: 2 })
+        .lineWidth(1);
+      const [vx0, vy0] = project(voidRing[0][0], voidRing[0][1]);
+      doc.moveTo(vx0, vy0);
+      for (let i = 1; i < voidRing.length; i++) {
+        const [x, y] = project(voidRing[i][0], voidRing[i][1]);
+        doc.lineTo(x, y);
+      }
+      doc.closePath().fillAndStroke();
+      doc.undash();
+      doc.restore();
+    }
+  }
+
+  doc.restore();
+  doc.y = boxY + boxH + 8;
 }
 
 export type McConsolidatedReportPayload = {

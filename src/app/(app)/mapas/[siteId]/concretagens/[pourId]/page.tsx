@@ -84,9 +84,23 @@ export default async function PourDetailPage({
   const { data: pourElements } = await supabase
     .from("mc_pour_elements")
     .select(
-      "element_id, mc_structural_elements(id, code, name, kind, geometry, area_m2, thickness_m, height_m, volume_teorico_m3)",
+      "element_id, executed_length_m, mc_structural_elements(id, code, name, kind, geometry, area_m2, thickness_m, height_m, volume_teorico_m3, section_area_m2, axis_length_m, executed_length_m)",
     )
     .eq("pour_id", pourId);
+
+  const elementIds = (pourElements || []).map((pe) => pe.element_id);
+  const { data: allStageLinks } = await supabase
+    .from("mc_pour_elements")
+    .select(
+      "element_id, executed_length_m, pour_id, mc_concrete_pours!inner(id, code, site_id)",
+    )
+    .in(
+      "element_id",
+      elementIds.length
+        ? elementIds
+        : ["00000000-0000-0000-0000-000000000000"],
+    )
+    .eq("mc_concrete_pours.site_id", siteId);
 
   const { data: deliveries } = await supabase
     .from("mc_truck_deliveries")
@@ -137,6 +151,9 @@ export default async function PourDetailPage({
           thickness_m: number | null;
           height_m: number | null;
           volume_teorico_m3: number | null;
+          section_area_m2: number | null;
+          axis_length_m: number | null;
+          executed_length_m: number | null;
         }
       | null
       | Array<{
@@ -149,10 +166,33 @@ export default async function PourDetailPage({
           thickness_m: number | null;
           height_m: number | null;
           volume_teorico_m3: number | null;
+          section_area_m2: number | null;
+          axis_length_m: number | null;
+          executed_length_m: number | null;
         }>;
     const row = Array.isArray(el) ? el[0] : el;
     if (!row) continue;
     volumeTeorico += Number(row.volume_teorico_m3 || 0);
+    const beamStages =
+      row.kind === "viga"
+        ? (allStageLinks || [])
+            .filter((s) => s.element_id === row.id)
+            .map((s) => {
+              const pour = s.mc_concrete_pours as
+                | { id: string; code: string }
+                | { id: string; code: string }[]
+                | null;
+              const pr = Array.isArray(pour) ? pour[0] : pour;
+              return {
+                pourId: s.pour_id,
+                label: pr?.code,
+                executedLengthM:
+                  s.executed_length_m != null
+                    ? Number(s.executed_length_m)
+                    : null,
+              };
+            })
+        : undefined;
     const acc = computeAccumulatedForElement(
       {
         id: row.id,
@@ -163,18 +203,38 @@ export default async function PourDetailPage({
         height_m: row.height_m != null ? Number(row.height_m) : null,
         volume_teorico_m3:
           row.volume_teorico_m3 != null ? Number(row.volume_teorico_m3) : null,
+        section_area_m2:
+          row.section_area_m2 != null ? Number(row.section_area_m2) : null,
+        axis_length_m:
+          row.axis_length_m != null ? Number(row.axis_length_m) : null,
+        executed_length_m:
+          pe.executed_length_m != null
+            ? Number(pe.executed_length_m)
+            : row.executed_length_m != null
+              ? Number(row.executed_length_m)
+              : null,
       },
       regionRows.map((r) => ({
         id: r.id,
         geometry: r.geometry,
         area_m2: r.area_m2 != null ? Number(r.area_m2) : null,
       })),
+      { beamStages },
     );
     if (acc) {
-      volumeEstimado += acc.volumeMappedM3;
-      accumulatedNotes.push(
-        `${row.code}: união ${acc.unionAreaM2.toFixed(3)} m² → ${acc.percent.toFixed(1)}% / ${acc.volumeMappedM3.toFixed(3)} m³ (sem dupla contagem)`,
-      );
+      if (!("indeterminate" in acc) || !acc.indeterminate) {
+        volumeEstimado += acc.volumeMappedM3;
+      }
+      if (row.kind === "viga") {
+        accumulatedNotes.push(
+          `${row.code} (viga multi-etapa): ${acc.percent.toFixed(1)}% / ${acc.volumeMappedM3.toFixed(3)} m³` +
+            (acc.indeterminate ? " · indeterminado" : ""),
+        );
+      } else {
+        accumulatedNotes.push(
+          `${row.code}: união ${acc.unionAreaM2.toFixed(3)} m² → ${acc.percent.toFixed(1)}% / ${acc.volumeMappedM3.toFixed(3)} m³ (sem dupla contagem)`,
+        );
+      }
     }
   }
 
