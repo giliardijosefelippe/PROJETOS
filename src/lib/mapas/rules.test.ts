@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
+  accumulateBeamStages,
   computeBeamMappedQuantity,
   computeColumnMappedQuantity,
   computeFoundationMappedQuantity,
@@ -81,6 +82,38 @@ describe("MapaConcreto parameterized rules", () => {
     assert.equal(r.volumeEstimadoM3, null);
     assert.ok(
       r.method.warnings.some((w) => w.code === "foundation_missing_thickness"),
+    );
+  });
+
+  it("accumulateBeamStages sums lengths with axis cap — no invent", () => {
+    const empty = accumulateBeamStages({
+      sectionAreaM2: 0.2,
+      axisLengthM: 10,
+      stages: [{ executedLengthM: null }, { executedLengthM: 0 }],
+    });
+    assert.equal(empty.indeterminate, true);
+    assert.equal(empty.volumeEstimadoM3, null);
+
+    const ok = accumulateBeamStages({
+      sectionAreaM2: 0.2,
+      axisLengthM: 10,
+      stages: [
+        { executedLengthM: 3, label: "C1" },
+        { executedLengthM: 4, label: "C2" },
+      ],
+    });
+    assert.equal(ok.indeterminate, false);
+    assert.equal(ok.summedExecutedM, 7);
+    assert.ok(Math.abs((ok.volumeEstimadoM3 || 0) - 1.4) < 1e-9);
+
+    const capped = accumulateBeamStages({
+      sectionAreaM2: 0.2,
+      axisLengthM: 5,
+      stages: [{ executedLengthM: 4 }, { executedLengthM: 4 }],
+    });
+    assert.equal(capped.cappedExecutedM, 5);
+    assert.ok(
+      capped.method.warnings.some((w) => w.code === "beam_stages_capped"),
     );
   });
 });

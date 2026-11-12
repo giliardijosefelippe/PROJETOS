@@ -365,3 +365,110 @@ export function pickRuleForKind(kind: McElementKind): string {
       return "manual_or_indeterminate";
   }
 }
+
+export type BeamStageLength = {
+  pourId?: string;
+  label?: string;
+  executedLengthM: number | null;
+};
+
+/**
+ * Multi-stage beam accumulation: SUM executed lengths (capped at axis).
+ * Does NOT invent missing stage lengths; overlapping axis segments are not
+ * geometrically deduped (warn) — only length sum with axis cap.
+ */
+export function accumulateBeamStages(args: {
+  sectionAreaM2: number | null;
+  axisLengthM: number | null;
+  stages: BeamStageLength[];
+}): CalculationMemory & {
+  summedExecutedM: number | null;
+  cappedExecutedM: number | null;
+} {
+  const warnings: GeometryWarning[] = [];
+  const steps: CalcStep[] = [];
+  const lengths = args.stages
+    .map((s) => s.executedLengthM)
+    .filter((n): n is number => n != null && Number.isFinite(n) && n > 0);
+
+  steps.push({
+    label: "Etapas informadas",
+    formula: "soma dos comprimentos_executados por concretagem",
+    inputs: {
+      stageCount: args.stages.length,
+      positiveStages: lengths.length,
+      rawSum: lengths.reduce((a, b) => a + b, 0),
+    },
+    result: lengths.reduce((a, b) => a + b, 0),
+  });
+
+  if (!lengths.length) {
+    warnings.push({
+      code: "beam_stages_empty",
+      message:
+        "Nenhuma etapa com comprimento executado informado — acumulação indeterminada (não inventada).",
+    });
+    return {
+      ruleId: "beam_multi_stage_sum",
+      elementKind: "viga",
+      steps,
+      indeterminate: true,
+      percent: null,
+      volumeEstimadoM3: null,
+      summedExecutedM: null,
+      cappedExecutedM: null,
+      method: {
+        method: "beam_multi_stage_sum",
+        dataOrigin: "pour_stage_executed_lengths",
+        precisionNote: "indeterminado",
+        warnings,
+      },
+    };
+  }
+
+  const summed = lengths.reduce((a, b) => a + b, 0);
+  let capped = summed;
+  if (args.axisLengthM != null && args.axisLengthM > 0 && summed > args.axisLengthM) {
+    capped = args.axisLengthM;
+    warnings.push({
+      code: "beam_stages_capped",
+      message: `Soma das etapas (${summed.toFixed(3)} m) > eixo (${args.axisLengthM.toFixed(3)} m) — limitada ao eixo. Sobreposição geométrica de trechos não é deduplicada automaticamente.`,
+    });
+  } else {
+    warnings.push({
+      code: "beam_stages_no_geom_dedupe",
+      message:
+        "Acúmulo por soma de comprimentos informados; união geométrica de trechos no eixo exige cadastro de segmentos (fora deste polish).",
+    });
+  }
+
+  steps.push({
+    label: "Comprimento acumulado",
+    formula: "min(soma(etapas), comprimento_eixo) se eixo conhecido",
+    inputs: { summed, axisLengthM: args.axisLengthM, capped },
+    result: capped,
+  });
+
+  const single = computeBeamMappedQuantity({
+    axisLengthM: args.axisLengthM,
+    executedLengthM: capped,
+    sectionAreaM2: args.sectionAreaM2,
+  });
+
+  return {
+    ruleId: "beam_multi_stage_sum",
+    elementKind: "viga",
+    steps: [...steps, ...single.steps],
+    indeterminate: single.indeterminate,
+    percent: single.percent,
+    volumeEstimadoM3: single.volumeEstimadoM3,
+    summedExecutedM: summed,
+    cappedExecutedM: capped,
+    method: {
+      method: "beam_multi_stage_sum",
+      dataOrigin: "pour_stage_executed_lengths",
+      precisionNote: single.method.precisionNote,
+      warnings: [...warnings, ...single.method.warnings],
+    },
+  };
+}

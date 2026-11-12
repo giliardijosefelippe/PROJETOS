@@ -12,7 +12,7 @@ import {
   calibrateScaleAction,
   selectPageAction,
 } from "@/actions/mapas/drawings";
-import { saveRegionAction } from "@/actions/mapas/regions";
+import { addRegionVoidAction, saveRegionAction } from "@/actions/mapas/regions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { Point } from "@/lib/mapas/geometry";
@@ -25,9 +25,16 @@ type SavedRegion = {
   color: string | null;
   area_m2: number | null;
   geometry: { type: string; coordinates: number[][][] };
+  voids?: { type: string; coordinates: number[][][] }[];
 };
 
-type Tool = "pan" | "calibrate" | "rectangle" | "polygon" | "freehand";
+type Tool =
+  | "pan"
+  | "calibrate"
+  | "rectangle"
+  | "polygon"
+  | "freehand"
+  | "void";
 
 const ACI: Record<number, string> = {
   1: "#E00024",
@@ -79,6 +86,10 @@ export function PlantViewer({
   const [tool, setTool] = useState<Tool>("pan");
   const [points, setPoints] = useState<Point[]>([]);
   const [draftName, setDraftName] = useState("Região 1");
+  const [voidRegionId, setVoidRegionId] = useState(regions[0]?.id || "");
+  const [voidShape, setVoidShape] = useState<"rectangle" | "polygon">(
+    "rectangle",
+  );
   const [realM, setRealM] = useState(String(scaleRealM ?? 5));
   const [zoom, setZoom] = useState(1);
   const [offset, setOffset] = useState<Point>([0, 0]);
@@ -248,11 +259,11 @@ export function PlantViewer({
       setPoints((prev) => (prev.length >= 2 ? [p] : [...prev, p]));
       return;
     }
-    if (tool === "rectangle") {
+    if (tool === "rectangle" || (tool === "void" && voidShape === "rectangle")) {
       setPoints((prev) => (prev.length >= 2 ? [p] : [...prev, p]));
       return;
     }
-    if (tool === "polygon") {
+    if (tool === "polygon" || (tool === "void" && voidShape === "polygon")) {
       setPoints((prev) => [...prev, p]);
       return;
     }
@@ -316,6 +327,27 @@ export function PlantViewer({
     });
   }
 
+  function submitVoid() {
+    if (!mpu) {
+      setStatus("Calibre a escala antes de adicionar vazios.");
+      return;
+    }
+    if (!voidRegionId) {
+      setStatus("Selecione a região que receberá o vazio/ilha.");
+      return;
+    }
+    const savePts = isDxf ? points.map(screenToSavePoint) : points;
+    const fd = new FormData();
+    fd.set("site_id", siteId);
+    fd.set("drawing_id", drawingId);
+    fd.set("region_id", voidRegionId);
+    fd.set("tool", voidShape);
+    fd.set("points_json", JSON.stringify(savePts));
+    startTransition(() => {
+      void addRegionVoidAction(fd);
+    });
+  }
+
   function renderCadEntity(e: CadEntity, layerColor: string) {
     if (layerOn[e.layer] === false) return null;
     if (e.geometryKind === "Point") {
@@ -375,6 +407,7 @@ export function PlantViewer({
             ["rectangle", "Retângulo"],
             ["polygon", "Polígono"],
             ["freehand", "Mão livre"],
+            ["void", "Vazio/ilha"],
           ] as const
         ).map(([id, label]) => (
           <Button
@@ -538,14 +571,30 @@ export function PlantViewer({
                 const pts = worldToPdf(r.geometry);
                 if (pts.length < 2) return null;
                 return (
-                  <polygon
-                    key={r.id}
-                    points={pts.map(([x, y]) => `${x},${y}`).join(" ")}
-                    fill={r.color || "#E00024"}
-                    fillOpacity={0.28}
-                    stroke={r.color || "#E00024"}
-                    strokeWidth={2}
-                  />
+                  <g key={r.id}>
+                    <polygon
+                      points={pts.map(([x, y]) => `${x},${y}`).join(" ")}
+                      fill={r.color || "#E00024"}
+                      fillOpacity={0.28}
+                      stroke={r.color || "#E00024"}
+                      strokeWidth={2}
+                    />
+                    {(r.voids || []).map((v, vi) => {
+                      const vpts = worldToPdf(v);
+                      if (vpts.length < 2) return null;
+                      return (
+                        <polygon
+                          key={`${r.id}-v${vi}`}
+                          points={vpts.map(([x, y]) => `${x},${y}`).join(" ")}
+                          fill="#111"
+                          fillOpacity={0.45}
+                          stroke="#fbbf24"
+                          strokeWidth={2}
+                          strokeDasharray="4 3"
+                        />
+                      );
+                    })}
+                  </g>
                 );
               })}
               {points.length > 0 && tool === "calibrate" && (
@@ -565,24 +614,30 @@ export function PlantViewer({
                   )}
                 </>
               )}
-              {tool === "rectangle" && points.length === 2 && (
+              {(tool === "rectangle" ||
+                (tool === "void" && voidShape === "rectangle")) &&
+                points.length === 2 && (
                 <rect
                   x={Math.min(points[0][0], points[1][0])}
                   y={Math.min(points[0][1], points[1][1])}
                   width={Math.abs(points[1][0] - points[0][0])}
                   height={Math.abs(points[1][1] - points[0][1])}
-                  fill="#E00024"
+                  fill={tool === "void" ? "#111" : "#E00024"}
                   fillOpacity={0.25}
-                  stroke="#E00024"
+                  stroke={tool === "void" ? "#fbbf24" : "#E00024"}
+                  strokeDasharray={tool === "void" ? "4 3" : undefined}
                 />
               )}
-              {(tool === "polygon" || tool === "freehand") &&
+              {(tool === "polygon" ||
+                tool === "freehand" ||
+                (tool === "void" && voidShape === "polygon")) &&
                 points.length > 1 && (
                   <polyline
                     points={svgPoints}
                     fill="none"
-                    stroke="#E00024"
+                    stroke={tool === "void" ? "#fbbf24" : "#E00024"}
                     strokeWidth={2}
+                    strokeDasharray={tool === "void" ? "4 3" : undefined}
                   />
                 )}
             </svg>
@@ -631,6 +686,54 @@ export function PlantViewer({
             >
               Salvar região
             </Button>
+          </>
+        )}
+        {tool === "void" && (
+          <>
+            <label className="text-sm">
+              Região alvo
+              <select
+                className="mt-1 block w-48 rounded border border-divider bg-surface px-2 py-1.5 text-sm"
+                value={voidRegionId}
+                onChange={(e) => setVoidRegionId(e.target.value)}
+              >
+                <option value="">Selecione…</option>
+                {regions.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="text-sm">
+              Forma do vazio
+              <select
+                className="mt-1 block w-40 rounded border border-divider bg-surface px-2 py-1.5 text-sm"
+                value={voidShape}
+                onChange={(e) => {
+                  setVoidShape(e.target.value as "rectangle" | "polygon");
+                  setPoints([]);
+                }}
+              >
+                <option value="rectangle">Retângulo</option>
+                <option value="polygon">Polígono</option>
+              </select>
+            </label>
+            <Button
+              type="button"
+              disabled={
+                pending ||
+                !voidRegionId ||
+                points.length < (voidShape === "rectangle" ? 2 : 3)
+              }
+              onClick={submitVoid}
+            >
+              Aplicar vazio
+            </Button>
+            <p className="basis-full text-xs text-ink-muted">
+              O vazio é descontado na área líquida e nas interseções (união sem
+              inventar volume).
+            </p>
           </>
         )}
       </div>
