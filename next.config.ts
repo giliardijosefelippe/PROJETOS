@@ -7,6 +7,7 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "placehold.co" },
     ],
   },
+  serverExternalPackages: ["@napi-rs/canvas", "pdfjs-dist", "pdfkit"],
   experimental: {
     serverActions: {
       bodySizeLimit: "25mb",
