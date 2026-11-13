@@ -31,19 +31,16 @@
     }
     #app {
       display: grid;
-      grid-template-rows: 1fr;
+      grid-template-rows: calc(var(--top-h) + var(--safe-top)) 1fr;
       height: 100%; height: 100dvh;
-    }
-    /* Brand/doc meta kept for JS, not shown as a chrome bar */
-    .sr-meta {
-      position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
-      overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
     }
     .top-bar {
       display: flex; align-items: center; justify-content: space-between; gap: 8px;
-      padding: calc(8px + var(--safe-top)) 12px 8px;
+      padding: calc(8px + var(--safe-top)) 10px 8px;
       background: linear-gradient(180deg, #1c232b 0%, #151a1f 100%);
       border-bottom: 1px solid var(--border); z-index: 5;
+      min-height: calc(var(--top-h) + var(--safe-top));
+      box-sizing: border-box;
     }
     .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
     .brand-mark {
@@ -54,20 +51,16 @@
     .brand-text strong { font-size: 15px; line-height: 1.1; }
     .brand-text span {
       font-size: 11px; color: var(--muted); white-space: nowrap;
-      overflow: hidden; text-overflow: ellipsis; max-width: 42vw;
+      overflow: hidden; text-overflow: ellipsis; max-width: 48vw;
     }
     .brand-text .rev-label { font-size: 10px; color: #8fa0ae; max-width: none; }
-    .top-actions { display: flex; align-items: center; gap: 8px; }
-    .chip, .icon-btn, .tool, .dock-btn, .primary, .secondary {
+    .top-actions {
+      display: flex; align-items: center; gap: 6px; flex-shrink: 0;
+    }
+    .icon-btn, .tool, .dock-btn, .primary, .secondary {
       border: 1px solid var(--border); background: var(--surface-2); color: var(--text);
       font-weight: 700; cursor: pointer;
     }
-    .chip {
-      min-height: 40px; padding: 0 12px; border-radius: 999px;
-      font-size: 12px; color: var(--muted);
-    }
-    .chip.on { color: #102016; background: #7ddea8; border-color: #4caf78; }
-    .chip.accent-chip { color: #fff; background: var(--accent); border-color: #ff3b57; }
     .icon-btn {
       width: var(--touch); height: var(--touch); border-radius: 12px; font-size: 22px;
     }
@@ -268,7 +261,20 @@
     }
     .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
 
-    /* Immersive / fullscreen — dock stays above everything usable */
+    /* Immersive / fullscreen — slim bar keeps only ☰ */
+    html.app-fullscreen #app {
+      grid-template-rows: calc(var(--touch) + var(--safe-top) + 8px) 1fr;
+    }
+    html.app-fullscreen .top-bar {
+      justify-content: flex-end;
+      background: transparent;
+      border-bottom: none;
+      padding: calc(4px + var(--safe-top)) 8px 4px;
+      min-height: 0;
+      pointer-events: none;
+    }
+    html.app-fullscreen .top-bar .brand { display: none; }
+    html.app-fullscreen .top-bar .top-actions { pointer-events: auto; }
     html.app-fullscreen .stage {
       min-height: 100dvh;
     }
@@ -289,42 +295,26 @@
     html.app-fullscreen #hint {
       z-index: 10045;
     }
-    .chip.fs-chip[aria-pressed="true"] {
-      color: #102016; background: #7ddea8; border-color: #4caf78;
-    }
     #tool-dock .dock-btn.fs-on {
       color: #102016; background: #7ddea8; border-color: #4caf78;
     }
 
-    /* Right side menu (Relatório, Tela ligada, Abrir…) */
-    .side-rail {
-      position: fixed;
-      top: max(10px, var(--safe-top));
-      right: max(10px, env(safe-area-inset-right, 0px));
-      z-index: 45;
-      display: flex;
-      flex-direction: row-reverse;
-      align-items: flex-start;
-      gap: 8px;
-      max-height: calc(100dvh - var(--safe-top) - var(--safe-bottom) - 20px);
-    }
-    html.app-fullscreen .side-rail {
-      top: max(10px, var(--safe-top));
-      z-index: 10055;
-      max-height: calc(100dvh - var(--safe-top) - var(--safe-bottom) - 20px);
-    }
+    /* ☰ lives inside the top bar (right) — not a free-floating button */
     .side-toggle {
-      width: var(--dock-size);
-      min-height: var(--dock-size);
-      border-radius: 14px;
+      width: var(--touch);
+      height: var(--touch);
+      min-width: var(--touch);
+      border-radius: 12px;
       border: 1px solid var(--border);
-      background: rgba(21, 26, 31, 0.96);
+      background: var(--surface-2);
       color: var(--text);
       font-size: 22px;
       font-weight: 700;
+      line-height: 1;
       cursor: pointer;
-      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
-      flex-shrink: 0;
+      padding: 0;
+      display: grid;
+      place-items: center;
     }
     .side-toggle[aria-expanded="true"] {
       background: var(--accent);
@@ -332,8 +322,12 @@
       color: #fff;
     }
     .side-panel {
-      width: min(260px, calc(100vw - 88px));
-      max-height: inherit;
+      position: fixed;
+      top: calc(var(--top-h) + var(--safe-top) + 6px);
+      right: max(8px, env(safe-area-inset-right, 0px));
+      z-index: 45;
+      width: min(260px, calc(100vw - 24px));
+      max-height: calc(100dvh - var(--top-h) - var(--safe-top) - var(--safe-bottom) - 20px);
       overflow: auto;
       border-radius: 16px;
       border: 1px solid var(--border);
@@ -345,13 +339,9 @@
       gap: 8px;
     }
     .side-panel[hidden] { display: none !important; }
-    .side-panel-head {
-      font-size: 12px;
-      font-weight: 700;
-      color: var(--muted);
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
-      padding: 4px 6px 2px;
+    html.app-fullscreen .side-panel {
+      top: calc(var(--touch) + var(--safe-top) + 12px);
+      z-index: 10055;
     }
     .side-item, label.side-item {
       display: flex;
@@ -392,10 +382,19 @@
 </head>
 <body>
   <div id="app">
-    <div class="sr-meta" aria-hidden="true">
-      <span id="doc-label">Abra um PDF</span>
-      <span id="app-revision" title="Pré-Prumo + raster com teto de memória">Revisão 1.0.15</span>
-    </div>
+    <header class="top-bar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <div class="brand-text">
+          <strong>Conf. Armadura</strong>
+          <span id="doc-label">Abra um PDF</span>
+          <span id="app-revision" class="rev-label" title="Pré-Prumo + raster com teto de memória">Revisão 1.0.16</span>
+        </div>
+      </div>
+      <div class="top-actions">
+        <button type="button" id="btn-side-toggle" class="side-toggle" aria-expanded="false" aria-controls="side-panel" title="Abrir ou fechar">☰</button>
+      </div>
+    </header>
 
     <main class="stage">
       <div id="viewport" class="viewport">
@@ -475,36 +474,32 @@
     </div>
 
     <button type="button" id="side-backdrop" class="side-backdrop" hidden aria-label="Fechar menu"></button>
-    <div id="side-rail" class="side-rail" aria-label="Menu lateral">
-      <button type="button" id="btn-side-toggle" class="side-toggle" aria-expanded="false" aria-controls="side-panel" title="Abrir ou fechar menu">☰</button>
-      <div id="side-panel" class="side-panel" hidden>
-        <div class="side-panel-head">Menu</div>
-        <label class="side-item" title="Abrir PDF">
-          <span class="side-ico" aria-hidden="true">📄</span>
-          <span>Abrir arquivos</span>
-          <input type="file" id="file-input" accept="application/pdf,.pdf" hidden />
-        </label>
-        <button type="button" id="btn-report-menu" class="side-item accent" title="Relatório">
-          <span class="side-ico" aria-hidden="true">☰</span>
-          <span>Relatório</span>
-        </button>
-        <button type="button" id="btn-wake" class="side-item on" aria-pressed="true" title="Manter tela ligada">
-          <span class="side-ico" aria-hidden="true">💡</span>
-          <span id="btn-wake-label">Tela ligada</span>
-        </button>
-        <button type="button" id="btn-rotate" class="side-item" title="Girar 90°">
-          <span class="side-ico" aria-hidden="true">⟳</span>
-          <span>Girar 90°</span>
-        </button>
-        <button type="button" id="btn-library" class="side-item" title="Biblioteca de PDFs">
-          <span class="side-ico" aria-hidden="true">📚</span>
-          <span>Biblioteca</span>
-        </button>
-        <button type="button" id="btn-demo" class="side-item" title="Abrir PDF demo">
-          <span class="side-ico" aria-hidden="true">▣</span>
-          <span>Demo</span>
-        </button>
-      </div>
+    <div id="side-panel" class="side-panel" hidden role="menu" aria-label="Ações">
+      <label class="side-item" title="Abrir PDF">
+        <span class="side-ico" aria-hidden="true">📄</span>
+        <span>Abrir arquivos</span>
+        <input type="file" id="file-input" accept="application/pdf,.pdf" hidden />
+      </label>
+      <button type="button" id="btn-report-menu" class="side-item accent" title="Relatório">
+        <span class="side-ico" aria-hidden="true">📋</span>
+        <span>Relatório</span>
+      </button>
+      <button type="button" id="btn-wake" class="side-item on" aria-pressed="true" title="Manter tela ligada">
+        <span class="side-ico" aria-hidden="true">💡</span>
+        <span id="btn-wake-label">Tela ligada</span>
+      </button>
+      <button type="button" id="btn-rotate" class="side-item" title="Girar 90°">
+        <span class="side-ico" aria-hidden="true">⟳</span>
+        <span>Girar 90°</span>
+      </button>
+      <button type="button" id="btn-library" class="side-item" title="Biblioteca de PDFs">
+        <span class="side-ico" aria-hidden="true">📚</span>
+        <span>Biblioteca</span>
+      </button>
+      <button type="button" id="btn-demo" class="side-item" title="Abrir PDF demo">
+        <span class="side-ico" aria-hidden="true">▣</span>
+        <span>Demo</span>
+      </button>
     </div>
   </div>
 
