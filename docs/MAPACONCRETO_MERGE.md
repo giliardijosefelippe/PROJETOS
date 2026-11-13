@@ -50,3 +50,11 @@ Com seed: obra **DEMO-MC-001** · aceite **62,5% / 3,75 m³** · `/mapas/aceitac
 | Relatório sem raster | PDF no Storage; esquema ainda funciona |
 
 **Bloqueante além do ambiente?** Não — sem SDK pago obrigatório. Fora de escopo: IFC 3D, e-mail/push pagos.
+
+## Demo HTML estático (opcional)
+
+Pasta [`docs/demo-mapaconcreto/`](./demo-mapaconcreto/) — painel / planta / concretagem sem Next nem Supabase (`localStorage`). Útil para teste visual rápido; **não** é o app de produção.
+
+```bash
+cd docs/demo-mapaconcreto && python3 -m http.server 8765
+```
