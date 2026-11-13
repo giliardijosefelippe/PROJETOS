@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#1a1f24" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta
+      name="description"
+      content="Conferência de armadura in loco — marcar PDF de pilares e vigas, relatório OK/risco."
+    />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" href="./icons/icon.svg" type="image/svg+xml" />
+    <title>Conf. Armadura</title>
+  </head>
+  <body>
+    <div id="app">
+      <header class="top-bar" role="banner">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true"></span>
+          <div class="brand-text">
+            <strong>Conf. Armadura</strong>
+            <span id="doc-label">PDF demo</span>
+          </div>
+        </div>
+        <div class="top-actions">
+          <button type="button" id="btn-wake" class="chip on" aria-pressed="true" title="Manter tela ligada">
+            Tela ligada
+          </button>
+          <button type="button" id="btn-rotate" class="icon-btn" title="Girar visualização 90°">
+            ⟳
+          </button>
+          <button
+            type="button"
+            id="btn-report-top"
+            class="chip accent-chip"
+            title="Gerar relatório"
+            onclick="window.__openConfReport && window.__openConfReport(event)"
+          >
+            Relatório
+          </button>
+        </div>
+      </header>
+
+      <main class="stage" id="stage" aria-label="Prancha PDF">
+        <div id="viewport" class="viewport">
+          <div id="scene" class="scene">
+            <canvas id="pdf-canvas"></canvas>
+            <canvas id="anno-canvas"></canvas>
+          </div>
+        </div>
+        <div id="hint" class="hint">Carregando prancha…</div>
+      </main>
+
+      <aside id="report-panel" class="report-panel" hidden>
+        <div class="report-head">
+          <h2>Relatório</h2>
+          <button
+            type="button"
+            id="btn-close-report"
+            class="icon-btn"
+            aria-label="Fechar"
+            onclick="window.__closeConfReport && window.__closeConfReport()"
+          >
+            ✕
+          </button>
+        </div>
+        <div id="report-body" class="report-body"></div>
+        <div class="report-actions">
+          <button type="button" id="btn-export-html" class="primary">Exportar HTML</button>
+          <button type="button" id="btn-export-text" class="secondary">Copiar texto</button>
+          <button type="button" id="btn-share" class="secondary">Compartilhar</button>
+        </div>
+      </aside>
+
+      <div id="text-modal" class="modal" hidden>
+        <div class="modal-card">
+          <h3 id="text-modal-title">Nota no PDF</h3>
+          <textarea id="text-input" rows="3" placeholder="Descreva o trecho ou o risco…" maxlength="500"></textarea>
+          <div class="modal-actions">
+            <button type="button" id="btn-text-cancel" class="secondary">Cancelar</button>
+            <button type="button" id="btn-text-ok" class="primary">Salvar</button>
+          </div>
+        </div>
+      </div>
+
+      <nav class="toolbar" aria-label="Ferramentas de conferência">
+        <div class="tool-row primary-row">
+          <button type="button" class="tool" data-tool="pan" aria-pressed="true" title="Mover">
+            <span class="tool-icon">✥</span><span>Mover</span>
+          </button>
+          <button type="button" class="tool" data-tool="stroke" title="Riscar">
+            <span class="tool-icon">╱</span><span>Riscar</span>
+          </button>
+          <button type="button" class="tool" data-tool="ok" title="Trecho OK">
+            <span class="tool-icon ok">✓</span><span>OK</span>
+          </button>
+          <button type="button" class="tool" data-tool="risk" title="Problema / risco">
+            <span class="tool-icon risk">!</span><span>Risco</span>
+          </button>
+          <button type="button" class="tool" data-tool="arrow" title="Seta">
+            <span class="tool-icon">➜</span><span>Seta</span>
+          </button>
+          <button type="button" class="tool" data-tool="note" title="Nota de texto">
+            <span class="tool-icon">T</span><span>Nota</span>
+          </button>
+        </div>
+        <div class="tool-row secondary-row">
+          <button type="button" id="btn-undo" class="action" title="Desfazer">Desfazer</button>
+          <button type="button" id="btn-clear" class="action danger" title="Limpar anotações">Limpar</button>
+          <label class="action file-btn" title="Abrir outro PDF">
+            Abrir PDF
+            <input type="file" id="file-input" accept="application/pdf,.pdf" hidden />
+          </label>
+          <button type="button" id="btn-demo" class="action" title="Carregar PDF demo">Demo</button>
+          <button
+            type="button"
+            id="btn-report"
+            class="action accent"
+            title="Gerar relatório"
+            onclick="window.__openConfReport && window.__openConfReport(event)"
+          >
+            Relatório
+          </button>
+        </div>
+      </nav>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
