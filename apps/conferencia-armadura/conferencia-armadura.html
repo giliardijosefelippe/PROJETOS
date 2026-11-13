@@ -296,6 +296,100 @@
     #tool-dock .dock-btn.fs-on {
       color: #102016; background: #7ddea8; border-color: #4caf78;
     }
+
+    /* Right side menu (Relatório, Tela ligada, Abrir…) */
+    .side-rail {
+      position: fixed;
+      top: calc(var(--top-h) + var(--safe-top) + 10px);
+      right: max(10px, env(safe-area-inset-right, 0px));
+      z-index: 45;
+      display: flex;
+      flex-direction: row-reverse;
+      align-items: flex-start;
+      gap: 8px;
+      max-height: calc(100dvh - var(--top-h) - var(--safe-top) - var(--safe-bottom) - 24px);
+    }
+    html.app-fullscreen .side-rail {
+      top: max(12px, var(--safe-top));
+      z-index: 10055;
+      max-height: calc(100dvh - var(--safe-top) - var(--safe-bottom) - 24px);
+    }
+    .side-toggle {
+      width: var(--dock-size);
+      min-height: var(--dock-size);
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      background: rgba(21, 26, 31, 0.96);
+      color: var(--text);
+      font-size: 22px;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+      flex-shrink: 0;
+    }
+    .side-toggle[aria-expanded="true"] {
+      background: var(--accent);
+      border-color: #ff3b57;
+      color: #fff;
+    }
+    .side-panel {
+      width: min(260px, calc(100vw - 88px));
+      max-height: inherit;
+      overflow: auto;
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      background: rgba(21, 26, 31, 0.97);
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .side-panel[hidden] { display: none !important; }
+    .side-panel-head {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--muted);
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      padding: 4px 6px 2px;
+    }
+    .side-item, label.side-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-height: 44px;
+      width: 100%;
+      padding: 0 12px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: var(--surface-2);
+      color: var(--text);
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      text-align: left;
+      box-sizing: border-box;
+    }
+    .side-item .side-ico { width: 1.25em; text-align: center; flex-shrink: 0; }
+    .side-item.accent {
+      background: var(--accent);
+      border-color: #ff3b57;
+      color: #fff;
+    }
+    .side-item.on {
+      color: #102016;
+      background: #7ddea8;
+      border-color: #4caf78;
+    }
+    .side-backdrop {
+      position: fixed; inset: 0; z-index: 44;
+      background: rgba(0,0,0,0.25);
+      border: 0; padding: 0; margin: 0; cursor: pointer;
+    }
+    .side-backdrop[hidden] { display: none !important; }
+    html.app-fullscreen .side-backdrop { z-index: 10054; }
+    .top-bar .top-actions { gap: 6px; }
   </style>
 </head>
 <body>
@@ -306,14 +400,11 @@
         <div class="brand-text">
           <strong>Conf. Armadura</strong>
           <span id="doc-label">Abra um PDF</span>
-          <span id="app-revision" class="rev-label" title="Pré-Prumo + raster com teto de memória">Revisão 1.0.12</span>
+          <span id="app-revision" class="rev-label" title="Pré-Prumo + raster com teto de memória">Revisão 1.0.13</span>
         </div>
       </div>
       <div class="top-actions">
-        <button type="button" id="btn-wake" class="chip on" aria-pressed="true">Tela ligada</button>
-        <button type="button" id="btn-fullscreen" class="chip fs-chip" aria-pressed="false" title="Expandir tela">⛶ Expandir</button>
-        <button type="button" id="btn-rotate" class="icon-btn" title="Girar 90°">⟳</button>
-        <button type="button" id="btn-report-top" class="chip accent-chip" onclick="window.__openConfReport && window.__openConfReport(event)">Relatório</button>
+        <span class="chip" id="top-hint-chip" style="pointer-events:none;opacity:0.85">Menu ☰</span>
       </div>
     </header>
 
@@ -391,9 +482,40 @@
         <button type="button" class="tool dock-btn" data-tool="risk" title="Não conforme — arrastar + motivo (vermelho)"><span class="tool-icon risk" aria-hidden="true">✕</span></button>
         <div class="dock-sep" aria-hidden="true"></div>
         <button type="button" id="btn-undo" class="dock-btn" title="Desfazer">↶</button>
-        <label class="dock-btn" title="Abrir PDF / documento"><span class="tool-icon" aria-hidden="true">📄</span><input type="file" id="file-input" accept="application/pdf,.pdf" hidden /></label>
-        <button type="button" id="btn-report-dock" class="dock-btn accent" title="Relatório" onclick="window.__openConfReport && window.__openConfReport(event)">☰</button>
         <button type="button" id="btn-fullscreen-dock" class="dock-btn" title="Expandir / sair da tela cheia" aria-pressed="false">⛶</button>
+      </div>
+    </div>
+
+    <button type="button" id="side-backdrop" class="side-backdrop" hidden aria-label="Fechar menu"></button>
+    <div id="side-rail" class="side-rail" aria-label="Menu lateral">
+      <button type="button" id="btn-side-toggle" class="side-toggle" aria-expanded="false" aria-controls="side-panel" title="Abrir ou fechar menu">☰</button>
+      <div id="side-panel" class="side-panel" hidden>
+        <div class="side-panel-head">Menu</div>
+        <label class="side-item" title="Abrir PDF">
+          <span class="side-ico" aria-hidden="true">📄</span>
+          <span>Abrir arquivos</span>
+          <input type="file" id="file-input" accept="application/pdf,.pdf" hidden />
+        </label>
+        <button type="button" id="btn-report-menu" class="side-item accent" title="Relatório">
+          <span class="side-ico" aria-hidden="true">☰</span>
+          <span>Relatório</span>
+        </button>
+        <button type="button" id="btn-wake" class="side-item on" aria-pressed="true" title="Manter tela ligada">
+          <span class="side-ico" aria-hidden="true">💡</span>
+          <span id="btn-wake-label">Tela ligada</span>
+        </button>
+        <button type="button" id="btn-rotate" class="side-item" title="Girar 90°">
+          <span class="side-ico" aria-hidden="true">⟳</span>
+          <span>Girar 90°</span>
+        </button>
+        <button type="button" id="btn-library" class="side-item" title="Biblioteca de PDFs">
+          <span class="side-ico" aria-hidden="true">📚</span>
+          <span>Biblioteca</span>
+        </button>
+        <button type="button" id="btn-demo" class="side-item" title="Abrir PDF demo">
+          <span class="side-ico" aria-hidden="true">▣</span>
+          <span>Demo</span>
+        </button>
       </div>
     </div>
   </div>
@@ -1368,11 +1490,15 @@
     hint: document.getElementById("hint"),
     docLabel: document.getElementById("doc-label"),
     btnWake: document.getElementById("btn-wake"),
+    btnWakeLabel: document.getElementById("btn-wake-label"),
     btnRotate: document.getElementById("btn-rotate"),
     btnUndo: document.getElementById("btn-undo"),
     btnFullscreen: document.getElementById("btn-fullscreen"),
     btnFullscreenDock: document.getElementById("btn-fullscreen-dock"),
-    btnReportDock: document.getElementById("btn-report-dock"),
+    btnReportMenu: document.getElementById("btn-report-menu"),
+    btnSideToggle: document.getElementById("btn-side-toggle"),
+    sidePanel: document.getElementById("side-panel"),
+    sideBackdrop: document.getElementById("side-backdrop"),
     btnClear: document.getElementById("btn-clear"),
     btnDemo: document.getElementById("btn-demo"),
     btnLibrary: document.getElementById("btn-library"),
@@ -2868,6 +2994,10 @@
       var App = window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.App;
       if (App && App.addListener) {
         App.addListener("backButton", function (ev) {
+          if (isSideMenuOpen()) {
+            setSideMenuOpen(false);
+            return;
+          }
           if (isAppFullscreen()) {
             exitFullscreen();
             return;
@@ -2895,9 +3025,11 @@
 
   function updateWakeUi() {
     var on = isWakeEnabled();
+    if (!els.btnWake) return;
     els.btnWake.classList.toggle("on", on);
     els.btnWake.setAttribute("aria-pressed", String(on));
-    els.btnWake.textContent = on ? "Tela ligada" : "Tela pode apagar";
+    if (els.btnWakeLabel) els.btnWakeLabel.textContent = on ? "Tela ligada" : "Tela pode apagar";
+    else els.btnWake.textContent = on ? "Tela ligada" : "Tela pode apagar";
   }
 
   function toggleWake() {
@@ -2984,6 +3116,64 @@
       navigator.share({ title: "Relatório Conf. Armadura", text: text }).catch(function () { copyText(); });
     } else {
       copyText();
+    }
+  }
+
+  function isSideMenuOpen() {
+    return !!(els.sidePanel && !els.sidePanel.hidden);
+  }
+
+  function setSideMenuOpen(open) {
+    if (!els.sidePanel || !els.btnSideToggle) return;
+    els.sidePanel.hidden = !open;
+    els.btnSideToggle.setAttribute("aria-expanded", String(!!open));
+    if (els.sideBackdrop) {
+      if (open) {
+        // Defer backdrop so the same tap that opens the menu does not instantly close it.
+        clearTimeout(setSideMenuOpen._backdropTimer);
+        setSideMenuOpen._backdropTimer = setTimeout(function () {
+          if (isSideMenuOpen()) els.sideBackdrop.hidden = false;
+        }, 40);
+      } else {
+        clearTimeout(setSideMenuOpen._backdropTimer);
+        els.sideBackdrop.hidden = true;
+      }
+    }
+  }
+
+  function toggleSideMenu() {
+    setSideMenuOpen(!isSideMenuOpen());
+  }
+
+  function bindSideMenu() {
+    if (els.btnSideToggle) {
+      els.btnSideToggle.addEventListener("click", function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        toggleSideMenu();
+      });
+    }
+    if (els.sideBackdrop) {
+      els.sideBackdrop.addEventListener("click", function (e) {
+        e.preventDefault();
+        setSideMenuOpen(false);
+      });
+    }
+    if (els.btnReportMenu) {
+      els.btnReportMenu.addEventListener("click", function (e) {
+        setSideMenuOpen(false);
+        if (window.__openConfReport) window.__openConfReport(e);
+      });
+    }
+    // Close menu after choosing open/demo/library actions that change context.
+    if (els.fileInput) {
+      els.fileInput.addEventListener("change", function () { setSideMenuOpen(false); });
+    }
+    if (els.btnDemo) {
+      els.btnDemo.addEventListener("click", function () { setSideMenuOpen(false); });
+    }
+    if (els.btnLibrary) {
+      els.btnLibrary.addEventListener("click", function () { setSideMenuOpen(false); });
     }
   }
 
@@ -3122,8 +3312,8 @@
     els.tools.forEach(function (btn) {
       btn.addEventListener("click", function () { setTool(btn.getAttribute("data-tool")); });
     });
-    els.btnWake.addEventListener("click", toggleWake);
-    els.btnRotate.addEventListener("click", rotateView);
+    if (els.btnWake) els.btnWake.addEventListener("click", toggleWake);
+    if (els.btnRotate) els.btnRotate.addEventListener("click", rotateView);
     els.btnUndo.addEventListener("click", function () { annotations.undo(); redrawAnnotations(); });
     if (els.btnClear) els.btnClear.addEventListener("click", function () {
       if (window.confirm("Limpar todas as marcações desta conferência?")) {
@@ -3219,6 +3409,7 @@
       });
     }
     bindFullscreenControls();
+    bindSideMenu();
     bindFloatingDock();
   }
 
