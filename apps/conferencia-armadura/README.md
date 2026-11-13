@@ -67,7 +67,6 @@ cd android && ./gradlew assembleDebug
 | Caminho | Função |
 |---------|--------|
 | `conferencia-armadura.html` | App completo |
-| `demo-pilares-vigas.pdf` | Prancha demo |
 | `android-dist/conf-armadura-debug.apk` | APK instalável |
 | `android/` | Projeto Capacitor Android |
 | `capacitor.config.json` | Config Capacitor (`webDir: www`) |

@@ -388,7 +388,7 @@
         <div class="brand-text">
           <strong>Conf. Armadura</strong>
           <span id="doc-label">Abra um PDF</span>
-          <span id="app-revision" class="rev-label" title="Pré-Prumo + raster com teto de memória">Revisão 1.0.16</span>
+          <span id="app-revision" class="rev-label" title="Pré-Prumo + raster com teto de memória">Revisão 1.0.17</span>
         </div>
       </div>
       <div class="top-actions">
@@ -434,7 +434,6 @@
           Importar PDF
           <input type="file" id="file-input-library" accept="application/pdf,.pdf" hidden />
         </label>
-        <button type="button" id="btn-library-demo" class="secondary">Demo</button>
       </div>
     </aside>
 
@@ -496,10 +495,6 @@
         <span class="side-ico" aria-hidden="true">📚</span>
         <span>Biblioteca</span>
       </button>
-      <button type="button" id="btn-demo" class="side-item" title="Abrir PDF demo">
-        <span class="side-ico" aria-hidden="true">▣</span>
-        <span>Demo</span>
-      </button>
     </div>
   </div>
 
@@ -509,8 +504,6 @@
 (function () {
   "use strict";
 
-  var DEMO_PDF = "demo-pilares-vigas.pdf";
-  var DEMO_LABEL = "2330_GAR PILARES E VIGAS — Sanluzzi Selenza Rev01";
   var PDFJS_VER = "3.11.174";
   var PDFJS_LOCAL = "vendor/pdfjs/pdf.min.js";
   var PDFJS_WORKER_LOCAL = "vendor/pdfjs/pdf.worker.min.js";
@@ -1483,7 +1476,6 @@
     sidePanel: document.getElementById("side-panel"),
     sideBackdrop: document.getElementById("side-backdrop"),
     btnClear: document.getElementById("btn-clear"),
-    btnDemo: document.getElementById("btn-demo"),
     btnLibrary: document.getElementById("btn-library"),
     fileInput: document.getElementById("file-input"),
     fileInputLibrary: document.getElementById("file-input-library"),
@@ -1492,7 +1484,6 @@
     libraryPanel: document.getElementById("library-panel"),
     libraryBody: document.getElementById("library-body"),
     btnCloseLibrary: document.getElementById("btn-close-library"),
-    btnLibraryDemo: document.getElementById("btn-library-demo"),
     btnExportHtml: document.getElementById("btn-export-html"),
     btnExportText: document.getElementById("btn-export-text"),
     btnShare: document.getElementById("btn-share"),
@@ -1516,7 +1507,7 @@
     pdfPage: null,
     pdfViewport: null,
     textItems: [],
-    docName: DEMO_LABEL,
+    docName: "",
     docId: "",
     pdfBytes: null,
     skipLibrarySave: false,
@@ -2358,19 +2349,6 @@
     }
   }
 
-  async function tryLoadDemo() {
-    setHint("Carregando PDF demo…");
-    try {
-      var res = await fetch(DEMO_PDF);
-      if (!res.ok) throw new Error("HTTP " + res.status);
-      var buf = await res.arrayBuffer();
-      await openPdfBytes(new Uint8Array(buf), DEMO_LABEL);
-    } catch (err) {
-      console.warn(err);
-      setHint("Use 📄 Importar PDF ou 📚 Biblioteca. Demo não carregou.");
-    }
-  }
-
   function fmtBytes(n) {
     if (!n && n !== 0) return "";
     if (n < 1024) return n + " B";
@@ -3148,12 +3126,9 @@
         if (window.__openConfReport) window.__openConfReport(e);
       });
     }
-    // Close menu after choosing open/demo/library actions that change context.
+    // Close menu after choosing open/library actions that change context.
     if (els.fileInput) {
       els.fileInput.addEventListener("change", function () { setSideMenuOpen(false); });
-    }
-    if (els.btnDemo) {
-      els.btnDemo.addEventListener("click", function () { setSideMenuOpen(false); });
     }
     if (els.btnLibrary) {
       els.btnLibrary.addEventListener("click", function () { setSideMenuOpen(false); });
@@ -3304,15 +3279,8 @@
         redrawAnnotations();
       }
     });
-    if (els.btnDemo) els.btnDemo.addEventListener("click", tryLoadDemo);
     if (els.btnLibrary) els.btnLibrary.addEventListener("click", openLibrary);
     if (els.btnCloseLibrary) els.btnCloseLibrary.addEventListener("click", closeLibrary);
-    if (els.btnLibraryDemo) {
-      els.btnLibraryDemo.addEventListener("click", function () {
-        closeLibrary();
-        tryLoadDemo();
-      });
-    }
     if (els.libraryBody) {
       els.libraryBody.addEventListener("click", function (e) {
         var btn = e.target && e.target.closest ? e.target.closest("button[data-act]") : null;
@@ -3405,25 +3373,20 @@
       // Defer native FS permission prompts until after first interactive frame.
       setTimeout(function () { ensureNativeFs().catch(function () {}); }, 1500);
       var index = readLibraryIndex();
-      // On Capacitor, do not auto-open a huge CAD demo — user taps Importar/Demo (avoids boot freeze).
-      if (isNativeCapacitor()) {
-        if (index.pdfs && index.pdfs.length) {
-          setHint("Biblioteca pronta. Abra um PDF (📄) ou Demo.");
-        } else {
-          setHint("Toque em 📄 Importar ou Demo para abrir a prancha.");
-        }
-        return;
-      }
       if (index.pdfs && index.pdfs.length) {
+        if (isNativeCapacitor()) {
+          setHint("Biblioteca pronta. Abra um PDF (📄) ou 📚 Biblioteca.");
+          return;
+        }
         var first = index.pdfs[0];
         setHint("Reabrindo da biblioteca…");
         return loadPdfFromLibrary(first.id).then(function (doc) {
           return openPdfBytes(doc.bytes, doc.name || first.name, { docId: first.id, skipLibrarySave: true });
         }).catch(function () {
-          return tryLoadDemo();
+          setHint("Abra um PDF (📄 Abrir arquivos) ou use 📚 Biblioteca.");
         });
       }
-      return tryLoadDemo();
+      setHint("Abra um PDF (📄 Abrir arquivos) ou use 📚 Biblioteca.");
     }).catch(function (err) {
       console.error(err);
       setHint("PDF.js não carregou. Reinstale o app ou use o HTML com vendor/pdfjs.");

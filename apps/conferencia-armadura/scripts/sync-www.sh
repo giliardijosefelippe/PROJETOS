@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 mkdir -p "$ROOT/www/vendor/pdfjs"
 cp -f "$ROOT/conferencia-armadura.html" "$ROOT/www/index.html"
-cp -f "$ROOT/demo-pilares-vigas.pdf" "$ROOT/www/demo-pilares-vigas.pdf"
+rm -f "$ROOT/www/demo-pilares-vigas.pdf"
 # Local pdf.js (required on Android — CDN/worker hangs the WebView)
 if [[ -f "$ROOT/vendor/pdfjs/pdf.min.js" ]]; then
   cp -f "$ROOT/vendor/pdfjs/pdf.min.js" "$ROOT/www/vendor/pdfjs/pdf.min.js"
