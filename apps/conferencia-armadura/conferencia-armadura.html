@@ -31,8 +31,13 @@
     }
     #app {
       display: grid;
-      grid-template-rows: calc(var(--top-h) + var(--safe-top)) 1fr;
+      grid-template-rows: 1fr;
       height: 100%; height: 100dvh;
+    }
+    /* Brand/doc meta kept for JS, not shown as a chrome bar */
+    .sr-meta {
+      position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+      overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
     }
     .top-bar {
       display: flex; align-items: center; justify-content: space-between; gap: 8px;
@@ -107,7 +112,7 @@
       top: 50%;
       transform: translateY(-50%);
       width: calc(var(--dock-size) + 10px);
-      max-height: calc(100dvh - var(--top-h) - 24px - var(--safe-bottom));
+      max-height: calc(100dvh - 24px - var(--safe-bottom) - var(--safe-top));
       display: flex;
       flex-direction: column;
       gap: 6px;
@@ -264,12 +269,6 @@
     .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
 
     /* Immersive / fullscreen — dock stays above everything usable */
-    html.app-fullscreen #app {
-      grid-template-rows: 0 1fr;
-    }
-    html.app-fullscreen .top-bar {
-      display: none !important;
-    }
     html.app-fullscreen .stage {
       min-height: 100dvh;
     }
@@ -300,19 +299,19 @@
     /* Right side menu (Relatório, Tela ligada, Abrir…) */
     .side-rail {
       position: fixed;
-      top: calc(var(--top-h) + var(--safe-top) + 10px);
+      top: max(10px, var(--safe-top));
       right: max(10px, env(safe-area-inset-right, 0px));
       z-index: 45;
       display: flex;
       flex-direction: row-reverse;
       align-items: flex-start;
       gap: 8px;
-      max-height: calc(100dvh - var(--top-h) - var(--safe-top) - var(--safe-bottom) - 24px);
+      max-height: calc(100dvh - var(--safe-top) - var(--safe-bottom) - 20px);
     }
     html.app-fullscreen .side-rail {
-      top: max(12px, var(--safe-top));
+      top: max(10px, var(--safe-top));
       z-index: 10055;
-      max-height: calc(100dvh - var(--safe-top) - var(--safe-bottom) - 24px);
+      max-height: calc(100dvh - var(--safe-top) - var(--safe-bottom) - 20px);
     }
     .side-toggle {
       width: var(--dock-size);
@@ -389,24 +388,14 @@
     }
     .side-backdrop[hidden] { display: none !important; }
     html.app-fullscreen .side-backdrop { z-index: 10054; }
-    .top-bar .top-actions { gap: 6px; }
   </style>
 </head>
 <body>
   <div id="app">
-    <header class="top-bar">
-      <div class="brand">
-        <span class="brand-mark" aria-hidden="true"></span>
-        <div class="brand-text">
-          <strong>Conf. Armadura</strong>
-          <span id="doc-label">Abra um PDF</span>
-          <span id="app-revision" class="rev-label" title="Pré-Prumo + raster com teto de memória">Revisão 1.0.14</span>
-        </div>
-      </div>
-      <div class="top-actions">
-        <span class="chip" id="top-hint-chip" style="pointer-events:none;opacity:0.85">Menu ☰</span>
-      </div>
-    </header>
+    <div class="sr-meta" aria-hidden="true">
+      <span id="doc-label">Abra um PDF</span>
+      <span id="app-revision" title="Pré-Prumo + raster com teto de memória">Revisão 1.0.15</span>
+    </div>
 
     <main class="stage">
       <div id="viewport" class="viewport">
