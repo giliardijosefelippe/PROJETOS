@@ -262,6 +262,40 @@
       background: #0f1317; color: var(--text); padding: 12px; font-size: 16px; resize: vertical;
     }
     .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+
+    /* Immersive / fullscreen — dock stays above everything usable */
+    html.app-fullscreen #app {
+      grid-template-rows: 0 1fr;
+    }
+    html.app-fullscreen .top-bar {
+      display: none !important;
+    }
+    html.app-fullscreen .stage {
+      min-height: 100dvh;
+    }
+    html.app-fullscreen #tool-dock {
+      z-index: 10050;
+      max-height: calc(100dvh - 16px - var(--safe-bottom) - var(--safe-top));
+    }
+    html.app-fullscreen .report-panel,
+    html.app-fullscreen .library-panel {
+      z-index: 10060;
+    }
+    html.app-fullscreen .modal {
+      z-index: 10070;
+    }
+    html.app-fullscreen .autosave-chip {
+      z-index: 10040;
+    }
+    html.app-fullscreen #hint {
+      z-index: 10045;
+    }
+    .chip.fs-chip[aria-pressed="true"] {
+      color: #102016; background: #7ddea8; border-color: #4caf78;
+    }
+    #tool-dock .dock-btn.fs-on {
+      color: #102016; background: #7ddea8; border-color: #4caf78;
+    }
   </style>
 </head>
 <body>
@@ -272,11 +306,12 @@
         <div class="brand-text">
           <strong>Conf. Armadura</strong>
           <span id="doc-label">Abra um PDF</span>
-          <span id="app-revision" class="rev-label" title="Pré-Prumo + raster com teto de memória">Revisão 1.0.9</span>
+          <span id="app-revision" class="rev-label" title="Pré-Prumo + raster com teto de memória">Revisão 1.0.10</span>
         </div>
       </div>
       <div class="top-actions">
         <button type="button" id="btn-wake" class="chip on" aria-pressed="true">Tela ligada</button>
+        <button type="button" id="btn-fullscreen" class="chip fs-chip" aria-pressed="false" title="Expandir tela">⛶ Expandir</button>
         <button type="button" id="btn-rotate" class="icon-btn" title="Girar 90°">⟳</button>
         <button type="button" id="btn-report-top" class="chip accent-chip" onclick="window.__openConfReport && window.__openConfReport(event)">Relatório</button>
       </div>
@@ -357,6 +392,8 @@
         <div class="dock-sep" aria-hidden="true"></div>
         <button type="button" id="btn-undo" class="dock-btn" title="Desfazer">↶</button>
         <label class="dock-btn" title="Abrir PDF / documento"><span class="tool-icon" aria-hidden="true">📄</span><input type="file" id="file-input" accept="application/pdf,.pdf" hidden /></label>
+        <button type="button" id="btn-report-dock" class="dock-btn accent" title="Relatório" onclick="window.__openConfReport && window.__openConfReport(event)">☰</button>
+        <button type="button" id="btn-fullscreen-dock" class="dock-btn" title="Expandir / sair da tela cheia" aria-pressed="false">⛶</button>
       </div>
     </div>
   </div>
@@ -1319,10 +1356,12 @@
     btnWake: document.getElementById("btn-wake"),
     btnRotate: document.getElementById("btn-rotate"),
     btnUndo: document.getElementById("btn-undo"),
+    btnFullscreen: document.getElementById("btn-fullscreen"),
+    btnFullscreenDock: document.getElementById("btn-fullscreen-dock"),
+    btnReportDock: document.getElementById("btn-report-dock"),
     btnClear: document.getElementById("btn-clear"),
     btnDemo: document.getElementById("btn-demo"),
     btnLibrary: document.getElementById("btn-library"),
-    btnReportDock: document.getElementById("btn-report"),
     fileInput: document.getElementById("file-input"),
     fileInputLibrary: document.getElementById("file-input-library"),
     reportPanel: document.getElementById("report-panel"),
@@ -1386,7 +1425,8 @@
     openingBlockedTools: false,
     savedView: null,
     deleteTargetId: null,
-    tapCandidate: null
+    tapCandidate: null,
+    fullscreenOn: false
   };
 
   // Huge CAD sheets (4×A0) blow WebView memory if rendered at print DPI.
@@ -2706,6 +2746,126 @@
     scheduleViewRefine(200);
   }
 
+  function isAppFullscreen() {
+    return !!state.fullscreenOn;
+  }
+
+  function syncFullscreenUi() {
+    var on = !!state.fullscreenOn;
+    document.documentElement.classList.toggle("app-fullscreen", on);
+    if (els.btnFullscreen) {
+      els.btnFullscreen.setAttribute("aria-pressed", String(on));
+      els.btnFullscreen.textContent = on ? "⛶ Sair" : "⛶ Expandir";
+      els.btnFullscreen.classList.toggle("on", on);
+    }
+    if (els.btnFullscreenDock) {
+      els.btnFullscreenDock.setAttribute("aria-pressed", String(on));
+      els.btnFullscreenDock.classList.toggle("fs-on", on);
+      els.btnFullscreenDock.title = on ? "Sair da tela cheia" : "Expandir tela";
+      els.btnFullscreenDock.textContent = on ? "❐" : "⛶";
+    }
+    clearTimeout(state.resizeTimer);
+    state.resizeTimer = setTimeout(function () {
+      if (!state.pageInfo) return;
+      if (state.savedView) restoreView(state.savedView);
+      else applySceneTransform();
+      scheduleViewRefine(200);
+    }, 80);
+  }
+
+  async function enterFullscreen() {
+    state.fullscreenOn = true;
+    document.documentElement.classList.add("app-fullscreen");
+    syncFullscreenUi();
+    try {
+      var root = document.documentElement;
+      if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+        if (root.requestFullscreen) await root.requestFullscreen();
+        else if (root.webkitRequestFullscreen) root.webkitRequestFullscreen();
+      }
+    } catch (err) {
+      // WebView often blocks Fullscreen API — CSS immersive still active.
+      console.warn(err);
+    }
+    try {
+      var StatusBar = window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.StatusBar;
+      if (StatusBar && StatusBar.hide) await StatusBar.hide();
+    } catch (e2) {}
+  }
+
+  async function exitFullscreen() {
+    state.fullscreenOn = false;
+    document.documentElement.classList.remove("app-fullscreen");
+    syncFullscreenUi();
+    try {
+      if (document.fullscreenElement && document.exitFullscreen) await document.exitFullscreen();
+      else if (document.webkitFullscreenElement && document.webkitExitFullscreen) document.webkitExitFullscreen();
+    } catch (err) {
+      console.warn(err);
+    }
+    try {
+      var StatusBar = window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.StatusBar;
+      if (StatusBar && StatusBar.show) await StatusBar.show();
+    } catch (e2) {}
+  }
+
+  function toggleFullscreen() {
+    if (isAppFullscreen()) exitFullscreen();
+    else enterFullscreen();
+  }
+
+  function bindFullscreenControls() {
+    if (els.btnFullscreen) els.btnFullscreen.addEventListener("click", function (e) {
+      e.preventDefault();
+      toggleFullscreen();
+    });
+    if (els.btnFullscreenDock) els.btnFullscreenDock.addEventListener("click", function (e) {
+      e.preventDefault();
+      toggleFullscreen();
+    });
+    document.addEventListener("fullscreenchange", function () {
+      // Browser ESC exits native fullscreen — mirror into app state.
+      if (!document.fullscreenElement && !document.webkitFullscreenElement && state.fullscreenOn) {
+        // Keep CSS immersive unless user pressed our Sair; ESC should exit fully.
+        state.fullscreenOn = false;
+        syncFullscreenUi();
+      }
+    });
+    document.addEventListener("webkitfullscreenchange", function () {
+      if (!document.fullscreenElement && !document.webkitFullscreenElement && state.fullscreenOn) {
+        state.fullscreenOn = false;
+        syncFullscreenUi();
+      }
+    });
+    try {
+      var App = window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.App;
+      if (App && App.addListener) {
+        App.addListener("backButton", function (ev) {
+          if (isAppFullscreen()) {
+            exitFullscreen();
+            return;
+          }
+          if (els.deleteModal && !els.deleteModal.hidden) {
+            closeDeleteAnnotationModal();
+            return;
+          }
+          if (els.textModal && !els.textModal.hidden) {
+            closeNoteModal();
+            return;
+          }
+          var panel = document.getElementById("report-panel");
+          if (panel && !panel.hidden) {
+            closeReport();
+            return;
+          }
+          if (ev && ev.canGoBack) window.history.back();
+        });
+      }
+    } catch (err) {
+      console.warn(err);
+    }
+  }
+
   function updateWakeUi() {
     var on = isWakeEnabled();
     els.btnWake.classList.toggle("on", on);
@@ -3031,6 +3191,7 @@
         }, 80);
       });
     }
+    bindFullscreenControls();
     bindFloatingDock();
   }
 
