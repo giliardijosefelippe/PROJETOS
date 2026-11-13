@@ -245,6 +245,8 @@
       min-height: 44px; border-radius: 10px; padding: 0 14px; font-size: 14px;
     }
     .primary { background: var(--accent); border-color: #ff3b57; color: #fff; flex: 1; }
+    .primary.danger { background: #a01828; border-color: #ff4d4d; }
+    .modal-card p { margin: 0 0 4px; color: var(--muted); font-size: 14px; line-height: 1.4; }
     .modal {
       position: fixed; inset: 0; background: rgba(0, 0, 0, 0.55);
       display: grid; place-items: end center; z-index: 50; padding: 16px;
@@ -270,7 +272,7 @@
         <div class="brand-text">
           <strong>Conf. Armadura</strong>
           <span id="doc-label">Abra um PDF</span>
-          <span id="app-revision" class="rev-label" title="Pré-Prumo + raster com teto de memória">Revisão 1.0.8</span>
+          <span id="app-revision" class="rev-label" title="Pré-Prumo + raster com teto de memória">Revisão 1.0.9</span>
         </div>
       </div>
       <div class="top-actions">
@@ -329,6 +331,17 @@
         <div class="modal-actions">
           <button type="button" id="btn-text-cancel" class="secondary">Cancelar</button>
           <button type="button" id="btn-text-ok" class="primary">Confirmar</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="delete-modal" class="modal" hidden>
+      <div class="modal-card">
+        <h3 id="delete-modal-title">Excluir marcação?</h3>
+        <p id="delete-modal-body">Remover esta marcação do PDF e do relatório.</p>
+        <div class="modal-actions">
+          <button type="button" id="btn-delete-cancel" class="secondary">Cancelar</button>
+          <button type="button" id="btn-delete-confirm" class="primary danger">Excluir</button>
         </div>
       </div>
     </div>
@@ -772,6 +785,19 @@
         notify();
         return full;
       },
+      removeById: function (id) {
+        var before = items.length;
+        items = items.filter(function (it) { return it.id !== id; });
+        if (items.length === before) return false;
+        notify();
+        return true;
+      },
+      getById: function (id) {
+        for (var i = 0; i < items.length; i++) {
+          if (items[i].id === id) return items[i];
+        }
+        return null;
+      },
       summarize: function () {
         return {
           ok: items.filter(function (i) { return i.kind === "ok"; }),
@@ -810,9 +836,10 @@
       var rw = item.w || 0, rh = item.h || 0;
       var isOk = kind === "ok" || (kind === "select" && item.mode === "ok");
       var isSelect = kind === "select";
+      var isFocused = !!(item.id && state.deleteTargetId && item.id === state.deleteTargetId);
       if (rw > 2 && rh > 2) {
         ctx.strokeStyle = isOk ? "#1f9d55" : "#e00024";
-        ctx.lineWidth = isSelect ? 2 : 3;
+        ctx.lineWidth = isSelect ? 2 : (isFocused ? 5 : 3);
         if (isSelect) {
           // Selection border only (snapped to text) — fill comes after commit.
           ctx.setLineDash([5, 4]);
@@ -820,6 +847,9 @@
           ctx.setLineDash([]);
         } else {
           ctx.fillStyle = isOk ? "rgba(31,157,85,0.28)" : "rgba(224,0,36,0.22)";
+          if (isFocused) {
+            ctx.fillStyle = isOk ? "rgba(31,157,85,0.45)" : "rgba(224,0,36,0.38)";
+          }
           ctx.fillRect(x, y, rw, rh);
           ctx.strokeRect(x, y, rw, rh);
         }
@@ -1309,6 +1339,11 @@
     textModalTitle: document.getElementById("text-modal-title"),
     btnTextCancel: document.getElementById("btn-text-cancel"),
     btnTextOk: document.getElementById("btn-text-ok"),
+    deleteModal: document.getElementById("delete-modal"),
+    deleteModalTitle: document.getElementById("delete-modal-title"),
+    deleteModalBody: document.getElementById("delete-modal-body"),
+    btnDeleteCancel: document.getElementById("btn-delete-cancel"),
+    btnDeleteConfirm: document.getElementById("btn-delete-confirm"),
     tools: Array.prototype.slice.call(document.querySelectorAll(".tool[data-tool]"))
   };
 
@@ -1349,7 +1384,9 @@
     logicalViewport: null,
     renderScale: 1,
     openingBlockedTools: false,
-    savedView: null
+    savedView: null,
+    deleteTargetId: null,
+    tapCandidate: null
   };
 
   // Huge CAD sheets (4×A0) blow WebView memory if rendered at print DPI.
@@ -1874,6 +1911,69 @@
       return { x: rec.bbox.x, y: rec.bbox.y, w: rec.bbox.w, h: rec.bbox.h };
     }
     return { x: sel.x, y: sel.y, w: sel.w, h: sel.h };
+  }
+
+  function annotationHitBox(item) {
+    var pad = 10;
+    if ((item.kind === "ok" || item.kind === "risk") && item.w > 2 && item.h > 2) {
+      return { x: item.x - pad, y: item.y - pad, w: item.w + pad * 2, h: item.h + pad * 2 };
+    }
+    if (item.kind === "ok" || item.kind === "risk") {
+      // Point-style mark (legacy).
+      var s = 18;
+      return { x: item.x - s, y: item.y - s, w: s * 2, h: s * 2 };
+    }
+    return null;
+  }
+
+  function hitTestOkRisk(pagePoint) {
+    var list = annotations.list();
+    // Top-most (last drawn) first.
+    for (var i = list.length - 1; i >= 0; i--) {
+      var it = list[i];
+      if (it.kind !== "ok" && it.kind !== "risk") continue;
+      var box = annotationHitBox(it);
+      if (!box) continue;
+      if (
+        pagePoint.x >= box.x && pagePoint.x <= box.x + box.w &&
+        pagePoint.y >= box.y && pagePoint.y <= box.y + box.h
+      ) {
+        return it;
+      }
+    }
+    return null;
+  }
+
+  function openDeleteAnnotationModal(item) {
+    if (!item || !els.deleteModal) return;
+    state.deleteTargetId = item.id;
+    var label = item.label || item.text || item.name || (item.kind === "ok" ? "OK" : "Não conforme");
+    var kindLabel = item.kind === "ok" ? "✓ OK" : "✕ Não conforme";
+    if (els.deleteModalTitle) els.deleteModalTitle.textContent = "Excluir " + kindLabel + "?";
+    if (els.deleteModalBody) {
+      els.deleteModalBody.textContent =
+        (label ? ("“" + String(label).slice(0, 80) + "”") : "Esta marcação")
+        + " será removida do PDF, do relatório e do autosave.";
+    }
+    els.deleteModal.hidden = false;
+    redrawAnnotations();
+  }
+
+  function closeDeleteAnnotationModal() {
+    if (els.deleteModal) els.deleteModal.hidden = true;
+    state.deleteTargetId = null;
+    redrawAnnotations();
+  }
+
+  function confirmDeleteAnnotation() {
+    var id = state.deleteTargetId;
+    closeDeleteAnnotationModal();
+    if (!id) return;
+    if (annotations.removeById(id)) {
+      redrawAnnotations();
+      setHint("Marcação excluída.");
+      setTimeout(function () { setHint(""); }, 1600);
+    }
   }
 
   function finishToMove() {
@@ -2507,11 +2607,20 @@
     }
     if (state.tool === "pan" || e.button === 1) {
       clearDetailCanvas();
-      state.panStart = { x: e.clientX, y: e.clientY, tx: state.tx, ty: state.ty };
+      state.panStart = { x: e.clientX, y: e.clientY, tx: state.tx, ty: state.ty, moved: false };
+      state.tapCandidate = { x: e.clientX, y: e.clientY };
       return;
     }
     var point = clientToPage(e.clientX, e.clientY);
-    if (state.tool === "ok" || state.tool === "risk") startSelect(point);
+    // While drawing OK/X, tapping an existing mark opens delete instead of a tiny drag.
+    if (state.tool === "ok" || state.tool === "risk") {
+      var hit = hitTestOkRisk(point);
+      if (hit) {
+        openDeleteAnnotationModal(hit);
+        return;
+      }
+      startSelect(point);
+    }
   }
 
   function onPointerMove(e) {
@@ -2535,9 +2644,14 @@
       return;
     }
     if (state.panStart && state.tool === "pan") {
-      state.tx = state.panStart.tx + (e.clientX - state.panStart.x);
-      state.ty = state.panStart.ty + (e.clientY - state.panStart.y);
-      applySceneTransform();
+      var dx = e.clientX - state.panStart.x;
+      var dy = e.clientY - state.panStart.y;
+      if (!state.panStart.moved && (dx * dx + dy * dy) > 64) state.panStart.moved = true;
+      if (state.panStart.moved) {
+        state.tx = state.panStart.tx + dx;
+        state.ty = state.panStart.ty + dy;
+        applySceneTransform();
+      }
       return;
     }
     if (!state.drawing) return;
@@ -2548,18 +2662,30 @@
   function onPointerUp(e) {
     var wasPinching = state.pinching;
     var wasPanning = !!state.panStart;
+    var panMoved = !!(state.panStart && state.panStart.moved);
+    var tapAt = state.tapCandidate;
     state.pointers.delete(e.pointerId);
     if (state.pointers.size < 2) state.pinching = false;
-    if (state.pointers.size === 0) state.panStart = null;
+    if (state.pointers.size === 0) {
+      state.panStart = null;
+      state.tapCandidate = null;
+    }
     if (state.drawing) {
       if (state.tool === "ok" || state.tool === "risk") endSelect();
+    } else if (
+      wasPanning && !panMoved && !wasPinching &&
+      state.tool === "pan" && tapAt && state.pointers.size === 0
+    ) {
+      var pagePt = clientToPage(e.clientX, e.clientY);
+      var hit = hitTestOkRisk(pagePt);
+      if (hit) openDeleteAnnotationModal(hit);
     }
     try {
       if (els.viewport.hasPointerCapture && els.viewport.hasPointerCapture(e.pointerId)) {
         els.viewport.releasePointerCapture(e.pointerId);
       }
     } catch (err) {}
-    if (state.pointers.size === 0 && (wasPinching || wasPanning)) {
+    if (state.pointers.size === 0 && (wasPinching || (wasPanning && panMoved))) {
       scheduleViewRefine(wasPinching ? 180 : 280);
     }
   }
@@ -2863,6 +2989,13 @@
     els.btnShare.addEventListener("click", shareReport);
     els.btnTextCancel.addEventListener("click", closeNoteModal);
     els.btnTextOk.addEventListener("click", saveNote);
+    if (els.btnDeleteCancel) els.btnDeleteCancel.addEventListener("click", closeDeleteAnnotationModal);
+    if (els.btnDeleteConfirm) els.btnDeleteConfirm.addEventListener("click", confirmDeleteAnnotation);
+    if (els.deleteModal) {
+      els.deleteModal.addEventListener("click", function (ev) {
+        if (ev.target === els.deleteModal) closeDeleteAnnotationModal();
+      });
+    }
     function onPickPdf(input) {
       var file = input.files && input.files[0];
       if (!file) return;

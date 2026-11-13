@@ -1,6 +1,6 @@
 {
   "name": "conferencia-armadura",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "private": true,
   "description": "App HTML/mobile para conferência de armadura in loco — anotação em PDF, relatório OK/risco, wake lock.",
   "type": "module",
