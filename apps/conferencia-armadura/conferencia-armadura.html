@@ -306,7 +306,7 @@
         <div class="brand-text">
           <strong>Conf. Armadura</strong>
           <span id="doc-label">Abra um PDF</span>
-          <span id="app-revision" class="rev-label" title="Pré-Prumo + raster com teto de memória">Revisão 1.0.11</span>
+          <span id="app-revision" class="rev-label" title="Pré-Prumo + raster com teto de memória">Revisão 1.0.12</span>
         </div>
       </div>
       <div class="top-actions">
@@ -823,8 +823,10 @@
         return full;
       },
       removeById: function (id) {
+        var sid = id == null ? "" : String(id);
         var before = items.length;
-        items = items.filter(function (it) { return it.id !== id; });
+        items = items.filter(function (it) { return String(it.id) !== sid; });
+        draft = null;
         if (items.length === before) return false;
         notify();
         return true;
@@ -848,8 +850,17 @@
     };
   }
 
-  function paintAnnotations(ctx, items, draft) {
+  function clearAnnoCanvasPixels(ctx) {
+    if (!ctx) return;
+    ctx.save();
+    // Must clear in device pixels — after setTransform(dpr) clearRect(canvas.*) only wipes a fraction.
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    ctx.restore();
+  }
+
+  function paintAnnotations(ctx, items, draft) {
+    clearAnnoCanvasPixels(ctx);
     var all = draft ? items.concat([draft]) : items;
     for (var i = 0; i < all.length; i++) paintOne(ctx, all[i]);
   }
@@ -1463,6 +1474,10 @@
   function redrawAnnotations() {
     var ctx = els.annoCanvas.getContext("2d");
     if (!ctx || !state.pageInfo) return;
+    // Re-apply logical scale each paint (clearAnnoCanvasPixels restores identity temporarily).
+    var cssWidth = state.pageInfo.cssWidth;
+    var dpr = els.annoCanvas.width / Math.max(1, cssWidth);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     paintAnnotations(ctx, annotations.list(), annotations.getDraft());
   }
 
@@ -2010,10 +2025,19 @@
 
   function confirmDeleteAnnotation() {
     var id = state.deleteTargetId;
-    closeDeleteAnnotationModal();
-    if (!id) return;
-    if (annotations.removeById(id)) {
-      redrawAnnotations();
+    if (!id) {
+      closeDeleteAnnotationModal();
+      return;
+    }
+    // Drop focus/draft first, then remove, then hard-repaint anno layer (no ghost fills).
+    state.deleteTargetId = null;
+    if (els.deleteModal) els.deleteModal.hidden = true;
+    annotations.setDraft(null);
+    var removed = annotations.removeById(id);
+    // Force full anno canvas reset (clears any uncleared device pixels).
+    if (state.pageInfo) syncAnnoCanvas();
+    else redrawAnnotations();
+    if (removed) {
       setHint("Marcação excluída.");
       setTimeout(function () { setHint(""); }, 1600);
     }
