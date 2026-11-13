@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MapaConcreto — Demo estático</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body data-page="index">
+    <header class="topbar">
+      <div class="brand">
+        <strong>MapaConcreto</strong>
+        <span>Demo visual estático · Lunardeli</span>
+      </div>
+      <nav class="nav" aria-label="Principal">
+        <a href="index.html" data-nav="index">Obras</a>
+        <a href="planta.html" data-nav="planta">Planta</a>
+        <a href="concretagem.html" data-nav="concretagem">Concretagem</a>
+      </nav>
+      <span class="badge">Demonstração</span>
+    </header>
+
+    <main class="wrap">
+      <section class="hero">
+        <span class="badge">Não substitui o app Supabase</span>
+        <h1>Painel de obras — demo para testar o fluxo</h1>
+        <p>
+          Abra a planta, calibri a escala, desenhe uma região e confira o caso de
+          aceite da laje (40&nbsp;m² ∩ 25&nbsp;m² → 62,5% / 3,75&nbsp;m³). Depois
+          veja NF, Slump e volumes sem chamar a diferença de “desperdício”.
+        </p>
+      </section>
+
+      <section class="panel">
+        <div class="panel-hd">
+          <h2>Obras</h2>
+          <div class="toolbar">
+            <button type="button" class="btn secondary" id="btn-reset">
+              Restaurar demo
+            </button>
+            <a class="btn" href="planta.html">Abrir planta</a>
+          </div>
+        </div>
+        <div class="panel-bd">
+          <div class="grid grid-2" id="sites"></div>
+          <p class="note">
+            Dados ficam só neste navegador (<code>localStorage</code>), marcados
+            como <strong>demonstração</strong>. Não há persistência real nem
+            volumes inventados fora do caso de aceite documentado.
+          </p>
+        </div>
+      </section>
+
+      <p class="footer-note">
+        Como abrir: duplo clique em <code>index.html</code> ou
+        <code>python3 -m http.server</code> nesta pasta. Ver
+        <a href="README.md">README.md</a>.
+      </p>
+    </main>
+
+    <script src="demo.js"></script>
+    <script>
+      McDemo.setCurrentNav();
+      const state = McDemo.load();
+
+      function render() {
+        const el = document.getElementById("sites");
+        const mapped = McDemo.mappedFromRegion(
+          state.slab,
+          state.region && state.region.areaM2,
+        );
+        el.innerHTML = `
+          <a class="site-card" href="planta.html">
+            <span class="badge">Demonstração</span>
+            <h3>${state.site.code} — ${state.site.name}</h3>
+            <p>
+              Laje ${state.slab.areaM2} m² · região
+              ${state.region && state.region.areaM2 != null ? state.region.areaM2 + " m²" : "—"}
+              · mapeado
+              ${
+                mapped.percent != null
+                  ? mapped.percent.toFixed(1).replace(".", ",") +
+                    "% / " +
+                    mapped.volumeEstimadoM3.toFixed(2).replace(".", ",") +
+                    " m³"
+                  : "indeterminado"
+              }
+            </p>
+          </a>
+          <a class="site-card" href="concretagem.html">
+            <span class="badge">Demonstração</span>
+            <h3>${state.pour.code} — ${state.pour.title}</h3>
+            <p>
+              NF ${state.pour.nf} · ${state.pour.volumeNfM3} m³ NF · Slump
+              ${state.pour.slumpMeasuredMm} mm
+            </p>
+          </a>
+        `;
+      }
+
+      document.getElementById("btn-reset").addEventListener("click", () => {
+        Object.assign(state, McDemo.reset());
+        render();
+      });
+
+      render();
+    </script>
+  </body>
+</html>

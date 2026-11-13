@@ -18,6 +18,7 @@ Documentação:
 - Arquitetura (inclui MapaConcreto): [`docs/architecture.md`](./docs/architecture.md)
 - Modelo de dados conferência: [`docs/DATA_MODEL.md`](./docs/DATA_MODEL.md)
 - **Merge + smoke MapaConcreto:** [`docs/MAPACONCRETO_MERGE.md`](./docs/MAPACONCRETO_MERGE.md)
+- **Demo HTML estático (teste visual):** [`docs/demo-mapaconcreto/`](./docs/demo-mapaconcreto/) — `python3 -m http.server` na pasta (não substitui o app Supabase)
 - Spec / guia expandido (Project store): `docs/especificacao-mapeamento-concreto.md`, `docs/guia-merge-smoke.md`
 
 ## Stack
