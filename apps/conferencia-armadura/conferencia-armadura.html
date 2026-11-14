@@ -302,6 +302,19 @@
       flex: 1; cursor: pointer; min-width: 0;
     }
     .prumo-footer .secondary { flex: 1; min-width: 0; }
+    .report-footer .primary,
+    .report-footer .secondary { flex: 1 1 calc(50% - 8px); min-width: 140px; }
+    .share-sheet-card { width: min(420px, 100%); max-height: none; }
+    .share-sheet-card .share-choice {
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .share-sheet-card .share-choice .primary {
+      flex: none; width: 100%; min-height: 48px; text-align: center;
+      white-space: normal; line-height: 1.25; padding: 10px 12px;
+    }
+    .share-sheet-card .share-choice .primary.subtle {
+      background: #1a4a36; border-color: #3d8f6a;
+    }
     .report-scroll .summary {
       display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px;
     }
@@ -475,7 +488,7 @@
         <div class="brand-text">
           <strong>CONF ARMADURA</strong>
           <span id="doc-label">Abra um PDF</span>
-          <span id="app-revision" class="rev-label" title="Versão app (0.mid.last — last 00–99)">0.1.03-20261114</span>
+          <span id="app-revision" class="rev-label" title="Versão app (0.mid.last — last 00–99)">0.1.04-20261114</span>
         </div>
       </div>
       <div class="top-actions">
@@ -503,10 +516,25 @@
         </div>
         <p class="prumo-hint">Conferência agrupada por <strong>Viga / Pilar / Laje</strong> (letra inicial do rótulo).</p>
         <div id="report-body" class="report-scroll"></div>
-        <div class="prumo-footer">
-          <button type="button" id="btn-export-html" class="primary">Exportar HTML</button>
+        <div class="prumo-footer report-footer">
+          <button type="button" id="btn-share" class="primary">Compartilhar</button>
+          <button type="button" id="btn-export-pdf" class="secondary">Exportar PDF</button>
+          <button type="button" id="btn-export-word" class="secondary">Exportar Word</button>
           <button type="button" id="btn-export-text" class="secondary">Copiar texto</button>
-          <button type="button" id="btn-share" class="secondary">Compartilhar</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="share-sheet" class="modal prumo-modal" hidden>
+      <div class="modal-card prumo-card share-sheet-card" role="dialog" aria-labelledby="share-sheet-title">
+        <div class="prumo-head">
+          <h3 id="share-sheet-title">Compartilhar</h3>
+          <button type="button" id="btn-close-share" class="secondary">Fechar</button>
+        </div>
+        <p class="prumo-hint">Escolha o que enviar pelo compartilhamento do dispositivo.</p>
+        <div class="share-choice">
+          <button type="button" id="btn-share-all" class="primary">Mandar tudo</button>
+          <button type="button" id="btn-share-nc-notes" class="primary subtle">Somente não conformes + notas de texto</button>
         </div>
       </div>
     </div>
@@ -1483,13 +1511,47 @@
     });
   }
 
+  function isTextNoteItem(item) {
+    if (!item || item.kind !== "note") return false;
+    var mode = item.mode == null ? "text" : String(item.mode);
+    return mode === "text" || (mode !== "ok" && mode !== "risk");
+  }
+
+  /** @param {"all"|"nc_notes"} scope */
+  function filterReportModel(model, scope) {
+    if (!model) return null;
+    if (scope !== "nc_notes") {
+      return Object.assign({}, model, { shareScope: "all" });
+    }
+    var textNotes = (model.notes || []).filter(isTextNoteItem);
+    return {
+      title: model.title + " (não conformes + notas)",
+      docName: model.docName,
+      generatedAt: model.generatedAt,
+      shareScope: "nc_notes",
+      counts: {
+        ok: 0,
+        risk: (model.risks || []).length,
+        notes: textNotes.length,
+        strokes: 0,
+        total: (model.risks || []).length + textNotes.length
+      },
+      risks: model.risks || [],
+      oks: [],
+      notes: textNotes
+    };
+  }
+
   function buildPlainTextReport(model) {
+    var scoped = model.shareScope === "nc_notes";
     var lines = [
       model.title,
       "Documento: " + model.docName,
       "Gerado em: " + fmtTime(model.generatedAt),
       "",
-      "Resumo: " + model.counts.ok + " conferidos · " + model.counts.risk + " não conformes · " + model.counts.total + " marcações"
+      scoped
+        ? ("Resumo: " + model.counts.risk + " não conformes · " + model.counts.notes + " notas de texto")
+        : ("Resumo: " + model.counts.ok + " conferidos · " + model.counts.risk + " não conformes · " + model.counts.total + " marcações")
     ];
     appendGroupedPlain(lines, "NÃO CONFORMES / RISCOS", model.risks, function (r, i) {
       var line = (i + 1) + ". " + reportHeadText(r) + " — Não conforme";
@@ -1497,10 +1559,12 @@
       line += " (" + fmtTime(r.createdAt) + ")";
       return line;
     });
-    appendGroupedPlain(lines, "JÁ CONFERIDOS (OK)", model.oks, function (r, i) {
-      return (i + 1) + ". " + reportHeadText(r) + " — conferido";
-    });
-    lines.push("", "NOTAS");
+    if (!scoped) {
+      appendGroupedPlain(lines, "JÁ CONFERIDOS (OK)", model.oks, function (r, i) {
+        return (i + 1) + ". " + reportHeadText(r) + " — conferido";
+      });
+    }
+    lines.push("", "NOTAS DE TEXTO");
     if (!model.notes.length) lines.push("- Nenhuma");
     model.notes.forEach(function (r) {
       lines.push("- " + (r.text || "(vazia)") + " [" + labelFor(r) + "]");
@@ -1509,21 +1573,156 @@
   }
 
   function buildExportableHtmlDocument(model) {
+    var bodyHtml = renderReportHtmlFragment(model)
+      .replace(/<div class="summary">[\s\S]*?<\/div>\s*<p><strong>Documento:[\s\S]*?<\/p>/, "");
+    if (model.shareScope === "nc_notes") {
+      bodyHtml = bodyHtml.replace(/<h3>Já conferidos \(OK\)<\/h3>[\s\S]*?(?=<h3>Notas de texto<\/h3>)/, "");
+    }
     return "<!DOCTYPE html><html lang=\"pt-BR\"><head><meta charset=\"UTF-8\" /><title>"
       + escapeHtml(model.title) + "</title>"
-      + "<style>body{font-family:system-ui,sans-serif;margin:24px}h1{font-size:1.4rem}"
+      + "<style>body{font-family:system-ui,sans-serif;margin:24px;color:#122}h1{font-size:1.4rem}"
+      + "h3{margin-top:1.2em}h4{margin:0.8em 0 0.3em;color:#355}"
       + ".cards{display:flex;gap:12px;flex-wrap:wrap}.card{border:1px solid #ccc;border-radius:8px;padding:12px 16px}"
       + ".ok{color:#147a3d}.risk{color:#9a6b00}</style></head><body>"
       + "<h1>" + escapeHtml(model.title) + "</h1>"
       + "<p><strong>Documento:</strong> " + escapeHtml(model.docName) + "<br/>"
       + "<strong>Gerado em:</strong> " + escapeHtml(fmtTime(model.generatedAt)) + "</p>"
       + '<div class="cards">'
-      + '<div class="card ok"><strong>' + model.counts.ok + '</strong><br/>Trechos OK</div>'
-      + '<div class="card risk"><strong>' + model.counts.risk + '</strong><br/>Riscos</div>'
-      + '<div class="card"><strong>' + model.counts.total + '</strong><br/>Marcações</div>'
+      + (model.shareScope === "nc_notes"
+        ? ""
+        : '<div class="card ok"><strong>' + model.counts.ok + '</strong><br/>Trechos OK</div>')
+      + '<div class="card risk"><strong>' + model.counts.risk + '</strong><br/>Não conformes</div>'
+      + '<div class="card"><strong>' + model.counts.notes + '</strong><br/>Notas</div>'
       + "</div>"
-      + renderReportHtmlFragment(model).replace(/<div class="summary">[\s\S]*?<\/div>\s*<p><strong>Documento:[\s\S]*?<\/p>/, "")
+      + bodyHtml
       + "</body></html>";
+  }
+
+  function wrapTextLines(text, maxChars) {
+    var raw = String(text || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
+    var out = [];
+    raw.forEach(function (line) {
+      if (line.length <= maxChars) {
+        out.push(line);
+        return;
+      }
+      var rest = line;
+      while (rest.length > maxChars) {
+        var slice = rest.slice(0, maxChars);
+        var breakAt = Math.max(slice.lastIndexOf(" "), slice.lastIndexOf("-"), slice.lastIndexOf("·"));
+        if (breakAt < maxChars * 0.55) breakAt = maxChars;
+        out.push(rest.slice(0, breakAt).trimEnd());
+        rest = rest.slice(breakAt).trimStart();
+      }
+      if (rest) out.push(rest);
+    });
+    return out;
+  }
+
+  function pdfEscapeLatin1(str) {
+    var s = String(str);
+    var out = "";
+    for (var i = 0; i < s.length; i++) {
+      var code = s.charCodeAt(i);
+      if (code === 0x5c || code === 0x28 || code === 0x29) {
+        out += "\\" + s.charAt(i);
+      } else if (code === 0x0a) {
+        out += "\\n";
+      } else if (code < 32) {
+        out += " ";
+      } else if (code < 127) {
+        out += s.charAt(i);
+      } else if (code <= 255) {
+        var oct = code.toString(8);
+        while (oct.length < 3) oct = "0" + oct;
+        out += "\\" + oct;
+      } else {
+        out += "?";
+      }
+    }
+    return out;
+  }
+
+  function buildPdfBlobFromText(text) {
+    var lines = wrapTextLines(text, 92);
+    var linesPerPage = 48;
+    var pageLinesList = [];
+    for (var i = 0; i < lines.length; i += linesPerPage) {
+      pageLinesList.push(lines.slice(i, i + linesPerPage));
+    }
+    if (!pageLinesList.length) pageLinesList = [[""]];
+
+    var objects = [];
+    function addObj(body) {
+      objects.push(body);
+      return objects.length;
+    }
+
+    var fontId = addObj("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>");
+    var contentIds = pageLinesList.map(function (pageLines) {
+      var parts = ["BT", "/F1 10 Tf", "14 TL", "50 800 Td"];
+      pageLines.forEach(function (line, idx) {
+        if (idx === 0) parts.push("(" + pdfEscapeLatin1(line) + ") Tj");
+        else parts.push("T* (" + pdfEscapeLatin1(line) + ") Tj");
+      });
+      parts.push("ET");
+      var stream = parts.join("\n");
+      return addObj("<< /Length " + stream.length + " >>\nstream\n" + stream + "\nendstream");
+    });
+
+    var pageIds = contentIds.map(function (contentId) {
+      return addObj("<< /Type /Page /Parent 0 0 R /MediaBox [0 0 595 842] "
+        + "/Resources << /Font << /F1 " + fontId + " 0 R >> >> "
+        + "/Contents " + contentId + " 0 R >>");
+    });
+    var pagesId = addObj("<< /Type /Pages /Kids ["
+      + pageIds.map(function (id) { return id + " 0 R"; }).join(" ")
+      + "] /Count " + pageIds.length + " >>");
+    pageIds.forEach(function (id, idx) {
+      objects[id - 1] = "<< /Type /Page /Parent " + pagesId + " 0 R /MediaBox [0 0 595 842] "
+        + "/Resources << /Font << /F1 " + fontId + " 0 R >> >> "
+        + "/Contents " + contentIds[idx] + " 0 R >>";
+    });
+    var catalogId = addObj("<< /Type /Catalog /Pages " + pagesId + " 0 R >>");
+
+    var pdf = "%PDF-1.4\n";
+    var offsets = [0];
+    objects.forEach(function (body, idx) {
+      offsets.push(pdf.length);
+      pdf += String(idx + 1) + " 0 obj\n" + body + "\nendobj\n";
+    });
+    var xrefPos = pdf.length;
+    pdf += "xref\n0 " + (objects.length + 1) + "\n";
+    pdf += "0000000000 65535 f \n";
+    for (var x = 1; x <= objects.length; x++) {
+      var off = String(offsets[x]);
+      while (off.length < 10) off = "0" + off;
+      pdf += off + " 00000 n \n";
+    }
+    pdf += "trailer\n<< /Size " + (objects.length + 1) + " /Root " + catalogId + " 0 R >>\n";
+    pdf += "startxref\n" + xrefPos + "\n%%EOF";
+    return new Blob([pdf], { type: "application/pdf" });
+  }
+
+  function buildWordBlob(model) {
+    var html = buildExportableHtmlDocument(model);
+    var doc = "<html xmlns:o='urn:schemas-microsoft-com:office:office' "
+      + "xmlns:w='urn:schemas-microsoft-com:office:word' "
+      + "xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'>"
+      + "<!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View></w:WordDocument></xml><![endif]-->"
+      + "</head><body>" + html.replace(/^[\s\S]*<body[^>]*>/i, "").replace(/<\/body>[\s\S]*$/i, "")
+      + "</body></html>";
+    return new Blob(["\ufeff", doc], { type: "application/msword" });
+  }
+
+  function reportFileStem(model) {
+    var base = String((model && model.docName) || "relatorio")
+      .replace(/\.[Pp][Dd][Ff]$/, "")
+      .replace(/[^\w\-À-ÿ]+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .slice(0, 48) || "relatorio";
+    var tag = model && model.shareScope === "nc_notes" ? "nc-notas" : "completo";
+    return "CONF-ARMADURA-" + base + "-" + tag;
   }
 
   /* ---- Wake lock ---- */
@@ -1588,9 +1787,14 @@
     libraryBody: document.getElementById("library-body"),
     librarySearch: document.getElementById("library-search"),
     btnCloseLibrary: document.getElementById("btn-close-library"),
-    btnExportHtml: document.getElementById("btn-export-html"),
+    btnExportPdf: document.getElementById("btn-export-pdf"),
+    btnExportWord: document.getElementById("btn-export-word"),
     btnExportText: document.getElementById("btn-export-text"),
     btnShare: document.getElementById("btn-share"),
+    shareSheet: document.getElementById("share-sheet"),
+    btnCloseShare: document.getElementById("btn-close-share"),
+    btnShareAll: document.getElementById("btn-share-all"),
+    btnShareNcNotes: document.getElementById("btn-share-nc-notes"),
     textModal: document.getElementById("text-modal"),
     textInput: document.getElementById("text-input"),
     textModalTitle: document.getElementById("text-modal-title"),
@@ -3197,20 +3401,18 @@
     var url = URL.createObjectURL(blob);
     var a = document.createElement("a");
     a.href = url; a.download = filename; a.click();
-    URL.revokeObjectURL(url);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1500);
   }
 
-  function exportHtml() {
+  function ensureReportModel() {
     if (!state.lastReportModel) openReport();
-    downloadBlob(
-      "relatorio-conferencia-armadura-" + Date.now() + ".html",
-      new Blob([buildExportableHtmlDocument(state.lastReportModel)], { type: "text/html;charset=utf-8" })
-    );
+    return state.lastReportModel;
   }
 
   function copyText() {
-    if (!state.lastReportModel) openReport();
-    var text = buildPlainTextReport(state.lastReportModel);
+    var model = ensureReportModel();
+    if (!model) return;
+    var text = buildPlainTextReport(model);
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(text).then(function () {
         setHint("Relatório copiado.");
@@ -3221,14 +3423,72 @@
     }
   }
 
-  function shareReport() {
-    if (!state.lastReportModel) openReport();
-    var text = buildPlainTextReport(state.lastReportModel);
+  function openShareSheet() {
+    if (!ensureReportModel()) return;
+    var sheet = els.shareSheet || document.getElementById("share-sheet");
+    if (!sheet) return;
+    sheet.hidden = false;
+    sheet.removeAttribute("hidden");
+    sheet.style.display = "grid";
+  }
+
+  function closeShareSheet() {
+    var sheet = els.shareSheet || document.getElementById("share-sheet");
+    if (!sheet) return;
+    sheet.hidden = true;
+    sheet.setAttribute("hidden", "");
+    sheet.style.display = "none";
+  }
+
+  function shareReportWithScope(scope) {
+    var base = ensureReportModel();
+    if (!base) return;
+    var model = filterReportModel(base, scope === "nc_notes" ? "nc_notes" : "all");
+    var text = buildPlainTextReport(model);
+    closeShareSheet();
+    var title = scope === "nc_notes"
+      ? "CONF ARMADURA — NC + notas"
+      : "Relatório CONF ARMADURA";
     if (navigator.share) {
-      navigator.share({ title: "Relatório CONF ARMADURA", text: text }).catch(function () { copyText(); });
+      navigator.share({ title: title, text: text }).then(function () {
+        setHint(scope === "nc_notes" ? "NC + notas enviados." : "Relatório completo enviado.");
+        setTimeout(function () { setHint(""); }, 1800);
+      }).catch(function (err) {
+        if (err && err.name === "AbortError") return;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(function () {
+            setHint("Não foi possível abrir o compartilhar — texto copiado.");
+            setTimeout(function () { setHint(""); }, 2200);
+          }).catch(function () { window.prompt("Copie o relatório:", text); });
+        } else {
+          window.prompt("Copie o relatório:", text);
+        }
+      });
+    } else if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () {
+        setHint("Compartilhar indisponível — texto copiado.");
+        setTimeout(function () { setHint(""); }, 2200);
+      }).catch(function () { window.prompt("Copie o relatório:", text); });
     } else {
-      copyText();
+      window.prompt("Copie o relatório:", text);
     }
+  }
+
+  function exportPdf() {
+    var model = ensureReportModel();
+    if (!model) return;
+    var text = buildPlainTextReport(model);
+    downloadBlob(reportFileStem(model) + ".pdf", buildPdfBlobFromText(text));
+    setHint("PDF exportado.");
+    setTimeout(function () { setHint(""); }, 1800);
+  }
+
+  function exportWord() {
+    var model = ensureReportModel();
+    if (!model) return;
+    downloadBlob(reportFileStem(model) + ".doc", buildWordBlob(model));
+    setHint("Word exportado.");
+    setTimeout(function () { setHint(""); }, 1800);
   }
 
   function isSideMenuOpen() {
@@ -3477,9 +3737,22 @@
         }
       });
     }
-    els.btnExportHtml.addEventListener("click", exportHtml);
-    els.btnExportText.addEventListener("click", copyText);
-    els.btnShare.addEventListener("click", shareReport);
+    if (els.btnExportPdf) els.btnExportPdf.addEventListener("click", exportPdf);
+    if (els.btnExportWord) els.btnExportWord.addEventListener("click", exportWord);
+    if (els.btnExportText) els.btnExportText.addEventListener("click", copyText);
+    if (els.btnShare) els.btnShare.addEventListener("click", openShareSheet);
+    if (els.btnCloseShare) els.btnCloseShare.addEventListener("click", closeShareSheet);
+    if (els.btnShareAll) {
+      els.btnShareAll.addEventListener("click", function () { shareReportWithScope("all"); });
+    }
+    if (els.btnShareNcNotes) {
+      els.btnShareNcNotes.addEventListener("click", function () { shareReportWithScope("nc_notes"); });
+    }
+    if (els.shareSheet) {
+      els.shareSheet.addEventListener("click", function (ev) {
+        if (ev.target === els.shareSheet) closeShareSheet();
+      });
+    }
     els.btnTextCancel.addEventListener("click", closeNoteModal);
     els.btnTextOk.addEventListener("click", saveNote);
     if (els.btnDeleteCancel) els.btnDeleteCancel.addEventListener("click", closeDeleteAnnotationModal);
