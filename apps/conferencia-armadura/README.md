@@ -23,7 +23,9 @@ Sirva a pasta (módulos ES): `python3 -m http.server 8080` → `http://localhost
 
 Arquivos gerados neste repo (nome + versão; versões anteriores são mantidas):
 
-**`apps/conferencia-armadura/android-dist/CONF ARMADURA 0.1.06-20261114.apk`**
+**`apps/conferencia-armadura/android-dist/CONF ARMADURA 0.1.07-20261114.apk`**
+
+No Android, o app aparece em **Abrir com** para PDF (WhatsApp → Abrir com → CONF ARMADURA).
 
 Alias local (sempre a última build): `android-dist/conf-armadura-debug.apk`
 

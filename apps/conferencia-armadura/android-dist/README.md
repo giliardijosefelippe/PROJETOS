@@ -2,7 +2,8 @@
 
 Filenames include **name + version** and prior builds are kept:
 
-- `CONF ARMADURA 0.1.06-20261114.apk` — install this (and keep older `CONF ARMADURA 0.*.apk` files)
+- `CONF ARMADURA 0.1.07-20261114.apk` — install this (and keep older `CONF ARMADURA 0.*.apk` files)
+- From 0.1.07: appears in **Abrir com** for PDF (VIEW/SEND)
 - `conf-armadura-debug.apk` — alias of the latest build only (for local scripts)
 
 Rebuild:

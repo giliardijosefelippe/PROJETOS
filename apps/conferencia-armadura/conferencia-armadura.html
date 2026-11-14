@@ -488,7 +488,7 @@
         <div class="brand-text">
           <strong>CONF ARMADURA</strong>
           <span id="doc-label">Abra um PDF</span>
-          <span id="app-revision" class="rev-label" title="Versão app (0.mid.last — last 00–99)">0.1.06-20261114</span>
+          <span id="app-revision" class="rev-label" title="Versão app (0.mid.last — last 00–99)">0.1.07-20261114</span>
         </div>
       </div>
       <div class="top-actions">
@@ -2738,6 +2738,60 @@
     reader.readAsArrayBuffer(file);
   }
 
+  /** Android Abrir com / SEND — PdfOpen plugin copies URI into CACHE/incoming. */
+  function capPdfOpen() {
+    try {
+      return (window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.PdfOpen) || null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  async function openIncomingPdfPayload(payload) {
+    if (!payload) return;
+    if (payload.error) {
+      setHint("Não foi possível abrir o PDF: " + payload.error);
+      setTimeout(function () { setHint(""); }, 2800);
+      return;
+    }
+    if (!payload.cachePath) return;
+    var fs = capFilesystem();
+    if (!fs || !fs.readFile) {
+      setHint("Filesystem indisponível para abrir o PDF recebido.");
+      return;
+    }
+    setHint("Abrindo PDF recebido…");
+    try {
+      var res = await fs.readFile({ path: payload.cachePath, directory: "CACHE" });
+      var bytes = base64ToBytes(res.data);
+      await openPdfBytes(bytes, payload.name || "recebido.pdf");
+      closeLibrary();
+      setSideMenuOpen(false);
+      setHint("PDF aberto via Abrir com.");
+      setTimeout(function () { setHint(""); }, 1800);
+    } catch (err) {
+      console.warn(err);
+      setHint("Falha ao ler o PDF compartilhado.");
+      setTimeout(function () { setHint(""); }, 2800);
+    }
+  }
+
+  function bindIncomingPdfIntents() {
+    if (!isNativeCapacitor()) return;
+    var PdfOpen = capPdfOpen();
+    if (!PdfOpen) return;
+    if (PdfOpen.addListener) {
+      PdfOpen.addListener("pdfOpen", function (payload) {
+        openIncomingPdfPayload(payload);
+      });
+    }
+    if (PdfOpen.consumePending) {
+      Promise.resolve(PdfOpen.consumePending()).then(function (payload) {
+        if (payload && (payload.cachePath || payload.error)) openIncomingPdfPayload(payload);
+      }).catch(function () {});
+    }
+  }
+
   function startStroke(point) {
     annotations.setDraft({ kind: "stroke", mode: state.contentMode, width: 3, points: [point] });
     state.drawing = true;
@@ -3810,6 +3864,7 @@
     ensurePdfJs().then(function () {
       // Defer native FS permission prompts until after first interactive frame.
       setTimeout(function () { ensureNativeFs().catch(function () {}); }, 1500);
+      bindIncomingPdfIntents();
       var index = readLibraryIndex();
       if (index.pdfs && index.pdfs.length) {
         if (isNativeCapacitor()) {
