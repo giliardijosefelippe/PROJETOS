@@ -171,9 +171,11 @@
     }
     .tool[data-tool="ok"][aria-pressed="true"] { background: #184a2d; border-color: var(--ok); }
     .tool[data-tool="risk"][aria-pressed="true"] { background: #4a1818; border-color: #ff4d4d; }
+    .tool[data-tool="note"][aria-pressed="true"] { background: #1a3a45; border-color: #4aa3c0; }
     .tool-icon { font-size: 20px; line-height: 1; }
     .tool-icon.ok { color: #7ddea8; }
     .tool-icon.risk { color: #ff6b6b; font-weight: 900; }
+    .tool-icon.note { color: #7ec8e0; font-weight: 800; font-size: 18px; }
     .dock-btn.accent { background: var(--accent); border-color: #ff3b57; color: #fff; }
     .dock-btn.danger { color: #ffc9c9; border-color: #7a3030; }
     .autosave-chip {
@@ -473,7 +475,7 @@
         <div class="brand-text">
           <strong>CONF ARMADURA</strong>
           <span id="doc-label">Abra um PDF</span>
-          <span id="app-revision" class="rev-label" title="Versão app (0.mid.last — last 00–99)">0.1.02-20261114</span>
+          <span id="app-revision" class="rev-label" title="Versão app (0.mid.last — last 00–99)">0.1.03-20261114</span>
         </div>
       </div>
       <div class="top-actions">
@@ -559,6 +561,7 @@
         <button type="button" class="tool dock-btn" data-tool="pan" aria-pressed="true" title="Mover"><span class="tool-icon" aria-hidden="true">✥</span></button>
         <button type="button" class="tool dock-btn" data-tool="ok" title="OK — arrastar sobre rótulo (verde)"><span class="tool-icon ok" aria-hidden="true">✓</span></button>
         <button type="button" class="tool dock-btn" data-tool="risk" title="Não conforme — arrastar + motivo (vermelho)"><span class="tool-icon risk" aria-hidden="true">✕</span></button>
+        <button type="button" class="tool dock-btn" data-tool="note" title="Notas — toque no PDF e escreva (Relatório → Notas de texto)"><span class="tool-icon note" aria-hidden="true">T</span></button>
         <div class="dock-sep" aria-hidden="true"></div>
         <button type="button" id="btn-fullscreen-dock" class="dock-btn" title="Expandir / sair da tela cheia" aria-pressed="false">⛶</button>
       </div>
@@ -1129,8 +1132,12 @@
     } else if (kind === "note") {
       x = item.x; y = item.y;
       var text = String(item.text || "");
-      var bg = item.mode === "ok" ? "rgba(31,157,85,0.92)" : "rgba(232,163,23,0.95)";
-      var fg = item.mode === "ok" ? "#d8ffe8" : "#2a1f05";
+      var bg = item.mode === "ok" ? "rgba(31,157,85,0.92)"
+        : item.mode === "risk" ? "rgba(232,163,23,0.95)"
+        : "rgba(42,120,150,0.94)";
+      var fg = item.mode === "ok" ? "#d8ffe8"
+        : item.mode === "risk" ? "#2a1f05"
+        : "#e8f7fc";
       ctx.font = "bold 12px sans-serif";
       var pad = 6;
       var w = Math.max(40, ctx.measureText(text || " ").width + pad * 2);
@@ -1276,7 +1283,11 @@
         + (riskParts.display ? " — " + riskParts.display : "")
         + (item.reason ? " · motivo: " + item.reason : "");
     }
-    if (item.kind === "note") return item.mode === "ok" ? "Nota OK" : "Nota de risco";
+    if (item.kind === "note") {
+      if (item.mode === "ok") return "Nota OK";
+      if (item.mode === "risk") return "Nota de risco";
+      return "Nota de texto";
+    }
     if (item.kind === "arrow") return item.mode === "ok" ? "Seta OK" : "Seta risco";
     if (item.kind === "stroke") {
       if (item.mode === "ok") return "Traço OK";
@@ -1302,15 +1313,16 @@
       counts: {
         ok: summary.ok.length,
         risk: summary.risk.length
-          + summary.notes.filter(function (n) { return n.mode !== "ok"; }).length
+          + summary.notes.filter(function (n) { return n.mode === "risk"; }).length
           + summary.strokes.filter(function (s) { return s.mode === "risk"; }).length,
         notes: summary.notes.length,
         strokes: summary.strokes.length,
         total: summary.total
       },
+      // Notas de texto (modo text / note tool) ficam só em "Notas de texto", não em OK/NC.
       risks: items.filter(function (i) {
         return i.kind === "risk"
-          || (i.kind === "note" && i.mode !== "ok")
+          || (i.kind === "note" && i.mode === "risk")
           || (i.kind === "stroke" && i.mode === "risk");
       }),
       oks: items.filter(function (i) {
@@ -2763,8 +2775,16 @@
     state.modalMode = "note";
     state.notePending = point;
     state.riskPending = null;
-    els.textModalTitle.textContent = state.contentMode === "ok" ? "Nota OK no PDF" : "Nota de risco no PDF";
-    els.textInput.placeholder = "Descreva o trecho ou o risco…";
+    if (state.tool === "note") {
+      els.textModalTitle.textContent = "Nota de texto";
+      els.textInput.placeholder = "Escreva a nota…";
+    } else if (state.contentMode === "ok") {
+      els.textModalTitle.textContent = "Nota OK no PDF";
+      els.textInput.placeholder = "Descreva o trecho…";
+    } else {
+      els.textModalTitle.textContent = "Nota de risco no PDF";
+      els.textInput.placeholder = "Descreva o trecho ou o risco…";
+    }
     els.textInput.value = "";
     els.textModal.hidden = false;
     setTimeout(function () { els.textInput.focus(); }, 50);
@@ -2841,9 +2861,20 @@
       return;
     }
     if (!text || !state.notePending) { closeNoteModal(); return; }
-    annotations.add({ kind: "note", mode: state.contentMode, x: state.notePending.x, y: state.notePending.y, text: text });
+    var noteMode = state.tool === "note" ? "text" : state.contentMode;
+    annotations.add({
+      kind: "note",
+      mode: noteMode,
+      x: state.notePending.x,
+      y: state.notePending.y,
+      text: text
+    });
     closeNoteModal();
     redrawAnnotations();
+    if (noteMode === "text") {
+      setHint("Nota salva no relatório (Notas de texto).");
+      setTimeout(function () { setHint(""); }, 1800);
+    }
   }
 
   function onPointerDown(e) {
@@ -2877,6 +2908,10 @@
       return;
     }
     var point = clientToPage(e.clientX, e.clientY);
+    if (state.tool === "note") {
+      openNoteModal(point);
+      return;
+    }
     // While drawing OK/X, tapping an existing mark opens delete instead of a tiny drag.
     if (state.tool === "ok" || state.tool === "risk") {
       var hit = hitTestOkRisk(point);
