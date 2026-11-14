@@ -1,4 +1,4 @@
-# Conf. Armadura — conferência in loco
+# CONF ARMADURA — conferência in loco
 
 App de campo (pt-BR) para marcar a prancha PDF de armadura (pilares/vigas): OK, risco, seta, nota, tela ligada, giro da vista, relatório, **biblioteca de PDFs** e **autosave**.
 
@@ -31,7 +31,7 @@ Arquivo gerado neste repo:
 
 1. Copie o `.apk` para o aparelho (USB, Drive, WhatsApp…).
 2. Em **Configurações → Segurança**, permita instalar de fontes desconhecidas / o app que abrir o arquivo.
-3. Abra o APK e instale (**Conf. Armadura**).
+3. Abra o APK e instale (**CONF ARMADURA**). Versão: `0.mid.last-YYYYMMDD` (last 00–99; depois mid++).
 4. Na 1ª abertura, permita armazenamento se o sistema pedir (gravação em Downloads).
 
 > Build **debug** (assinatura de debug). Para Play Store use `assembleRelease` com keystore.

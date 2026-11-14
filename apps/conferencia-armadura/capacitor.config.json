@@ -1,6 +1,6 @@
 {
   "appId": "br.lunardeli.conferenciaarmadura",
-  "appName": "Conf. Armadura",
+  "appName": "CONF ARMADURA",
   "webDir": "www",
   "server": { "androidScheme": "https" },
   "android": { "allowMixedContent": true }

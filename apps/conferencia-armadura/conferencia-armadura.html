@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <meta name="theme-color" content="#1a1f24" />
   <meta name="description" content="Conferência de armadura in loco — marcar PDF, relatório OK/risco." />
-  <title>Conf. Armadura</title>
+  <title>CONF ARMADURA</title>
   <style>
     :root {
       --bg: #12161a;
@@ -184,28 +184,87 @@
       opacity: 0; transition: opacity 0.25s ease;
     }
     .autosave-chip.on { opacity: 1; }
-    .report-panel, .library-panel {
+    .report-panel {
       position: fixed; left: 0; right: 0; bottom: 0; max-height: min(72vh, 640px);
       background: var(--surface); border-top: 1px solid var(--border); z-index: 40;
       display: flex; flex-direction: column; padding-bottom: var(--safe-bottom);
       box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.45);
     }
-    .report-panel[hidden], .library-panel[hidden] { display: none !important; }
-    .library-panel .lib-item {
-      display: flex; gap: 10px; align-items: flex-start; justify-content: space-between;
-      padding: 10px 0; border-bottom: 1px solid var(--border);
+    .report-panel[hidden] { display: none !important; }
+    /* Biblioteca local — modal estilo Prumo (não bottom-sheet) */
+    .library-modal {
+      place-items: center;
+      padding: max(16px, var(--safe-top)) 16px calc(16px + var(--safe-bottom));
+      z-index: 55;
     }
-    .library-panel .lib-item button {
+    .library-card {
+      width: min(520px, 100%);
+      max-height: min(86dvh, 720px);
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 14px;
+    }
+    .library-head {
+      display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    }
+    .library-head h3 { margin: 0; font-size: 18px; font-weight: 700; }
+    .library-head .secondary { min-height: 40px; flex: 0 0 auto; }
+    #library-search {
+      width: 100%;
+      min-height: 44px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: #0f1317;
+      color: var(--text);
+      padding: 0 12px;
+      font-size: 15px;
+      box-sizing: border-box;
+    }
+    #library-search::placeholder { color: var(--muted); }
+    .library-hint {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.4;
+    }
+    .library-list {
+      overflow: auto;
+      flex: 1;
+      min-height: 120px;
+      max-height: min(48vh, 420px);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--surface-2);
+      padding: 4px 8px;
+    }
+    .library-list .lib-item {
+      display: flex; gap: 10px; align-items: center; justify-content: space-between;
+      padding: 10px 4px; border-bottom: 1px solid var(--border);
+    }
+    .library-list .lib-item:last-child { border-bottom: 0; }
+    .library-list .lib-item button {
       min-height: 40px; padding: 0 12px; border-radius: 10px;
-      border: 1px solid var(--border); background: var(--surface-2); color: var(--text);
-      font-weight: 700; cursor: pointer;
+      border: 1px solid var(--border); background: var(--surface); color: var(--text);
+      font-weight: 700; cursor: pointer; font-size: 13px;
     }
-    .library-panel .lib-meta { min-width: 0; flex: 1; }
-    .library-panel .lib-meta strong {
+    .library-list .lib-item button[data-act="del"] {
+      color: #ffc9c9; border-color: #7a3030;
+    }
+    .library-list .lib-meta { min-width: 0; flex: 1; }
+    .library-list .lib-meta strong {
       display: block; font-size: 14px; word-break: break-word;
     }
-    .library-panel .lib-meta span { color: var(--muted); font-size: 12px; }
-    .library-panel .lib-actions { display: flex; gap: 6px; flex-shrink: 0; }
+    .library-list .lib-meta span { color: var(--muted); font-size: 12px; }
+    .library-list .lib-actions { display: flex; gap: 6px; flex-shrink: 0; }
+    .library-footer {
+      display: flex; gap: 8px; align-items: stretch;
+    }
+    .library-footer .primary {
+      display: inline-flex; align-items: center; justify-content: center;
+      flex: 1; cursor: pointer;
+    }
     .report-head {
       display: flex; align-items: center; justify-content: space-between;
       padding: 12px 14px; border-bottom: 1px solid var(--border);
@@ -282,9 +341,11 @@
       z-index: 10050;
       max-height: calc(100dvh - 16px - var(--safe-bottom) - var(--safe-top));
     }
-    html.app-fullscreen .report-panel,
-    html.app-fullscreen .library-panel {
+    html.app-fullscreen .report-panel {
       z-index: 10060;
+    }
+    html.app-fullscreen .library-modal {
+      z-index: 10065;
     }
     html.app-fullscreen .modal {
       z-index: 10070;
@@ -386,9 +447,9 @@
       <div class="brand">
         <span class="brand-mark" aria-hidden="true"></span>
         <div class="brand-text">
-          <strong>Conf. Armadura</strong>
+          <strong>CONF ARMADURA</strong>
           <span id="doc-label">Abra um PDF</span>
-          <span id="app-revision" class="rev-label" title="Pré-Prumo + raster com teto de memória">Revisão 1.0.17</span>
+          <span id="app-revision" class="rev-label" title="Versão app (0.mid.last — last 00–99)">0.1.00-20261114</span>
         </div>
       </div>
       <div class="top-actions">
@@ -421,21 +482,25 @@
       </div>
     </aside>
 
-    <aside id="library-panel" class="library-panel" hidden>
-      <div class="report-head">
-        <h2>Biblioteca de PDFs</h2>
-        <button type="button" id="btn-close-library" class="icon-btn" title="Fechar">✕</button>
+    <div id="library-panel" class="modal library-modal" hidden>
+      <div class="modal-card library-card" role="dialog" aria-labelledby="library-title">
+        <div class="library-head">
+          <h3 id="library-title">Biblioteca local</h3>
+          <button type="button" id="btn-close-library" class="secondary">Fechar</button>
+        </div>
+        <input type="search" id="library-search" placeholder="Pesquisar…" autocomplete="off" enterkeyhint="search" />
+        <p class="library-hint">PDFs salvos neste dispositivo. No app Android ficam em <strong>Download/ConfArmadura</strong>.</p>
+        <div id="library-body" class="library-list">
+          <p class="group-empty">Nenhum PDF importado ainda.</p>
+        </div>
+        <div class="library-footer">
+          <label class="primary">
+            Importar PDF
+            <input type="file" id="file-input-library" accept="application/pdf,.pdf" hidden />
+          </label>
+        </div>
       </div>
-      <div id="library-body" class="report-body">
-        <p class="group-empty">Nenhum PDF importado ainda.</p>
-      </div>
-      <div class="report-actions">
-        <label class="primary" style="display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 14px;border-radius:12px;cursor:pointer;">
-          Importar PDF
-          <input type="file" id="file-input-library" accept="application/pdf,.pdf" hidden />
-        </label>
-      </div>
-    </aside>
+    </div>
 
     <div id="text-modal" class="modal" hidden>
       <div class="modal-card">
@@ -1066,9 +1131,9 @@
     try { return new Date(iso).toLocaleString("pt-BR"); } catch (e) { return iso || "—"; }
   }
 
-  // Structural codes: letter(s) + number. Longer prefixes first (VG before V, LG before L).
+  // Structural codes: first letter of prefix decides type (L…=laje, P…=pilar, V…=viga).
   // Do not swallow dimension "x" in tokens like VR-114x65 (that "x" is not a suffix letter).
-  var STRUCT_CODE_RE = /\b((?:VG|VR|VT|LG|LR|LA|P|R)[\-\s]?\d+)([A-Za-z])?(?=\b|[xX×]|$)/i;
+  var STRUCT_CODE_RE = /\b((?:[PVL][A-Za-z]{0,2})[\-\s]?\d+)([A-Za-z])?(?=\b|[xX×]|$)/i;
   var DIM_ONLY_RE = /^(?:\d{1,3}\s*[xX×]\s*\d{1,3}.*|h\s*=\s*\d)/i;
 
   function extractStructuralCode(text) {
@@ -1082,11 +1147,17 @@
   function classifyLabel(text) {
     var code = extractStructuralCode(text).toUpperCase();
     var t = String(text || "").toUpperCase().replace(/\s+/g, " ").trim();
+    if (/\bPILAR\b/.test(t)) return "pilar";
+    if (/\bVIGA\b/.test(t)) return "viga";
+    if (/\bLAJE\b/.test(t)) return "laje";
     var key = code || t;
     if (!key) return "elemento";
-    if (/^P[\-]?\d/.test(key) || /\bPILAR\b/.test(t) || /\bP[\s\-.]?\d/.test(t)) return "pilar";
-    if (/^(VG|VR|VT)/.test(key) || /\bVIGA\b/.test(t) || /\bV[GRT][\s\-]?\d/.test(t)) return "viga";
-    if (/^(LG|LR|LA)/.test(key) || /^R[\-]?\d/.test(key) || /\bLAJE\b/.test(t) || /\bLG[\s\-]?\d/.test(t)) return "laje";
+    var letterMatch = key.match(/[A-Z]/);
+    if (!letterMatch) return "elemento";
+    var letter = letterMatch[0];
+    if (letter === "P") return "pilar";
+    if (letter === "V") return "viga";
+    if (letter === "L") return "laje";
     return "elemento";
   }
 
@@ -1483,6 +1554,7 @@
     reportBody: document.getElementById("report-body"),
     libraryPanel: document.getElementById("library-panel"),
     libraryBody: document.getElementById("library-body"),
+    librarySearch: document.getElementById("library-search"),
     btnCloseLibrary: document.getElementById("btn-close-library"),
     btnExportHtml: document.getElementById("btn-export-html"),
     btnExportText: document.getElementById("btn-export-text"),
@@ -2356,14 +2428,27 @@
     return (n / (1024 * 1024)).toFixed(1) + " MB";
   }
 
+  function librarySearchQuery() {
+    return els.librarySearch ? String(els.librarySearch.value || "").trim().toLowerCase() : "";
+  }
+
   function renderLibraryList() {
     if (!els.libraryBody) return;
     var index = readLibraryIndex();
-    if (!index.pdfs.length) {
-      els.libraryBody.innerHTML = "<p class=\"group-empty\">Nenhum PDF importado ainda. Use Importar PDF — arquivos vão para <strong>Download/ConfArmadura</strong> no app.</p>";
+    var q = librarySearchQuery();
+    var pdfs = (index.pdfs || []).filter(function (p) {
+      if (!q) return true;
+      return String(p.name || "").toLowerCase().indexOf(q) !== -1;
+    });
+    if (!(index.pdfs || []).length) {
+      els.libraryBody.innerHTML = "<p class=\"group-empty\">Nenhum PDF neste dispositivo ainda. Use <strong>Importar PDF</strong>.</p>";
       return;
     }
-    els.libraryBody.innerHTML = index.pdfs.map(function (p) {
+    if (!pdfs.length) {
+      els.libraryBody.innerHTML = "<p class=\"group-empty\">Nenhum arquivo corresponde à pesquisa.</p>";
+      return;
+    }
+    els.libraryBody.innerHTML = pdfs.map(function (p) {
       var when = p.updatedAt || p.importedAt || "";
       var annotCount = loadAnnotsForDoc(p.id).length;
       return ""
@@ -2376,18 +2461,24 @@
         + "</div>"
         + "<div class=\"lib-actions\">"
         + "<button type=\"button\" data-act=\"open\">Abrir</button>"
-        + "<button type=\"button\" data-act=\"del\" title=\"Remover\">⌫</button>"
+        + "<button type=\"button\" data-act=\"del\" title=\"Excluir\">Excluir</button>"
         + "</div></div>";
     }).join("");
   }
 
   function openLibrary() {
     try { closeReport(); } catch (e) {}
+    if (els.librarySearch) els.librarySearch.value = "";
     renderLibraryList();
     if (els.libraryPanel) {
       els.libraryPanel.hidden = false;
       els.libraryPanel.removeAttribute("hidden");
-      els.libraryPanel.style.display = "flex";
+      els.libraryPanel.style.display = "grid";
+    }
+    if (els.librarySearch) {
+      setTimeout(function () {
+        try { els.librarySearch.focus(); } catch (e) {}
+      }, 40);
     }
   }
 
@@ -3074,7 +3165,7 @@
     if (!state.lastReportModel) openReport();
     var text = buildPlainTextReport(state.lastReportModel);
     if (navigator.share) {
-      navigator.share({ title: "Relatório Conf. Armadura", text: text }).catch(function () { copyText(); });
+      navigator.share({ title: "Relatório CONF ARMADURA", text: text }).catch(function () { copyText(); });
     } else {
       copyText();
     }
@@ -3281,6 +3372,14 @@
     });
     if (els.btnLibrary) els.btnLibrary.addEventListener("click", openLibrary);
     if (els.btnCloseLibrary) els.btnCloseLibrary.addEventListener("click", closeLibrary);
+    if (els.librarySearch) {
+      els.librarySearch.addEventListener("input", function () { renderLibraryList(); });
+    }
+    if (els.libraryPanel) {
+      els.libraryPanel.addEventListener("click", function (ev) {
+        if (ev.target === els.libraryPanel) closeLibrary();
+      });
+    }
     if (els.libraryBody) {
       els.libraryBody.addEventListener("click", function (e) {
         var btn = e.target && e.target.closest ? e.target.closest("button[data-act]") : null;
