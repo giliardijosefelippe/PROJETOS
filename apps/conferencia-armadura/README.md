@@ -21,9 +21,13 @@ Sirva a pasta (módulos ES): `python3 -m http.server 8080` → `http://localhost
 
 ## APK Android (instalável)
 
-Arquivo gerado neste repo:
+Arquivos gerados neste repo (nome + versão; versões anteriores são mantidas):
 
-**`apps/conferencia-armadura/android-dist/conf-armadura-debug.apk`**
+**`apps/conferencia-armadura/android-dist/CONF ARMADURA 0.1.06-20261114.apk`**
+
+Alias local (sempre a última build): `android-dist/conf-armadura-debug.apk`
+
+Desktop: `npm run pack:desktop` → `desktop-dist/CONF ARMADURA <versão>.html` + `.apk` (não apaga versões anteriores na pasta Desktop).
 
 > **CDA-15:** o APK embute `vendor/pdfjs` (pdf.js + worker em blob). Não depende de CDN no celular — evita o freeze ao abrir PDF no WebView.
 
@@ -50,8 +54,11 @@ Requer Android SDK (`ANDROID_HOME`) + JDK:
 cd apps/conferencia-armadura
 npm install
 npm run apk:debug
-# → android-dist/conf-armadura-debug.apk
+# → android-dist/CONF ARMADURA <versão>.apk (+ mantém APKs versionados anteriores)
+npm run pack:desktop
+# → desktop-dist/CONF ARMADURA <versão>.{html,apk}
 ```
+
 
 Passos manuais:
 
@@ -66,8 +73,9 @@ cd android && ./gradlew assembleDebug
 
 | Caminho | Função |
 |---------|--------|
-| `conferencia-armadura.html` | App completo |
-| `android-dist/conf-armadura-debug.apk` | APK instalável |
+| `conferencia-armadura.html` | App completo (fonte) |
+| `android-dist/CONF ARMADURA <versão>.apk` | APK instalável versionado |
+| `scripts/sync-desktop-windows.ps1` | Copia versionada p/ Desktop (Windows) |
 | `android/` | Projeto Capacitor Android |
 | `capacitor.config.json` | Config Capacitor (`webDir: www`) |
 
