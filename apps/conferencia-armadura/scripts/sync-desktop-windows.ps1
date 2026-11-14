@@ -19,7 +19,7 @@ $ApkSrc = Join-Path $AppDir "android-dist\$Stem.apk"
 if (-not (Test-Path $ApkSrc)) {
   $legacy = Join-Path $AppDir "android-dist\CONF ARMADURA.apk"
   if (Test-Path $legacy) { $ApkSrc = $legacy }
-  else { throw "Missing APK for $Stem — build apk:debug first" }
+  else { throw "Missing APK for $Stem - build apk:debug first" }
 }
 $ApkDst = Join-Path $DesktopDir "$Stem.apk"
 
