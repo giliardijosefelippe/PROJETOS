@@ -473,7 +473,7 @@
         <div class="brand-text">
           <strong>CONF ARMADURA</strong>
           <span id="doc-label">Abra um PDF</span>
-          <span id="app-revision" class="rev-label" title="Versão app (0.mid.last — last 00–99)">0.1.01-20261114</span>
+          <span id="app-revision" class="rev-label" title="Versão app (0.mid.last — last 00–99)">0.1.02-20261114</span>
         </div>
       </div>
       <div class="top-actions">
@@ -1303,27 +1303,22 @@
         ok: summary.ok.length,
         risk: summary.risk.length
           + summary.notes.filter(function (n) { return n.mode !== "ok"; }).length
-          + summary.arrows.filter(function (a) { return a.mode !== "ok"; }).length
           + summary.strokes.filter(function (s) { return s.mode === "risk"; }).length,
         notes: summary.notes.length,
-        arrows: summary.arrows.length,
         strokes: summary.strokes.length,
         total: summary.total
       },
       risks: items.filter(function (i) {
         return i.kind === "risk"
           || (i.kind === "note" && i.mode !== "ok")
-          || (i.kind === "arrow" && i.mode !== "ok")
           || (i.kind === "stroke" && i.mode === "risk");
       }),
       oks: items.filter(function (i) {
         return i.kind === "ok"
           || (i.kind === "note" && i.mode === "ok")
-          || (i.kind === "arrow" && i.mode === "ok")
           || (i.kind === "stroke" && i.mode === "ok");
       }),
-      notes: summary.notes,
-      arrows: summary.arrows
+      notes: summary.notes
     };
   }
 
@@ -1452,9 +1447,7 @@
       + '<h3>Já conferidos (OK)</h3>'
       + (model.oks.length ? okBlock.html : '<p>Nenhum elemento conferido.</p>')
       + '<h3>Notas de texto</h3>'
-      + (noteLis ? '<ul>' + noteLis + '</ul>' : '<p>Sem notas.</p>')
-      + '<h3>Setas</h3>'
-      + '<p>' + model.counts.arrows + ' seta(s) · ' + model.counts.strokes + ' traço(s)</p>';
+      + (noteLis ? '<ul>' + noteLis + '</ul>' : '<p>Sem notas.</p>');
   }
 
   function appendGroupedPlain(lines, title, items, lineFn) {
@@ -1500,7 +1493,6 @@
     model.notes.forEach(function (r) {
       lines.push("- " + (r.text || "(vazia)") + " [" + labelFor(r) + "]");
     });
-    lines.push("", "Setas: " + model.counts.arrows + " · Traços: " + model.counts.strokes);
     return lines.join("\n");
   }
 
