@@ -184,20 +184,21 @@
       opacity: 0; transition: opacity 0.25s ease;
     }
     .autosave-chip.on { opacity: 1; }
-    .report-panel {
-      position: fixed; left: 0; right: 0; bottom: 0; max-height: min(72vh, 640px);
-      background: var(--surface); border-top: 1px solid var(--border); z-index: 40;
-      display: flex; flex-direction: column; padding-bottom: var(--safe-bottom);
-      box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.45);
-    }
-    .report-panel[hidden] { display: none !important; }
-    /* Biblioteca local — modal estilo Prumo (não bottom-sheet) */
-    .library-modal {
+    /* Modais Biblioteca / Relatório — visual teal Prumo (mesmo propósito) */
+    .prumo-modal {
       place-items: center;
       padding: max(16px, var(--safe-top)) 16px calc(16px + var(--safe-bottom));
       z-index: 55;
+      background: rgba(4, 18, 14, 0.62);
     }
-    .library-card {
+    .prumo-card {
+      --prumo-bg: #102c21;
+      --prumo-bg-2: #0b2219;
+      --prumo-border: #355241;
+      --prumo-muted: #9bb8a6;
+      --prumo-text: #e8f2eb;
+      --prumo-accent: #3d8f6a;
+      --prumo-accent-border: #4aa57a;
       width: min(520px, 100%);
       max-height: min(86dvh, 720px);
       margin: 0;
@@ -205,103 +206,129 @@
       flex-direction: column;
       gap: 10px;
       padding: 14px;
+      background: linear-gradient(165deg, #143528 0%, var(--prumo-bg) 45%, var(--prumo-bg-2) 100%);
+      border: 1px solid var(--prumo-border);
+      border-radius: 14px;
+      color: var(--prumo-text);
+      box-shadow: 0 18px 48px rgba(0, 0, 0, 0.55);
     }
-    .library-head {
+    .prumo-head {
       display: flex; align-items: center; justify-content: space-between; gap: 10px;
     }
-    .library-head h3 { margin: 0; font-size: 18px; font-weight: 700; }
-    .library-head .secondary { min-height: 40px; flex: 0 0 auto; }
+    .prumo-head h3 {
+      margin: 0; font-size: 18px; font-weight: 700; color: var(--prumo-text);
+      letter-spacing: 0.01em;
+    }
+    .prumo-card .secondary {
+      min-height: 40px; flex: 0 0 auto;
+      background: transparent;
+      border: 1px solid var(--prumo-border);
+      color: var(--prumo-text);
+      border-radius: 10px;
+      font-weight: 700;
+      cursor: pointer;
+      padding: 0 14px;
+    }
+    .prumo-card .secondary:active { background: rgba(255,255,255,0.06); }
+    .prumo-card .primary {
+      min-height: 44px; border-radius: 10px; padding: 0 14px; font-size: 14px;
+      background: var(--prumo-accent); border: 1px solid var(--prumo-accent-border);
+      color: #fff; font-weight: 700; cursor: pointer; flex: 1;
+    }
+    .prumo-card .primary.danger {
+      background: #a01828; border-color: #ff4d4d;
+    }
     #library-search {
       width: 100%;
       min-height: 44px;
       border-radius: 10px;
-      border: 1px solid var(--border);
-      background: #0f1317;
-      color: var(--text);
+      border: 1px solid var(--prumo-border);
+      background: #081d16;
+      color: var(--prumo-text);
       padding: 0 12px;
       font-size: 15px;
       box-sizing: border-box;
     }
-    #library-search::placeholder { color: var(--muted); }
-    .library-hint {
+    #library-search::placeholder { color: var(--prumo-muted); }
+    .prumo-hint {
       margin: 0;
-      color: var(--muted);
+      color: var(--prumo-muted);
       font-size: 13px;
       line-height: 1.4;
     }
-    .library-list {
+    .prumo-hint strong { color: var(--prumo-text); }
+    .library-list, .report-scroll {
       overflow: auto;
       flex: 1;
       min-height: 120px;
       max-height: min(48vh, 420px);
-      border: 1px solid var(--border);
+      border: 1px solid var(--prumo-border);
       border-radius: 12px;
-      background: var(--surface-2);
+      background: rgba(8, 29, 22, 0.72);
       padding: 4px 8px;
+    }
+    .report-scroll {
+      max-height: min(52vh, 480px);
+      padding: 10px 12px;
+      font-size: 14px;
+      line-height: 1.45;
     }
     .library-list .lib-item {
       display: flex; gap: 10px; align-items: center; justify-content: space-between;
-      padding: 10px 4px; border-bottom: 1px solid var(--border);
+      padding: 10px 4px; border-bottom: 1px solid var(--prumo-border);
     }
     .library-list .lib-item:last-child { border-bottom: 0; }
     .library-list .lib-item button {
       min-height: 40px; padding: 0 12px; border-radius: 10px;
-      border: 1px solid var(--border); background: var(--surface); color: var(--text);
+      border: 1px solid var(--prumo-border); background: #143528; color: var(--prumo-text);
       font-weight: 700; cursor: pointer; font-size: 13px;
     }
     .library-list .lib-item button[data-act="del"] {
-      color: #ffc9c9; border-color: #7a3030;
+      color: #ffc9c9; border-color: #7a3030; background: rgba(80, 20, 24, 0.45);
     }
     .library-list .lib-meta { min-width: 0; flex: 1; }
     .library-list .lib-meta strong {
-      display: block; font-size: 14px; word-break: break-word;
+      display: block; font-size: 14px; word-break: break-word; color: var(--prumo-text);
     }
-    .library-list .lib-meta span { color: var(--muted); font-size: 12px; }
+    .library-list .lib-meta span { color: var(--prumo-muted); font-size: 12px; }
     .library-list .lib-actions { display: flex; gap: 6px; flex-shrink: 0; }
-    .library-footer {
-      display: flex; gap: 8px; align-items: stretch;
+    .prumo-footer {
+      display: flex; gap: 8px; align-items: stretch; flex-wrap: wrap;
     }
-    .library-footer .primary {
+    .prumo-footer .primary {
       display: inline-flex; align-items: center; justify-content: center;
-      flex: 1; cursor: pointer;
+      flex: 1; cursor: pointer; min-width: 0;
     }
-    .report-head {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 12px 14px; border-bottom: 1px solid var(--border);
-    }
-    .report-head h2 { margin: 0; font-size: 18px; }
-    .report-body {
-      overflow: auto; padding: 12px 14px 8px; font-size: 14px;
-      line-height: 1.45; min-height: 140px; flex: 1;
-    }
-    .report-body .summary {
+    .prumo-footer .secondary { flex: 1; min-width: 0; }
+    .report-scroll .summary {
       display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px;
     }
-    .report-body .stat {
-      background: var(--surface-2); border: 1px solid var(--border);
+    .report-scroll .stat {
+      background: rgba(20, 53, 40, 0.9); border: 1px solid var(--prumo-border);
       border-radius: 10px; padding: 10px; text-align: center;
     }
-    .report-body .stat strong { display: block; font-size: 22px; }
-    .report-body .stat span { color: var(--muted); font-size: 12px; }
-    .report-body .stat.ok strong { color: #7ddea8; }
-    .report-body .stat.risk strong { color: #ffcc66; }
-    .report-body h4 {
-      margin: 12px 0 6px; font-size: 13px; color: var(--muted); font-weight: 700;
+    .report-scroll .stat strong { display: block; font-size: 22px; color: var(--prumo-text); }
+    .report-scroll .stat span { color: var(--prumo-muted); font-size: 12px; }
+    .report-scroll .stat.ok strong { color: #7ddea8; }
+    .report-scroll .stat.risk strong { color: #ffcc66; }
+    .report-scroll h4 {
+      margin: 12px 0 6px; font-size: 13px; color: var(--prumo-muted); font-weight: 700;
       letter-spacing: 0.02em;
     }
-    .report-body h4:first-child { margin-top: 4px; }
-    .report-body .group-empty { color: var(--muted); font-size: 13px; margin: 0 0 8px; }
-    .report-body h3 {
+    .report-scroll h4:first-child { margin-top: 4px; }
+    .report-scroll .group-empty { color: var(--prumo-muted); font-size: 13px; margin: 0 0 8px; }
+    .report-scroll h3 {
       margin: 12px 0 6px; font-size: 13px; text-transform: uppercase;
-      letter-spacing: 0.06em; color: var(--muted);
+      letter-spacing: 0.06em; color: var(--prumo-muted);
     }
-    .report-body ul { margin: 0; padding-left: 18px; }
-    .report-body li { margin-bottom: 6px; }
-    .report-actions { display: flex; gap: 8px; padding: 10px 14px 14px; }
+    .report-scroll ul { margin: 0; padding-left: 18px; color: var(--prumo-text); }
+    .report-scroll li { margin-bottom: 6px; }
     .primary, .secondary {
       min-height: 44px; border-radius: 10px; padding: 0 14px; font-size: 14px;
+      border: 1px solid var(--border); font-weight: 700; cursor: pointer;
     }
     .primary { background: var(--accent); border-color: #ff3b57; color: #fff; flex: 1; }
+    .secondary { background: var(--surface-2); color: var(--text); }
     .primary.danger { background: #a01828; border-color: #ff4d4d; }
     .modal-card p { margin: 0 0 4px; color: var(--muted); font-size: 14px; line-height: 1.4; }
     .modal {
@@ -341,10 +368,7 @@
       z-index: 10050;
       max-height: calc(100dvh - 16px - var(--safe-bottom) - var(--safe-top));
     }
-    html.app-fullscreen .report-panel {
-      z-index: 10060;
-    }
-    html.app-fullscreen .library-modal {
+    html.app-fullscreen .prumo-modal {
       z-index: 10065;
     }
     html.app-fullscreen .modal {
@@ -449,7 +473,7 @@
         <div class="brand-text">
           <strong>CONF ARMADURA</strong>
           <span id="doc-label">Abra um PDF</span>
-          <span id="app-revision" class="rev-label" title="Versão app (0.mid.last — last 00–99)">0.1.00-20261114</span>
+          <span id="app-revision" class="rev-label" title="Versão app (0.mid.last — last 00–99)">0.1.01-20261114</span>
         </div>
       </div>
       <div class="top-actions">
@@ -469,31 +493,34 @@
       <div id="hint" class="hint">Carregando…</div>
     </main>
 
-    <aside id="report-panel" class="report-panel" hidden>
-      <div class="report-head">
-        <h2>Relatório</h2>
-        <button type="button" id="btn-close-report" class="icon-btn" onclick="window.__closeConfReport && window.__closeConfReport()">✕</button>
+    <div id="report-panel" class="modal prumo-modal" hidden>
+      <div class="modal-card prumo-card" role="dialog" aria-labelledby="report-title">
+        <div class="prumo-head">
+          <h3 id="report-title">Relatório</h3>
+          <button type="button" id="btn-close-report" class="secondary">Fechar</button>
+        </div>
+        <p class="prumo-hint">Conferência agrupada por <strong>Viga / Pilar / Laje</strong> (letra inicial do rótulo).</p>
+        <div id="report-body" class="report-scroll"></div>
+        <div class="prumo-footer">
+          <button type="button" id="btn-export-html" class="primary">Exportar HTML</button>
+          <button type="button" id="btn-export-text" class="secondary">Copiar texto</button>
+          <button type="button" id="btn-share" class="secondary">Compartilhar</button>
+        </div>
       </div>
-      <div id="report-body" class="report-body"></div>
-      <div class="report-actions">
-        <button type="button" id="btn-export-html" class="primary">Exportar HTML</button>
-        <button type="button" id="btn-export-text" class="secondary">Copiar texto</button>
-        <button type="button" id="btn-share" class="secondary">Compartilhar</button>
-      </div>
-    </aside>
+    </div>
 
-    <div id="library-panel" class="modal library-modal" hidden>
-      <div class="modal-card library-card" role="dialog" aria-labelledby="library-title">
-        <div class="library-head">
+    <div id="library-panel" class="modal prumo-modal" hidden>
+      <div class="modal-card prumo-card" role="dialog" aria-labelledby="library-title">
+        <div class="prumo-head">
           <h3 id="library-title">Biblioteca local</h3>
           <button type="button" id="btn-close-library" class="secondary">Fechar</button>
         </div>
         <input type="search" id="library-search" placeholder="Pesquisar…" autocomplete="off" enterkeyhint="search" />
-        <p class="library-hint">PDFs salvos neste dispositivo. No app Android ficam em <strong>Download/ConfArmadura</strong>.</p>
+        <p class="prumo-hint">PDFs salvos neste dispositivo. No app Android ficam em <strong>Download/ConfArmadura</strong>.</p>
         <div id="library-body" class="library-list">
           <p class="group-empty">Nenhum PDF importado ainda.</p>
         </div>
-        <div class="library-footer">
+        <div class="prumo-footer">
           <label class="primary">
             Importar PDF
             <input type="file" id="file-input-library" accept="application/pdf,.pdf" hidden />
@@ -1552,6 +1579,7 @@
     fileInputLibrary: document.getElementById("file-input-library"),
     reportPanel: document.getElementById("report-panel"),
     reportBody: document.getElementById("report-body"),
+    btnCloseReport: document.getElementById("btn-close-report"),
     libraryPanel: document.getElementById("library-panel"),
     libraryBody: document.getElementById("library-body"),
     librarySearch: document.getElementById("library-search"),
@@ -3062,6 +3090,10 @@
             closeNoteModal();
             return;
           }
+          if (els.libraryPanel && !els.libraryPanel.hidden) {
+            closeLibrary();
+            return;
+          }
           var panel = document.getElementById("report-panel");
           if (panel && !panel.hidden) {
             closeReport();
@@ -3104,15 +3136,16 @@
   function openReport(event) {
     try { if (event && event.preventDefault) event.preventDefault(); } catch (e) {}
     try {
-      var panel = document.getElementById("report-panel");
-      var body = document.getElementById("report-body");
+      try { closeLibrary(); } catch (e2) {}
+      var panel = els.reportPanel || document.getElementById("report-panel");
+      var body = els.reportBody || document.getElementById("report-body");
       var model = buildReportModel(state.docName, annotations);
       state.lastReportModel = model;
       if (body) body.innerHTML = renderReportHtmlFragment(model);
       if (panel) {
         panel.hidden = false;
         panel.removeAttribute("hidden");
-        panel.style.display = "flex";
+        panel.style.display = "grid";
       }
       setHint("");
     } catch (err) {
@@ -3123,7 +3156,7 @@
   }
 
   function closeReport() {
-    var panel = document.getElementById("report-panel");
+    var panel = els.reportPanel || document.getElementById("report-panel");
     if (!panel) return;
     panel.hidden = true;
     panel.setAttribute("hidden", "");
@@ -3372,12 +3405,18 @@
     });
     if (els.btnLibrary) els.btnLibrary.addEventListener("click", openLibrary);
     if (els.btnCloseLibrary) els.btnCloseLibrary.addEventListener("click", closeLibrary);
+    if (els.btnCloseReport) els.btnCloseReport.addEventListener("click", closeReport);
     if (els.librarySearch) {
       els.librarySearch.addEventListener("input", function () { renderLibraryList(); });
     }
     if (els.libraryPanel) {
       els.libraryPanel.addEventListener("click", function (ev) {
         if (ev.target === els.libraryPanel) closeLibrary();
+      });
+    }
+    if (els.reportPanel) {
+      els.reportPanel.addEventListener("click", function (ev) {
+        if (ev.target === els.reportPanel) closeReport();
       });
     }
     if (els.libraryBody) {
