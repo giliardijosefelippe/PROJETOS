@@ -488,7 +488,7 @@
         <div class="brand-text">
           <strong>CONF ARMADURA</strong>
           <span id="doc-label">Abra um PDF</span>
-          <span id="app-revision" class="rev-label" title="Versão app (0.mid.last — last 00–99)">0.1.04-20261114</span>
+          <span id="app-revision" class="rev-label" title="Versão app (0.mid.last — last 00–99)">0.1.05-20261114</span>
         </div>
       </div>
       <div class="top-actions">
@@ -1482,7 +1482,7 @@
       + ' · P ' + riskGroups.pilar.length
       + ' · L ' + riskGroups.laje.length
       + '</p>'
-      + '<h3>Não conformes / riscos</h3>'
+      + '<h3>Não conformes</h3>'
       + (model.risks.length ? riskBlock.html : '<p>Nenhum não conforme marcado.</p>')
       + '<h3>Já conferidos (OK)</h3>'
       + (model.oks.length ? okBlock.html : '<p>Nenhum elemento conferido.</p>')
@@ -1553,7 +1553,7 @@
         ? ("Resumo: " + model.counts.risk + " não conformes · " + model.counts.notes + " notas de texto")
         : ("Resumo: " + model.counts.ok + " conferidos · " + model.counts.risk + " não conformes · " + model.counts.total + " marcações")
     ];
-    appendGroupedPlain(lines, "NÃO CONFORMES / RISCOS", model.risks, function (r, i) {
+    appendGroupedPlain(lines, "NÃO CONFORMES", model.risks, function (r, i) {
       var line = (i + 1) + ". " + reportHeadText(r) + " — Não conforme";
       if (r.reason) line += " · motivo: " + r.reason;
       line += " (" + fmtTime(r.createdAt) + ")";
