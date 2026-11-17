@@ -73,9 +73,10 @@
     .viewport { width: 100%; height: 100%; overflow: hidden; position: relative; touch-action: none; }
     .scene { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; contain: layout style; }
     #pdf-canvas, #anno-canvas, #detail-canvas { position: absolute; left: 0; top: 0; display: block; }
-    #pdf-canvas { z-index: 1; }
+    #pdf-canvas { z-index: 1; pointer-events: none; }
     #detail-canvas { z-index: 1; pointer-events: none; display: none; image-rendering: auto; }
-    #anno-canvas { z-index: 2; }
+    /* Marks are painted here but taps go to #viewport (hit-test in JS). */
+    #anno-canvas { z-index: 2; pointer-events: none; }
     /* Lightweight selection preview — CSS only during drag (no canvas/pdf.js on pointermove). */
     #select-preview {
       position: absolute; left: 0; top: 0; z-index: 3;
@@ -488,7 +489,7 @@
         <div class="brand-text">
           <strong>CONF ARMADURA</strong>
           <span id="doc-label">Abra um PDF</span>
-          <span id="app-revision" class="rev-label" title="Versão app (0.mid.last — last 00–99)">0.1.07-20261114</span>
+          <span id="app-revision" class="rev-label" title="Versão app (0.mid.last — last 00–99)">0.1.08-20261117</span>
         </div>
       </div>
       <div class="top-actions">
@@ -2379,20 +2380,31 @@
     return { x: sel.x, y: sel.y, w: sel.w, h: sel.h };
   }
 
+  /** Page-space pad so OK/NC remain ≥ ~44 CSS px on screen after fit-to-page zoom. */
+  function annotationHitPad() {
+    var scale = Math.max(0.12, Number(state.scale) || 1);
+    return Math.max(18, Math.ceil(28 / scale));
+  }
+
   function annotationHitBox(item) {
-    var pad = 10;
-    if ((item.kind === "ok" || item.kind === "risk") && item.w > 2 && item.h > 2) {
-      return { x: item.x - pad, y: item.y - pad, w: item.w + pad * 2, h: item.h + pad * 2 };
+    if (!item || (item.kind !== "ok" && item.kind !== "risk")) return null;
+    var pad = annotationHitPad();
+    var scale = Math.max(0.12, Number(state.scale) || 1);
+    var minPage = 48 / scale; // ~48px touch target on the shorter side
+    if (item.w > 2 && item.h > 2) {
+      var w = Math.max(item.w + pad * 2, minPage);
+      var h = Math.max(item.h + pad * 2, minPage);
+      var cx = item.x + item.w / 2;
+      var cy = item.y + item.h / 2;
+      return { x: cx - w / 2, y: cy - h / 2, w: w, h: h };
     }
-    if (item.kind === "ok" || item.kind === "risk") {
-      // Point-style mark (legacy).
-      var s = 18;
-      return { x: item.x - s, y: item.y - s, w: s * 2, h: s * 2 };
-    }
-    return null;
+    // Point-style mark (legacy) — still expand for fat fingers / zoom-out.
+    var s = Math.max(22, minPage / 2);
+    return { x: item.x - s, y: item.y - s, w: s * 2, h: s * 2 };
   }
 
   function hitTestOkRisk(pagePoint) {
+    if (!pagePoint) return null;
     var list = annotations.list();
     // Top-most (last drawn) first.
     for (var i = list.length - 1; i >= 0; i--) {
@@ -2422,11 +2434,17 @@
         + " será removida do PDF, do relatório e do autosave.";
     }
     els.deleteModal.hidden = false;
+    els.deleteModal.removeAttribute("hidden");
+    els.deleteModal.style.display = "grid";
     redrawAnnotations();
   }
 
   function closeDeleteAnnotationModal() {
-    if (els.deleteModal) els.deleteModal.hidden = true;
+    if (els.deleteModal) {
+      els.deleteModal.hidden = true;
+      els.deleteModal.setAttribute("hidden", "");
+      els.deleteModal.style.display = "none";
+    }
     state.deleteTargetId = null;
     redrawAnnotations();
   }
@@ -2439,7 +2457,11 @@
     }
     // Drop focus/draft first, then remove, then hard-repaint anno layer (no ghost fills).
     state.deleteTargetId = null;
-    if (els.deleteModal) els.deleteModal.hidden = true;
+    if (els.deleteModal) {
+      els.deleteModal.hidden = true;
+      els.deleteModal.setAttribute("hidden", "");
+      els.deleteModal.style.display = "none";
+    }
     annotations.setDraft(null);
     var removed = annotations.removeById(id);
     // Force full anno canvas reset (clears any uncleared device pixels).
@@ -2634,7 +2656,7 @@
       setHint(
         saved.length
           ? ("Marcações restauradas (" + saved.length + "). ✓/✕ sobre o rótulo.")
-          : ("Prancha pronta (" + took + " ms). ✓/✕: arraste o rótulo. Pinch: zoom.")
+          : ("Prancha pronta (" + took + " ms). ✓/✕: arraste o rótulo. Toque na marcação para excluir.")
       );
       setTimeout(function () { setHint(""); }, 2800);
       renderLibraryList();
@@ -2928,8 +2950,15 @@
     var raw = { x: drag.x, y: drag.y, w: drag.w, h: drag.h };
     var sel = { x: drag.x, y: drag.y, w: drag.w, h: drag.h, mode: drag.mode };
     if (raw.w < 8 || raw.h < 8) {
-      setHint("Arraste sobre o rótulo (ex.: VG-114x90).");
-      setTimeout(function () { setHint(""); }, 1800);
+      // Tap (not drag) with ✓/✕ still active: treat as delete of existing mark.
+      var tapHit = hitTestOkRisk({ x: drag.x0, y: drag.y0 })
+        || hitTestOkRisk({ x: drag.x + drag.w / 2, y: drag.y + drag.h / 2 });
+      if (tapHit) {
+        openDeleteAnnotationModal(tapHit);
+        return;
+      }
+      setHint("Arraste sobre o rótulo (ex.: VG-114x90). Toque numa marcação para excluir.");
+      setTimeout(function () { setHint(""); }, 2200);
       finishToMove();
       return;
     }
@@ -3204,7 +3233,9 @@
     if (state.panStart && state.tool === "pan") {
       var dx = e.clientX - state.panStart.x;
       var dy = e.clientY - state.panStart.y;
-      if (!state.panStart.moved && (dx * dx + dy * dy) > 64) state.panStart.moved = true;
+      // 20px — finger jitter on Android often exceeds the old 8px threshold and
+      // cancelled tap-to-delete after placing OK/NC marks.
+      if (!state.panStart.moved && (dx * dx + dy * dy) > 400) state.panStart.moved = true;
       if (state.panStart.moved) {
         state.tx = state.panStart.tx + dx;
         state.ty = state.panStart.ty + dy;
@@ -3234,7 +3265,8 @@
       wasPanning && !panMoved && !wasPinching &&
       state.tool === "pan" && tapAt && state.pointers.size === 0
     ) {
-      var pagePt = clientToPage(e.clientX, e.clientY);
+      // Prefer down position — up coords can drift after soft keyboard / WebView quirks.
+      var pagePt = clientToPage(tapAt.x, tapAt.y);
       var hit = hitTestOkRisk(pagePt);
       if (hit) openDeleteAnnotationModal(hit);
     }
