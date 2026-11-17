@@ -1,0 +1,19 @@
+{
+  "name": "Conferência de Armadura",
+  "short_name": "Conf. Armadura",
+  "description": "Marcar PDF de armadura in loco, relatório OK/risco, tela sempre ligada.",
+  "start_url": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#12161a",
+  "theme_color": "#1a1f24",
+  "lang": "pt-BR",
+  "icons": [
+    {
+      "src": "./icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
