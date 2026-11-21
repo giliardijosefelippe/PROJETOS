@@ -9,7 +9,7 @@
     "lint": "next lint",
     "seed": "node scripts/seed.mjs",
     "seed:mapas": "node scripts/seed-mapas.mjs",
-    "test": "tsx --test src/lib/workflow.test.ts src/lib/approval.test.ts src/lib/conditionals.test.ts src/lib/rls-matrix.test.ts src/lib/template-version.test.ts src/lib/validation/upload.test.ts src/lib/spreadsheet.test.ts src/lib/revision-compare.test.ts src/lib/mapas/geometry.test.ts src/lib/mapas/quantities.test.ts src/lib/mapas/csv-elements.test.ts src/lib/mapas/dxf/dxf.test.ts",
+    "test": "tsx --test src/lib/workflow.test.ts src/lib/approval.test.ts src/lib/conditionals.test.ts src/lib/rls-matrix.test.ts src/lib/template-version.test.ts src/lib/validation/upload.test.ts src/lib/spreadsheet.test.ts src/lib/revision-compare.test.ts src/lib/mapas/geometry.test.ts src/lib/mapas/quantities.test.ts src/lib/mapas/csv-elements.test.ts src/lib/mapas/dxf/dxf.test.ts src/lib/mapas/boolean.test.ts src/lib/mapas/rules.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

@@ -9,11 +9,12 @@ import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
-  detectRegionOverlaps,
   polygonFromGeoJson,
   type GeoJsonPolygon,
 } from "@/lib/mapas/geometry";
+import { analyzeRegionConflicts } from "@/lib/mapas/boolean";
 import type { CadEntity, CadLayer } from "@/lib/mapas/dxf/types";
+import type { CalculationMemory } from "@/lib/mapas/rules";
 
 const BUCKET = process.env.STORAGE_BUCKET_LIBRARY || "library";
 
@@ -51,22 +52,24 @@ export default async function PlantaPage({
   const { data: intersections } = await supabase
     .from("mc_region_element_intersections")
     .select(
-      "region_id, percent, volume_estimado_m3, indeterminate, warnings, method, mc_structural_elements(code, name, kind)",
+      "region_id, percent, volume_estimado_m3, indeterminate, warnings, method, containment, calc_memory, mc_structural_elements(code, name, kind)",
     )
     .in(
       "region_id",
       (regions || []).map((r) => r.id).concat(["00000000-0000-0000-0000-000000000000"]),
     );
 
-  const regionName = new Map((regions || []).map((r) => [r.id, r.name]));
-  const overlaps = detectRegionOverlaps(
+  const conflictReport = analyzeRegionConflicts(
     (regions || [])
       .map((r) => {
         const poly = polygonFromGeoJson(r.geometry as GeoJsonPolygon);
-        return poly ? { id: r.id, polygon: poly } : null;
+        return poly
+          ? { id: r.id, polygon: poly, name: r.name }
+          : null;
       })
       .filter(Boolean) as Array<{
       id: string;
+      name: string;
       polygon: NonNullable<ReturnType<typeof polygonFromGeoJson>>;
     }>,
   );
@@ -176,18 +179,30 @@ export default async function PlantaPage({
         />
       )}
 
-      {overlaps.length > 0 && (
-        <p className="rounded-md border border-[var(--color-status-warn)] bg-[var(--color-status-warn-bg)] px-3 py-2 text-sm text-[var(--color-status-warn)]">
-          Sobreposição detectada entre regiões (
-          {overlaps
-            .map(
-              (o) =>
-                `${regionName.get(o.aId) || o.aId} ∩ ${regionName.get(o.bId) || o.bId}: ${o.overlapAreaM2.toFixed(3)} m²`,
-            )
-            .join("; ")}
-          ). Percentuais acumulados usam <strong>união</strong> — sem soma
-          duplicada por padrão.
-        </p>
+      {(conflictReport.conflicts.length > 0 ||
+        conflictReport.warnings.length > 0) && (
+        <div className="rounded-md border border-[var(--color-status-warn)] bg-[var(--color-status-warn-bg)] px-3 py-2 text-sm text-[var(--color-status-warn)]">
+          <p>
+            Conflitos de cobertura — contabilização padrão:{" "}
+            <strong>união</strong> (sem dupla contagem). Soma{" "}
+            {conflictReport.sumAreaM2.toFixed(3)} m² · união{" "}
+            {conflictReport.unionAreaM2.toFixed(3)} m²
+            {conflictReport.doubleCountRiskM2 > 0
+              ? ` · risco ${conflictReport.doubleCountRiskM2.toFixed(3)} m²`
+              : ""}
+            .
+          </p>
+          <ul className="mt-1 text-xs">
+            {conflictReport.conflicts.map((c) => (
+              <li key={`${c.aId}-${c.bId}`}>
+                • {c.message} [{c.kind}]
+              </li>
+            ))}
+            {conflictReport.warnings.map((w) => (
+              <li key={w.code}>• {w.message}</li>
+            ))}
+          </ul>
+        </div>
       )}
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -215,13 +230,31 @@ export default async function PlantaPage({
                 | { code: string; name: string; kind: string }[]
                 | null;
               const row = Array.isArray(el) ? el[0] : el;
+              const mem = i.calc_memory as CalculationMemory | null;
               return (
-                <li key={idx}>
+                <li key={idx} className="border-b border-divider pb-2">
                   {row?.code} {row?.name}:{" "}
                   {i.indeterminate
                     ? "volume indeterminado"
                     : `${i.percent != null ? Number(i.percent).toFixed(1) + "%" : "—"} · ${i.volume_estimado_m3 != null ? Number(i.volume_estimado_m3).toFixed(3) + " m³" : "—"}`}
-                  <span className="text-ink-muted"> · {i.method}</span>
+                  <span className="text-ink-muted">
+                    {" "}
+                    · {i.method}
+                    {i.containment ? ` · ${i.containment}` : ""}
+                  </span>
+                  {mem?.steps?.length ? (
+                    <details className="mt-1 text-xs text-ink-muted">
+                      <summary>Memória de cálculo ({mem.ruleId})</summary>
+                      <ul className="mt-1 space-y-1">
+                        {mem.steps.map((s, si) => (
+                          <li key={si}>
+                            {s.label}: <code>{s.formula}</code>
+                            {s.result != null ? ` → ${s.result}` : ""}
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
+                  ) : null}
                 </li>
               );
             })}

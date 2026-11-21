@@ -67,6 +67,7 @@ Obra → Pavimento → Importar PDF → Calibrar escala
 - Elementos planos (laje) com espessura constante: cálculo automático auditável.
 - Pilares / verticais: exigem altura ou ficam **indeterminados**.
 - **DXF (Fase 2):** parser ASCII TS + opcional `POST /parse` (ezdxf). Layers/entidades → modelo interno em metros. **Não** cria elementos estruturais automaticamente.
+- **Booleanas / regras (Fase 2B):** `boolean.ts` (vazios, união, conflitos) + `rules.ts` (viga/pilar/fundação) com memória de cálculo; contabilização por união.
 - DWG/IFC: Fase 3 (ver `services/cad-convert`; sem SDK pago sem autorização).
 - Sem SDK pago; alternativa local = PDF + CSV + DXF ASCII.
 
