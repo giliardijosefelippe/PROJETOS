@@ -12,21 +12,29 @@ Pacote HTML/CSS/JS **sem build** para testar o fluxo visual no browser.
 | `concretagem.html` | NF, Slump, volumes (teórico / mapeado / NF) sem rótulo “desperdício” |
 | `styles.css` / `demo.js` | Estilos e estado compartilhado |
 
-## Como abrir
+## Como abrir (mais fácil)
 
-**Opção A — duplo clique**
+**1) Baixe o ZIP**
 
-1. Abra a pasta `demo-mapaconcreto` no Finder/Explorer.  
-2. Duplo clique em `index.html`.
+- No store: `mapaconcreto-demo-html.zip` (nesta pasta) ou  
+  `/cursor/stores/bc-1f61a4cf-bf94-4c63-b310-38f22d21e01f/media/mapaconcreto-demo-html.zip`
+- No GitHub (branch do demo):  
+  https://github.com/giliardijosefelippe/PROJETOS/raw/cursor/mapaconcreto-static-demo-539b/docs/demo-mapaconcreto/mapaconcreto-demo-html.zip
 
-**Opção B — servidor local (recomendado)**
+Extraia no PC → duplo clique em `index.html`.
+
+**2) Servidor local (se o browser bloquear file://)**
 
 ```bash
-cd /caminho/para/demo-mapaconcreto
+cd pasta-extraida
 python3 -m http.server 8765
 ```
 
 Abra http://127.0.0.1:8765/
+
+**3) Publicar no Cursor**
+
+Confirme o Publish do app `mapa-concreto` no chat do agente (botão Publish) para ter um link hospedado.
 
 ## Fluxo sugerido
 
