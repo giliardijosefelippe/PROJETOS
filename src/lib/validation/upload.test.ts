@@ -36,8 +36,8 @@ describe("upload validation", () => {
     assert.equal(r.ok, true);
   });
 
-  it("accepts drawing pdf/dxf/dwg by extension", () => {
-    for (const name of ["prancha.pdf", "forma.dxf", "vigas.DWG"]) {
+  it("accepts drawing pdf/dxf/dwg/ifc by extension", () => {
+    for (const name of ["prancha.pdf", "forma.dxf", "vigas.DWG", "laje.ifc"]) {
       const r = validateUpload("drawing", {
         type: "",
         size: 2048,
@@ -59,6 +59,7 @@ describe("upload validation", () => {
   it("detects drawing formats", () => {
     assert.equal(detectDrawingFormat({ name: "a.dxf" }), "dxf");
     assert.equal(detectDrawingFormat({ name: "a.dwg" }), "dwg");
+    assert.equal(detectDrawingFormat({ name: "a.ifc" }), "ifc");
     assert.equal(
       detectDrawingFormat({ name: "a.pdf", type: "application/pdf" }),
       "pdf",

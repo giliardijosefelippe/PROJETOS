@@ -4,8 +4,11 @@ import { requireSession } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { uploadPlantPdfAction } from "@/actions/mapas/drawings";
 import { uploadPlantDxfAction } from "@/actions/mapas/dxf";
+import { uploadPlantDwgAction } from "@/actions/mapas/dwg";
+import { uploadIfcAction } from "@/actions/mapas/ifc";
 import { createElementAction } from "@/actions/mapas/elements";
 import { importElementsCsvAction } from "@/actions/mapas/import-elements";
+import { cadConvertHealth } from "@/lib/cad/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input, Label, Select } from "@/components/ui/input";
@@ -22,6 +25,7 @@ export default async function SiteDetailPage({
   const { siteId } = await params;
   const sp = await searchParams;
   const supabase = await createClient();
+  const cadHealth = await cadConvertHealth();
 
   const { data: site } = await supabase
     .from("mc_sites")
@@ -227,10 +231,9 @@ export default async function SiteDetailPage({
           className="space-y-3 rounded-lg border border-border bg-surface p-4"
           encType="multipart/form-data"
         >
-          <h3 className="font-semibold">Importar DXF (Fase 2)</h3>
+          <h3 className="font-semibold">Importar DXF</h3>
           <p className="text-xs text-ink-muted">
-            Parser ASCII local (layers, polilinhas, blocos/INSERT). Não cria
-            lajes/pilares automaticamente. Fixture demo:{" "}
+            Parser ASCII local. Não cria lajes/pilares automaticamente. Fixture:{" "}
             <code>fixtures/mapas/demo-laje-40m2.dxf</code>.
           </p>
           <input type="hidden" name="site_id" value={siteId} />
@@ -255,6 +258,78 @@ export default async function SiteDetailPage({
             required
           />
           <Button type="submit">Enviar DXF</Button>
+        </form>
+
+        <form
+          action={uploadPlantDwgAction}
+          className="space-y-3 rounded-lg border border-border bg-surface p-4"
+          encType="multipart/form-data"
+        >
+          <h3 className="font-semibold">Importar DWG (Fase 3)</h3>
+          <p className="text-xs text-ink-muted">
+            Pipeline local: ODA File Converter (gratuito) → DXF intermediário →
+            ezdxf.{" "}
+            {cadHealth.dwg_supported
+              ? "ODA detectado no serviço CAD."
+              : "ODA não detectado — suba cad-convert com ODA no PATH ou envie DXF."}{" "}
+            Sem SDK pago / sem leitura nativa de DWG.
+          </p>
+          <input type="hidden" name="site_id" value={siteId} />
+          <input type="hidden" name="floor_id" value={floors[0]?.id || ""} />
+          <div>
+            <Label htmlFor="dwg_revision">Revisão</Label>
+            <Input id="dwg_revision" name="revision_code" defaultValue="R00" />
+          </div>
+          <div>
+            <Label htmlFor="dwg_title">Título</Label>
+            <Input id="dwg_title" name="title" defaultValue="Planta DWG" />
+          </div>
+          <Input
+            id="dwg_file"
+            name="file"
+            type="file"
+            accept=".dwg,image/vnd.dwg"
+            required
+          />
+          <Button type="submit" disabled={!cadHealth.ok}>
+            Enviar DWG
+          </Button>
+        </form>
+
+        <form
+          action={uploadIfcAction}
+          className="space-y-3 rounded-lg border border-border bg-surface p-4"
+          encType="multipart/form-data"
+        >
+          <h3 className="font-semibold">Importar IFC (Fase 3)</h3>
+          <p className="text-xs text-ink-muted">
+            Preserva GUID, propriedades e Qto. Volumes só se vierem do arquivo.
+            Sem viewer 3D neste incremento. Fixture:{" "}
+            <code>fixtures/mapas/demo-laje-40m2.ifc</code>.
+          </p>
+          <input type="hidden" name="site_id" value={siteId} />
+          <input type="hidden" name="floor_id" value={floors[0]?.id || ""} />
+          <input type="hidden" name="create_elements" value="1" />
+          <div>
+            <Label htmlFor="ifc_revision">Revisão</Label>
+            <Input id="ifc_revision" name="revision_code" defaultValue="R00" />
+          </div>
+          <div>
+            <Label htmlFor="ifc_title">Título</Label>
+            <Input id="ifc_title" name="title" defaultValue="Modelo IFC" />
+          </div>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" name="is_demo" value="1" />
+            Marcar como demonstração
+          </label>
+          <Input
+            id="ifc_file"
+            name="file"
+            type="file"
+            accept=".ifc,.ifcxml,application/x-step"
+            required
+          />
+          <Button type="submit">Enviar IFC</Button>
         </form>
 
         <form
@@ -401,9 +476,13 @@ export default async function SiteDetailPage({
                   {d.file_name}
                   {d.source_kind === "dxf"
                     ? ` · DXF${d.cad_unit_label ? ` (${d.cad_unit_label})` : ""}`
-                    : d.meters_per_pdf_unit
-                      ? " · escala calibrada"
-                      : " · escala pendente"}
+                    : d.source_kind === "dwg"
+                      ? " · DWG→DXF"
+                      : d.source_kind === "ifc"
+                        ? " · IFC"
+                        : d.meters_per_pdf_unit
+                          ? " · escala calibrada"
+                          : " · escala pendente"}
                   {d.is_demo ? " · demonstração" : ""}
                 </p>
               </div>

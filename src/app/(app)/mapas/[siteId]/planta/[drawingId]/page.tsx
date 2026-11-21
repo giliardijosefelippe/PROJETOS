@@ -90,9 +90,18 @@ export default async function PlantaPage({
           </h2>
           <p className="text-sm text-ink-muted">
             {drawing.file_name} ·{" "}
-            {drawing.source_kind === "dxf" ? "DXF" : "PDF"} · hash{" "}
-            {drawing.content_hash.slice(0, 12)}…
+            {drawing.source_kind === "dxf"
+              ? "DXF"
+              : drawing.source_kind === "dwg"
+                ? "DWG→DXF"
+                : drawing.source_kind === "ifc"
+                  ? "IFC"
+                  : "PDF"}{" "}
+            · hash {drawing.content_hash.slice(0, 12)}…
             {drawing.cad_unit_label ? ` · unidade ${drawing.cad_unit_label}` : ""}
+            {drawing.converter_path
+              ? ` · ${drawing.converter_path}`
+              : ""}
             {drawing.is_demo ? " · " : ""}
             {drawing.is_demo && <Badge>Demonstração</Badge>}
           </p>
@@ -145,7 +154,29 @@ export default async function PlantaPage({
         </p>
       )}
 
-      {drawing.source_kind !== "dxf" && !signed?.signedUrl ? (
+      {drawing.source_kind === "ifc" && (
+        <p className="text-xs text-ink-muted">
+          IFC: listagem de elementos com GUID/Qto. Vista 3D não incluída neste
+          incremento
+          {drawing.ifc_project_name
+            ? ` · projeto «${drawing.ifc_project_name}»`
+            : ""}
+          {drawing.ifc_schema ? ` · ${drawing.ifc_schema}` : ""}.
+        </p>
+      )}
+      {drawing.source_kind === "dwg" && (
+        <p className="text-xs text-ink-muted">
+          DWG original preservado; geometria via DXF intermediário (ODA). Sem
+          suporte nativo a DWG binário
+          {drawing.intermediate_format
+            ? ` · intermediário ${drawing.intermediate_format}`
+            : ""}
+          .
+        </p>
+      )}
+
+      {!["dxf", "dwg", "ifc"].includes(drawing.source_kind) &&
+      !signed?.signedUrl ? (
         <p className="text-sm text-[var(--color-status-danger)]">
           Não foi possível assinar a URL do PDF. Verifique Storage/bucket{" "}
           <code>{BUCKET}</code>.
@@ -155,13 +186,21 @@ export default async function PlantaPage({
           siteId={siteId}
           drawingId={drawingId}
           pdfUrl={
-            drawing.source_kind === "dxf" ? null : signed?.signedUrl || null
+            ["dxf", "dwg", "ifc"].includes(drawing.source_kind)
+              ? null
+              : signed?.signedUrl || null
           }
-          sourceKind={drawing.source_kind === "dxf" ? "dxf" : "pdf"}
+          sourceKind={
+            drawing.source_kind === "dxf" ||
+            drawing.source_kind === "dwg" ||
+            drawing.source_kind === "ifc"
+              ? drawing.source_kind
+              : "pdf"
+          }
           metersPerPdfUnit={
             drawing.meters_per_pdf_unit != null
               ? Number(drawing.meters_per_pdf_unit)
-              : drawing.source_kind === "dxf"
+              : ["dxf", "dwg", "ifc"].includes(drawing.source_kind)
                 ? 1
                 : null
           }

@@ -62,7 +62,7 @@ export type CadLayer = {
 
 export type CadModel = {
   sourceFormat: "dxf";
-  parser: "ts-ascii" | "ezdxf";
+  parser: "ts-ascii" | "ezdxf" | "oda+ezdxf";
   isDemo: boolean;
   units: {
     insunits: number | null;

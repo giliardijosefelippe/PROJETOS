@@ -64,13 +64,14 @@ export function PlantViewer({
   scaleRealM: number | null;
   selectedPage: number;
   regions: SavedRegion[];
-  sourceKind?: "pdf" | "dxf";
+  sourceKind?: "pdf" | "dxf" | "dwg" | "ifc";
   cadLayers?: CadLayer[];
   cadEntities?: CadEntity[];
   cadWarnings?: string[];
   cadUnitLabel?: string | null;
 }) {
-  const isDxf = sourceKind === "dxf";
+  const isDxf =
+    sourceKind === "dxf" || sourceKind === "dwg" || sourceKind === "ifc";
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const [pageCount, setPageCount] = useState(1);

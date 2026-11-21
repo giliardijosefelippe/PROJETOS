@@ -36,9 +36,14 @@ const MIMES: Record<UploadKind, string[]> = {
   ],
 };
 
-const DRAWING_EXT = [".pdf", ".dxf", ".dwg"];
+const DRAWING_EXT = [".pdf", ".dxf", ".dwg", ".ifc"];
 
-export type DrawingSourceFormat = "pdf" | "dxf" | "dwg" | "unknown";
+export type DrawingSourceFormat =
+  | "pdf"
+  | "dxf"
+  | "dwg"
+  | "ifc"
+  | "unknown";
 
 export type UploadValidationResult =
   | { ok: true }
@@ -57,6 +62,7 @@ export function detectDrawingFormat(
   if (ext === ".pdf" || file?.type === "application/pdf") return "pdf";
   if (ext === ".dxf") return "dxf";
   if (ext === ".dwg") return "dwg";
+  if (ext === ".ifc" || ext === ".ifcxml") return "ifc";
   return "unknown";
 }
 
@@ -80,7 +86,7 @@ export function validateUpload(
         ok: false,
         code: "UPLOAD_MIME",
         message:
-          "Formato não permitido. Aceitos na prancha: PDF, DXF e DWG.",
+          "Formato não permitido. Aceitos: PDF, DXF, DWG e IFC.",
       };
     }
   } else {

@@ -53,18 +53,30 @@ def oda_available() -> bool:
     return shutil.which(ODA_BIN) is not None
 
 
+def ifcopenshell_available() -> bool:
+    try:
+        import ifcopenshell  # noqa: F401
+
+        return True
+    except Exception:
+        return False
+
+
 def converter_status() -> dict:
     return {
         "ezdxf": True,
         "oda_file_converter": oda_available(),
         "oda_bin": ODA_BIN,
         "librecad": shutil.which(LIBRECAD_BIN) is not None,
+        "ifcopenshell": ifcopenshell_available(),
         "dwg_supported": oda_available(),
         "dxf_supported": True,
+        "ifc_supported": ifcopenshell_available(),
         "notes": [
-            "DXF: renderizado com ezdxf + matplotlib (PDF/PNG).",
+            "DXF: renderizado/parseado com ezdxf (+ matplotlib para PDF/PNG).",
             "DWG: requer ODA File Converter no PATH (gratuito com registro ODA) "
-            "para DWG→DXF; depois o mesmo pipeline ezdxf. Sem Forge como caminho primário.",
+            "para DWG→DXF intermediário; sem leitura nativa de DWG binário e sem Forge.",
+            "IFC: ifcopenshell opcional neste serviço; o app Next.js tem parser STEP próprio.",
         ],
     }
 
