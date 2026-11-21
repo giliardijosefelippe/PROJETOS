@@ -22,6 +22,16 @@ describe("RLS / permissions matrix", () => {
     assert.equal(roleCan("admin", "branding_logo"), true);
   });
 
+  it("mapas: consulta read-only; desenhista writes; conferente status/field", () => {
+    assert.equal(roleCan("consulta", "mapas_write"), false);
+    assert.equal(roleCan("consulta", "mapas_pour_status"), false);
+    assert.equal(roleCan("desenhista", "mapas_write"), true);
+    assert.equal(roleCan("desenhista", "mapas_pour_status"), false);
+    assert.equal(roleCan("conferente", "mapas_pour_status"), true);
+    assert.equal(roleCan("conferente", "mapas_field"), true);
+    assert.equal(roleCan("conferente", "mapas_audit_read"), true);
+  });
+
   it("isolates rows by active membership org", () => {
     const memberships = [
       { user_id: "u1", organization_id: "org-a", status: "active" },

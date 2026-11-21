@@ -145,16 +145,33 @@ export function compareRevisionRegions(args: {
       same: boolean;
     } | null = null;
 
+    const normName = (s: string) =>
+      s
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/\p{M}/gu, "")
+        .replace(/[^a-z0-9]+/g, "");
+
     for (const t of targetActive) {
       if (usedTarget.has(t.id)) continue;
       const tPoly = polygonFromGeoJson(t.geometry);
       if (!tPoly) continue;
       const cmp = almostSameGeometry(srcPoly, tPoly);
       const containment = classifyContainment(tPoly, srcPoly);
+      const nameBoost =
+        src.name && t.name && normName(src.name) === normName(t.name)
+          ? 2
+          : src.name &&
+              t.name &&
+              (normName(src.name).includes(normName(t.name)) ||
+                normName(t.name).includes(normName(src.name)))
+            ? 0.8
+            : 0;
       const score =
         cmp.overlapRatio * 10 -
         Math.min(cmp.shiftM, 50) * 0.1 +
-        (containment.classification === "fully_contained" ? 1 : 0);
+        (containment.classification === "fully_contained" ? 1 : 0) +
+        nameBoost;
       if (!best || score > best.score) {
         best = {
           t,
@@ -162,7 +179,7 @@ export function compareRevisionRegions(args: {
           overlapRatio: cmp.overlapRatio,
           shiftM: cmp.shiftM,
           areaDelta: cmp.areaDelta,
-          same: cmp.same,
+          same: cmp.same || (nameBoost >= 2 && cmp.overlapRatio >= 0.9),
         };
       }
     }

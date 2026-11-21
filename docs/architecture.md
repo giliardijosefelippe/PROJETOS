@@ -66,7 +66,7 @@ Obra → Pavimento → Importar PDF → Calibrar escala
 - PDF: renderização + calibração; sem OCR/extração automática de elementos.
 - Laje com espessura constante: cálculo automático auditável; pilares exigem altura.
 - Vazios/ilhas: UI + `subtractVoids`; persistidos em `mc_mapped_regions.voids`.
-- Vigas multi-etapa: `accumulateBeamStages` soma `mc_pour_elements.executed_length_m` (teto no eixo).
+- Vigas multi-etapa: `accumulateBeamStages` soma comprimentos (teto no eixo); com `startM`/`endM` aplica união 1D (`mergeAxisIntervals`) para evitar dupla contagem de trechos.
 - DXF/DWG/IFC: Fases 2–3; `services/cad-convert`; sem SDK pago.
 - Relatório: PDFKit com mapa esquemático das regiões (+ vazios); sem raster do PDF original.
 - Migrations MapaConcreto: **00007 → 00013** (ver README).

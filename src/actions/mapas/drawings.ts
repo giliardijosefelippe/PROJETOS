@@ -48,9 +48,10 @@ export async function uploadPlantPdfAction(formData: FormData) {
     });
 
   if (upErr) {
-    redirect(
-      `/mapas/${siteId}?error=${encodeURIComponent(upErr.message)}`,
-    );
+    const msg = /already exists|Duplicate|409/i.test(upErr.message)
+      ? "Este arquivo já foi enviado (ou conflito no Storage). Renomeie ou use outra revisão."
+      : `Falha no upload do PDF: ${upErr.message}`;
+    redirect(`/mapas/${siteId}?error=${encodeURIComponent(msg)}`);
   }
 
   const { data, error } = await supabase
@@ -109,7 +110,23 @@ export async function calibrateScaleAction(formData: FormData) {
 
   if (!drawingId || ![p1x, p1y, p2x, p2y, realM].every((n) => Number.isFinite(n))) {
     redirect(
-      `/mapas/${siteId}/planta/${drawingId}?error=Calibração incompleta`,
+      `/mapas/${siteId}/planta/${drawingId}?error=${encodeURIComponent(
+        "Calibração incompleta — marque dois pontos e informe a distância real em metros.",
+      )}`,
+    );
+  }
+  if (realM <= 0) {
+    redirect(
+      `/mapas/${siteId}/planta/${drawingId}?error=${encodeURIComponent(
+        "A distância real deve ser maior que zero (metros).",
+      )}`,
+    );
+  }
+  if (p1x === p2x && p1y === p2y) {
+    redirect(
+      `/mapas/${siteId}/planta/${drawingId}?error=${encodeURIComponent(
+        "Os dois pontos de escala coincidem — escolha extremos distintos da cota.",
+      )}`,
     );
   }
 
@@ -120,7 +137,9 @@ export async function calibrateScaleAction(formData: FormData) {
   });
   if (mpu == null) {
     redirect(
-      `/mapas/${siteId}/planta/${drawingId}?error=Distância de calibração inválida`,
+      `/mapas/${siteId}/planta/${drawingId}?error=${encodeURIComponent(
+        "Não foi possível calcular a escala — verifique pontos e distância.",
+      )}`,
     );
   }
 
