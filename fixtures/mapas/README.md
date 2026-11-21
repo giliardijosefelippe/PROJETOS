@@ -4,6 +4,9 @@
 |---------|-----|
 | `demo-laje-40m2.dxf` | DXF ASCII — laje 8×5 m (40 m²), `$INSUNITS=6` |
 | `demo-laje-40m2.ifc` | IFC4 STEP — mesma laje com GUID + Qto GrossVolume=6 m³ / GrossArea=40 m² |
+| `public/demo/mapaconcreto-demo.pdf` | Gerado por `npm run seed:mapas:check` — planta demo p/ raster do relatório |
+
+Offline (sem Supabase): `npm run seed:mapas:check` · `npm run test` (inclui `pdf-raster` + plano demo).
 
 ## DWG
 

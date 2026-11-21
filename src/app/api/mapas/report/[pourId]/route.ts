@@ -2,7 +2,10 @@ import { NextResponse } from "next/server";
 import { requireSession } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { compareVolumes } from "@/lib/mapas/geometry";
+import { renderPdfPageToPng } from "@/lib/mapas/pdf-raster";
 import { buildMcPourReportPdf } from "@/lib/mapas/report";
+
+const BUCKET = process.env.STORAGE_BUCKET_LIBRARY || "library";
 
 export async function GET(
   _req: Request,
@@ -31,7 +34,9 @@ export async function GET(
 
   const { data: pourRegions } = await supabase
     .from("mc_pour_regions")
-    .select("region_id, mc_mapped_regions(name, area_m2, tool, geometry, voids, color)")
+    .select(
+      "region_id, mc_mapped_regions(name, area_m2, tool, geometry, voids, color, drawing_revision_id)",
+    )
     .eq("pour_id", pourId);
 
   const { data: intersections } = await supabase
@@ -116,6 +121,50 @@ export async function GET(
 
   const nfById = new Map((deliveries || []).map((d) => [d.id, d.nf_number]));
 
+  let plantPreviewPng: Buffer | null = null;
+  let plantPreviewLabel: string | null = null;
+  const drawingIds = new Set<string>();
+  for (const r of pourRegions || []) {
+    const region = r.mc_mapped_regions as
+      | { drawing_revision_id?: string }
+      | { drawing_revision_id?: string }[]
+      | null;
+    const row = Array.isArray(region) ? region[0] : region;
+    if (row?.drawing_revision_id) drawingIds.add(row.drawing_revision_id);
+  }
+  const drawingId = [...drawingIds][0];
+  if (drawingId) {
+    const { data: drawing } = await supabase
+      .from("mc_drawing_revisions")
+      .select("storage_path, mime_type, selected_page, revision_code, file_name")
+      .eq("id", drawingId)
+      .eq("organization_id", session.organizationId)
+      .maybeSingle();
+    if (
+      drawing?.storage_path &&
+      (drawing.mime_type || "").includes("pdf")
+    ) {
+      const { data: file, error: dlErr } = await supabase.storage
+        .from(BUCKET)
+        .download(drawing.storage_path);
+      if (!dlErr && file) {
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        const raster = await renderPdfPageToPng(bytes, {
+          page: drawing.selected_page || 1,
+          maxWidthPx: 1100,
+        });
+        if (raster) {
+          plantPreviewPng = raster.png;
+          plantPreviewLabel = `Raster da planta ${drawing.revision_code} · ${drawing.file_name} · página ${raster.page}/${raster.pageCount}`;
+        } else {
+          warnings.push(
+            "Não foi possível rasterizar o PDF da planta para o relatório — esquema mantido.",
+          );
+        }
+      }
+    }
+  }
+
   const pdf = await buildMcPourReportPdf({
     organizationName: session.organizationName,
     siteCode: site?.code || "",
@@ -126,6 +175,8 @@ export async function GET(
     isDemo: Boolean(site?.is_demo || pour.is_demo),
     generatedBy: session.fullName,
     generatedAt: new Date(),
+    plantPreviewPng,
+    plantPreviewLabel,
     regions: (pourRegions || []).map((r) => {
       const region = r.mc_mapped_regions as
         | {

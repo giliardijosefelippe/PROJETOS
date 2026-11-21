@@ -1,10 +1,12 @@
 #!/usr/bin/env node
 /**
- * Seed MapaConcreto — dados de DEMONSTRAÇÃO
+ * Seed MapaConcreto — dados de DEMONSTRAÇÃO (100% idempotente em re-runs)
  * Requires: NEXT_PUBLIC_SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY
- * Prefer running after npm run seed (org + users) and migration 00007.
+ * Prefer running after npm run seed and migrations 00007–00014.
  *
- * Usage: npm run seed:mapas
+ * Usage:
+ *   npm run seed:mapas
+ *   node scripts/seed-mapas.mjs --check   # offline (sem secrets): gera PDF + valida plano
  */
 import { createClient } from "@supabase/supabase-js";
 import { createHash } from "crypto";
@@ -12,36 +14,47 @@ import { readFileSync, existsSync, writeFileSync, mkdirSync } from "fs";
 import { resolve } from "path";
 import PDFDocument from "pdfkit";
 
-function loadEnv() {
-  const path = resolve(process.cwd(), ".env.local");
-  if (!existsSync(path)) return;
-  for (const line of readFileSync(path, "utf8").split("\n")) {
-    const m = line.match(/^([^#=]+)=(.*)$/);
-    if (!m) continue;
-    const key = m[1].trim();
-    let val = m[2].trim().replace(/^["']|["']$/g, "");
-    if (!process.env[key]) process.env[key] = val;
-  }
+const CHECK_ONLY = process.argv.includes("--check");
+
+export const DEMO_SITE_CODE = "DEMO-MC-001";
+export const DEMO_BUILDING_CODE = "T-DEMO";
+export const DEMO_FLOOR_LEVEL = 1;
+export const DEMO_DRAWING_FILE = "mapaconcreto-demo.pdf";
+export const DEMO_REVISION = "R00";
+
+/** Plano geométrico de aceite — sem inventar volumes. */
+export function demoAcceptancePlan() {
+  const slab = {
+    code: "LJ-DEMO-40",
+    areaM2: 40,
+    thicknessM: 0.15,
+    volumeTeoricoM3: 6,
+  };
+  const regionA = {
+    name: "Região demo A 25 m²",
+    areaM2: 25,
+    intersectionM2: 25,
+    percent: 62.5,
+    volumeEstimadoM3: 3.75,
+  };
+  const regionB = {
+    name: "Região demo B (sobrepõe A)",
+    areaM2: 25,
+  };
+  const unionAreaM2 = 40; // A∪B over 8×5 slab
+  return {
+    slab,
+    regionA,
+    regionB,
+    unionAreaM2,
+    acceptance: {
+      percent: (regionA.intersectionM2 / slab.areaM2) * 100,
+      volumeM3: regionA.intersectionM2 * slab.thicknessM,
+    },
+  };
 }
 
-loadEnv();
-
-const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-if (!url || !key || url.includes("YOUR_PROJECT")) {
-  console.error(
-    "Configure NEXT_PUBLIC_SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY em .env.local.",
-  );
-  process.exit(1);
-}
-
-const admin = createClient(url, key, {
-  auth: { autoRefreshToken: false, persistSession: false },
-});
-
-const BUCKET = process.env.STORAGE_BUCKET_LIBRARY || "library";
-
-function buildDemoPdf() {
+export function buildDemoPdf() {
   return new Promise((resolvePdf, reject) => {
     const doc = new PDFDocument({ size: [600, 400], margin: 40 });
     const chunks = [];
@@ -59,18 +72,165 @@ function buildDemoPdf() {
     doc.rect(80, 120, 320, 200).stroke("#222");
     doc.fontSize(10).text("Laje demo 8,00 × 5,00 m (40 m²)", 90, 130);
     doc.text("Cota de referência: 5,00 m (lado menor)", 90, 150);
-    // Visual scale bar ~200 pdf units = 5 m after calibration tip
     doc.moveTo(90, 300).lineTo(290, 300).stroke("#175cd3");
     doc.fillColor("#175cd3").text("barra 5,00 m (calibrar estes extremos)", 90, 305);
     doc.end();
   });
 }
 
+function loadEnv() {
+  const path = resolve(process.cwd(), ".env.local");
+  if (!existsSync(path)) return;
+  for (const line of readFileSync(path, "utf8").split("\n")) {
+    const m = line.match(/^([^#=]+)=(.*)$/);
+    if (!m) continue;
+    const key = m[1].trim();
+    let val = m[2].trim().replace(/^["']|["']$/g, "");
+    if (!process.env[key]) process.env[key] = val;
+  }
+}
+
+async function upsertOne(admin, table, row, onConflict) {
+  const { data, error } = await admin
+    .from(table)
+    .upsert(row, { onConflict })
+    .select("id")
+    .single();
+  if (error || !data) {
+    throw new Error(`${table} upsert: ${error?.message || "sem id"}`);
+  }
+  return data;
+}
+
+async function findOrCreateBuilding(admin, { siteId, orgId, code, name }) {
+  const { data: existing } = await admin
+    .from("mc_buildings")
+    .select("id")
+    .eq("site_id", siteId)
+    .eq("code", code)
+    .maybeSingle();
+  if (existing?.id) {
+    await admin
+      .from("mc_buildings")
+      .update({ name, updated_at: new Date().toISOString() })
+      .eq("id", existing.id);
+    return existing;
+  }
+  const { data, error } = await admin
+    .from("mc_buildings")
+    .insert({
+      site_id: siteId,
+      organization_id: orgId,
+      code,
+      name,
+    })
+    .select("id")
+    .single();
+  if (error || !data) {
+    const { data: again } = await admin
+      .from("mc_buildings")
+      .select("id")
+      .eq("site_id", siteId)
+      .eq("code", code)
+      .maybeSingle();
+    if (again?.id) return again;
+    throw new Error(`mc_buildings: ${error?.message || "falha"}`);
+  }
+  return data;
+}
+
+async function findOrCreateFloor(admin, { buildingId, orgId, name, levelIndex }) {
+  const { data: existing } = await admin
+    .from("mc_floors")
+    .select("id")
+    .eq("building_id", buildingId)
+    .eq("level_index", levelIndex)
+    .maybeSingle();
+  if (existing?.id) {
+    await admin
+      .from("mc_floors")
+      .update({ name, updated_at: new Date().toISOString() })
+      .eq("id", existing.id);
+    return existing;
+  }
+  const { data, error } = await admin
+    .from("mc_floors")
+    .insert({
+      building_id: buildingId,
+      organization_id: orgId,
+      name,
+      level_index: levelIndex,
+    })
+    .select("id")
+    .single();
+  if (error || !data) {
+    // Race / unique after 00014 — fetch again
+    const { data: again } = await admin
+      .from("mc_floors")
+      .select("id")
+      .eq("building_id", buildingId)
+      .eq("level_index", levelIndex)
+      .maybeSingle();
+    if (again?.id) return again;
+    throw new Error(`mc_floors: ${error?.message || "falha"}`);
+  }
+  return data;
+}
+
+async function upsertDrawing(admin, row) {
+  return upsertOne(
+    admin,
+    "mc_drawing_revisions",
+    row,
+    "site_id,revision_code,file_name",
+  );
+}
+
+async function runCheck() {
+  const plan = demoAcceptancePlan();
+  if (Math.abs(plan.acceptance.percent - 62.5) > 1e-9) {
+    throw new Error("Aceite % inválido no plano demo");
+  }
+  if (Math.abs(plan.acceptance.volumeM3 - 3.75) > 1e-9) {
+    throw new Error("Aceite volume inválido no plano demo");
+  }
+  const pdf = await buildDemoPdf();
+  if (pdf.length < 100 || pdf.subarray(0, 4).toString() !== "%PDF") {
+    throw new Error("PDF demo inválido");
+  }
+  const outDir = resolve(process.cwd(), "public/demo");
+  mkdirSync(outDir, { recursive: true });
+  writeFileSync(resolve(outDir, DEMO_DRAWING_FILE), pdf);
+  console.log("seed:mapas --check OK (offline)");
+  console.log(`  PDF: public/demo/${DEMO_DRAWING_FILE} (${pdf.length} bytes)`);
+  console.log(
+    `  Aceite plano: ${plan.acceptance.percent}% / ${plan.acceptance.volumeM3} m³`,
+  );
+}
+
 async function main() {
-  const { data: orgs } = await admin
-    .from("organizations")
-    .select("id, name")
-    .limit(1);
+  if (CHECK_ONLY) {
+    await runCheck();
+    return;
+  }
+
+  loadEnv();
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key || url.includes("YOUR_PROJECT")) {
+    console.error(
+      "Configure NEXT_PUBLIC_SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY em .env.local.",
+    );
+    console.error("Sem secrets: rode `node scripts/seed-mapas.mjs --check`.");
+    process.exit(1);
+  }
+
+  const admin = createClient(url, key, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+  const BUCKET = process.env.STORAGE_BUCKET_LIBRARY || "library";
+
+  const { data: orgs } = await admin.from("organizations").select("id, name").limit(1);
   const org = orgs?.[0];
   if (!org) {
     console.error("Nenhuma organização. Rode npm run seed antes.");
@@ -90,54 +250,36 @@ async function main() {
   const hash = createHash("sha256").update(pdf).digest("hex");
   const outDir = resolve(process.cwd(), "public/demo");
   mkdirSync(outDir, { recursive: true });
-  writeFileSync(resolve(outDir, "mapaconcreto-demo.pdf"), pdf);
+  writeFileSync(resolve(outDir, DEMO_DRAWING_FILE), pdf);
 
-  const { data: site, error: siteErr } = await admin
-    .from("mc_sites")
-    .upsert(
-      {
-        organization_id: org.id,
-        code: "DEMO-MC-001",
-        name: "Obra Demonstração MapaConcreto",
-        description:
-          "Dados fictícios de demonstração — não representam obra real.",
-        is_demo: true,
-        created_by: userId,
-      },
-      { onConflict: "organization_id,code" },
-    )
-    .select("id")
-    .single();
-
-  if (siteErr || !site) {
-    console.error("Falha ao criar obra demo:", siteErr?.message);
-    console.error(
-      "Confirme que a migration 00007_mapaconcreto.sql foi aplicada.",
-    );
-    process.exit(1);
-  }
-
-  const { data: building } = await admin
-    .from("mc_buildings")
-    .insert({
-      site_id: site.id,
+  const site = await upsertOne(
+    admin,
+    "mc_sites",
+    {
       organization_id: org.id,
-      code: "T-DEMO",
-      name: "Torre Demonstração",
-    })
-    .select("id")
-    .single();
+      code: DEMO_SITE_CODE,
+      name: "Obra Demonstração MapaConcreto",
+      description:
+        "Dados fictícios de demonstração — não representam obra real.",
+      is_demo: true,
+      created_by: userId,
+    },
+    "organization_id,code",
+  );
 
-  const { data: floor } = await admin
-    .from("mc_floors")
-    .insert({
-      building_id: building.id,
-      organization_id: org.id,
-      name: "Pavimento tipo (demo)",
-      level_index: 1,
-    })
-    .select("id")
-    .single();
+  const building = await findOrCreateBuilding(admin, {
+    siteId: site.id,
+    orgId: org.id,
+    code: DEMO_BUILDING_CODE,
+    name: "Torre Demonstração",
+  });
+
+  const floor = await findOrCreateFloor(admin, {
+    buildingId: building.id,
+    orgId: org.id,
+    name: "Pavimento tipo (demo)",
+    levelIndex: DEMO_FLOOR_LEVEL,
+  });
 
   const storagePath = `${org.id}/mapas/${site.id}/DEMO_${hash.slice(0, 12)}.pdf`;
   await admin.storage.from(BUCKET).upload(storagePath, pdf, {
@@ -145,32 +287,28 @@ async function main() {
     upsert: true,
   });
 
-  // Calibrated: 200 pdf units = 5 m → 0.025 m/unit; laje 8x5 m = 320x200 pdf units at origin
   const mpu = 0.025;
-  const { data: drawing } = await admin
-    .from("mc_drawing_revisions")
-    .insert({
-      site_id: site.id,
-      floor_id: floor.id,
-      organization_id: org.id,
-      revision_code: "R00",
-      title: "Planta demo laje 40 m²",
-      file_name: "mapaconcreto-demo.pdf",
-      storage_path: storagePath,
-      content_hash: hash,
-      mime_type: "application/pdf",
-      page_count: 1,
-      selected_page: 1,
-      scale_p1: [90, 300],
-      scale_p2: [290, 300],
-      scale_real_m: 5,
-      meters_per_pdf_unit: mpu,
-      unit: "m",
-      is_demo: true,
-      created_by: userId,
-    })
-    .select("id")
-    .single();
+  const drawing = await upsertDrawing(admin, {
+    site_id: site.id,
+    floor_id: floor.id,
+    organization_id: org.id,
+    revision_code: DEMO_REVISION,
+    title: "Planta demo laje 40 m²",
+    file_name: DEMO_DRAWING_FILE,
+    storage_path: storagePath,
+    content_hash: hash,
+    mime_type: "application/pdf",
+    page_count: 1,
+    selected_page: 1,
+    scale_p1: [90, 300],
+    scale_p2: [290, 300],
+    scale_real_m: 5,
+    meters_per_pdf_unit: mpu,
+    unit: "m",
+    is_demo: true,
+    created_by: userId,
+    updated_at: new Date().toISOString(),
+  });
 
   const elementGeom = {
     type: "Polygon",
@@ -184,30 +322,35 @@ async function main() {
       ],
     ],
   };
-  const { data: element } = await admin
-    .from("mc_structural_elements")
-    .upsert(
-      {
-        site_id: site.id,
-        floor_id: floor.id,
-        drawing_revision_id: drawing.id,
-        organization_id: org.id,
-        code: "LJ-DEMO-40",
-        name: "Laje demonstração 40 m²",
-        kind: "laje",
-        geometry: elementGeom,
-        area_m2: 40,
-        thickness_m: 0.15,
-        volume_teorico_m3: 6,
-        quantity_source: "demo",
-        reliability: "demonstracao",
-        is_demo: true,
-        created_by: userId,
-      },
-      { onConflict: "site_id,code" },
-    )
-    .select("id")
-    .single();
+  const element = await upsertOne(
+    admin,
+    "mc_structural_elements",
+    {
+      site_id: site.id,
+      floor_id: floor.id,
+      drawing_revision_id: drawing.id,
+      organization_id: org.id,
+      code: "LJ-DEMO-40",
+      name: "Laje demonstração 40 m²",
+      kind: "laje",
+      geometry: elementGeom,
+      area_m2: 40,
+      thickness_m: 0.15,
+      volume_teorico_m3: 6,
+      quantity_source: "demo",
+      reliability: "demonstracao",
+      is_demo: true,
+      created_by: userId,
+    },
+    "site_id,code",
+  );
+
+  // Replace demo regions (cascades intersections / pour_regions / allocations)
+  await admin
+    .from("mc_mapped_regions")
+    .delete()
+    .eq("site_id", site.id)
+    .eq("is_demo", true);
 
   const regionGeom = {
     type: "Polygon",
@@ -221,10 +364,7 @@ async function main() {
       ],
     ],
   };
-  // Clear previous demo regions/deliveries for idempotent re-seed of geometry cases
-  await admin.from("mc_mapped_regions").delete().eq("site_id", site.id).eq("is_demo", true);
-
-  const { data: region } = await admin
+  const { data: region, error: regionErr } = await admin
     .from("mc_mapped_regions")
     .insert({
       site_id: site.id,
@@ -241,8 +381,8 @@ async function main() {
     })
     .select("id")
     .single();
+  if (regionErr || !region) throw new Error(regionErr?.message || "região A");
 
-  // Segunda região sobreposta (3–8 × 0–5 = 25 m²) → união com A = 40 m² (100%)
   const region2Geom = {
     type: "Polygon",
     coordinates: [
@@ -255,7 +395,7 @@ async function main() {
       ],
     ],
   };
-  const { data: region2 } = await admin
+  const { data: region2, error: region2Err } = await admin
     .from("mc_mapped_regions")
     .insert({
       site_id: site.id,
@@ -272,6 +412,7 @@ async function main() {
     })
     .select("id")
     .single();
+  if (region2Err || !region2) throw new Error(region2Err?.message || "região B");
 
   await admin.from("mc_region_element_intersections").upsert(
     {
@@ -306,51 +447,53 @@ async function main() {
     { onConflict: "region_id,element_id" },
   );
 
-  const { data: pour } = await admin
-    .from("mc_concrete_pours")
-    .upsert(
-      {
-        site_id: site.id,
-        floor_id: floor.id,
-        organization_id: org.id,
-        code: "C-DEMO-01",
-        title: "Concretagem demonstração — 1ª etapa",
-        status: "em_execucao",
-        pour_date: new Date().toISOString().slice(0, 10),
-        fck_mpa: 30,
-        slump_spec_mm: 100,
-        volume_planned_m3: 4,
-        notes: "Demonstração",
-        is_demo: true,
-        created_by: userId,
-      },
-      { onConflict: "site_id,code" },
-    )
-    .select("id")
-    .single();
+  const pour = await upsertOne(
+    admin,
+    "mc_concrete_pours",
+    {
+      site_id: site.id,
+      floor_id: floor.id,
+      organization_id: org.id,
+      code: "C-DEMO-01",
+      title: "Concretagem demonstração — 1ª etapa",
+      status: "em_execucao",
+      pour_date: new Date().toISOString().slice(0, 10),
+      fck_mpa: 30,
+      slump_spec_mm: 100,
+      volume_planned_m3: 4,
+      notes: "Demonstração",
+      is_demo: true,
+      created_by: userId,
+    },
+    "site_id,code",
+  );
 
-  const { data: pour2 } = await admin
-    .from("mc_concrete_pours")
-    .upsert(
-      {
-        site_id: site.id,
-        floor_id: floor.id,
-        organization_id: org.id,
-        code: "C-DEMO-02",
-        title: "Concretagem demonstração — 2ª etapa (união)",
-        status: "em_execucao",
-        pour_date: new Date().toISOString().slice(0, 10),
-        fck_mpa: 30,
-        slump_spec_mm: 100,
-        volume_planned_m3: 3,
-        notes: "Demonstração — percentual acumulado por união das regiões",
-        is_demo: true,
-        created_by: userId,
-      },
-      { onConflict: "site_id,code" },
-    )
-    .select("id")
-    .single();
+  const pour2 = await upsertOne(
+    admin,
+    "mc_concrete_pours",
+    {
+      site_id: site.id,
+      floor_id: floor.id,
+      organization_id: org.id,
+      code: "C-DEMO-02",
+      title: "Concretagem demonstração — 2ª etapa (união)",
+      status: "em_execucao",
+      pour_date: new Date().toISOString().slice(0, 10),
+      fck_mpa: 30,
+      slump_spec_mm: 100,
+      volume_planned_m3: 3,
+      notes: "Demonstração — percentual acumulado por união das regiões",
+      is_demo: true,
+      created_by: userId,
+    },
+    "site_id,code",
+  );
+
+  // Clear pour links then reattach (idempotent)
+  await admin.from("mc_pour_regions").delete().eq("pour_id", pour.id);
+  await admin.from("mc_pour_regions").delete().eq("pour_id", pour2.id);
+  await admin.from("mc_pour_elements").delete().eq("pour_id", pour.id);
+  await admin.from("mc_pour_elements").delete().eq("pour_id", pour2.id);
 
   await admin.from("mc_pour_regions").upsert({
     pour_id: pour.id,
@@ -378,7 +521,7 @@ async function main() {
     .eq("site_id", site.id)
     .eq("is_demo", true);
 
-  const { data: delivery } = await admin
+  const { data: delivery, error: delErr } = await admin
     .from("mc_truck_deliveries")
     .insert({
       organization_id: org.id,
@@ -395,8 +538,9 @@ async function main() {
     })
     .select("id")
     .single();
+  if (delErr || !delivery) throw new Error(delErr?.message || "delivery");
 
-  const { data: delivery2 } = await admin
+  const { data: delivery2, error: del2Err } = await admin
     .from("mc_truck_deliveries")
     .insert({
       organization_id: org.id,
@@ -413,6 +557,7 @@ async function main() {
     })
     .select("id")
     .single();
+  if (del2Err || !delivery2) throw new Error(del2Err?.message || "delivery2");
 
   await admin.from("mc_delivery_region_allocations").insert([
     {
@@ -451,8 +596,9 @@ async function main() {
     created_by: userId,
   });
 
-  // Pilar sem altura → volume indeterminado (aceite §12.11)
-  await admin.from("mc_structural_elements").upsert(
+  await upsertOne(
+    admin,
+    "mc_structural_elements",
     {
       site_id: site.id,
       floor_id: floor.id,
@@ -481,70 +627,64 @@ async function main() {
       is_demo: true,
       created_by: userId,
     },
-    { onConflict: "site_id,code" },
+    "site_id,code",
   );
 
-  // Viga com duas etapas de comprimento (multi-etapa)
-  const { data: beam } = await admin
-    .from("mc_structural_elements")
-    .upsert(
-      {
-        site_id: site.id,
-        floor_id: floor.id,
-        drawing_revision_id: drawing.id,
-        organization_id: org.id,
-        code: "VG-DEMO-01",
-        name: "Viga demo multi-etapa",
-        kind: "viga",
-        geometry: {
-          type: "Polygon",
-          coordinates: [
-            [
-              [0, 4.7],
-              [8, 4.7],
-              [8, 5],
-              [0, 5],
-              [0, 4.7],
-            ],
+  const beam = await upsertOne(
+    admin,
+    "mc_structural_elements",
+    {
+      site_id: site.id,
+      floor_id: floor.id,
+      drawing_revision_id: drawing.id,
+      organization_id: org.id,
+      code: "VG-DEMO-01",
+      name: "Viga demo multi-etapa",
+      kind: "viga",
+      geometry: {
+        type: "Polygon",
+        coordinates: [
+          [
+            [0, 4.7],
+            [8, 4.7],
+            [8, 5],
+            [0, 5],
+            [0, 4.7],
           ],
-        },
-        area_m2: 2.4,
-        section_area_m2: 0.12,
-        axis_length_m: 8,
-        executed_length_m: null,
-        volume_teorico_m3: 0.96,
-        quantity_source: "demo",
-        reliability: "demonstracao",
-        is_demo: true,
-        created_by: userId,
+        ],
       },
-      { onConflict: "site_id,code" },
-    )
-    .select("id")
-    .single();
+      area_m2: 2.4,
+      section_area_m2: 0.12,
+      axis_length_m: 8,
+      executed_length_m: null,
+      volume_teorico_m3: 0.96,
+      quantity_source: "demo",
+      reliability: "demonstracao",
+      is_demo: true,
+      created_by: userId,
+    },
+    "site_id,code",
+  );
 
-  if (beam?.id) {
-    await admin.from("mc_pour_elements").upsert(
-      {
-        pour_id: pour.id,
-        element_id: beam.id,
-        organization_id: org.id,
-        executed_length_m: 3.5,
-      },
-      { onConflict: "pour_id,element_id" },
-    );
-    await admin.from("mc_pour_elements").upsert(
-      {
-        pour_id: pour2.id,
-        element_id: beam.id,
-        organization_id: org.id,
-        executed_length_m: 2.5,
-      },
-      { onConflict: "pour_id,element_id" },
-    );
-  }
+  await admin.from("mc_pour_elements").upsert(
+    {
+      pour_id: pour.id,
+      element_id: beam.id,
+      organization_id: org.id,
+      executed_length_m: 3.5,
+    },
+    { onConflict: "pour_id,element_id" },
+  );
+  await admin.from("mc_pour_elements").upsert(
+    {
+      pour_id: pour2.id,
+      element_id: beam.id,
+      organization_id: org.id,
+      executed_length_m: 2.5,
+    },
+    { onConflict: "pour_id,element_id" },
+  );
 
-  // Vazio/ilha demo na região A (1×1 m)
   await admin
     .from("mc_mapped_regions")
     .update({
@@ -568,8 +708,11 @@ async function main() {
     })
     .eq("id", region.id);
 
-  // Ocorrência + nota de campo (Fase 4)
-  await admin.from("mc_site_occurrences").delete().eq("site_id", site.id).eq("is_demo", true);
+  await admin
+    .from("mc_site_occurrences")
+    .delete()
+    .eq("site_id", site.id)
+    .eq("is_demo", true);
   await admin.from("mc_site_occurrences").insert({
     organization_id: org.id,
     site_id: site.id,
@@ -583,7 +726,12 @@ async function main() {
     is_demo: true,
     created_by: userId,
   });
-  await admin.from("mc_field_notes").delete().eq("site_id", site.id).eq("is_demo", true);
+
+  await admin
+    .from("mc_field_notes")
+    .delete()
+    .eq("site_id", site.id)
+    .eq("is_demo", true);
   await admin.from("mc_field_notes").insert({
     organization_id: org.id,
     site_id: site.id,
@@ -593,18 +741,39 @@ async function main() {
     created_by: userId,
   });
 
-  console.log("Seed MapaConcreto (DEMONSTRAÇÃO) concluído.");
+  // Sanity: single building/floor/drawing for demo codes
+  const { count: bCount } = await admin
+    .from("mc_buildings")
+    .select("id", { count: "exact", head: true })
+    .eq("site_id", site.id)
+    .eq("code", DEMO_BUILDING_CODE);
+  const { count: dCount } = await admin
+    .from("mc_drawing_revisions")
+    .select("id", { count: "exact", head: true })
+    .eq("site_id", site.id)
+    .eq("revision_code", DEMO_REVISION)
+    .eq("file_name", DEMO_DRAWING_FILE);
+
+  console.log("Seed MapaConcreto (DEMONSTRAÇÃO) concluído — idempotente.");
   console.log(`  Org: ${org.name} (${org.id})`);
-  console.log(`  Obra: DEMO-MC-001 (${site.id})`);
+  console.log(`  Obra: ${DEMO_SITE_CODE} (${site.id})`);
+  console.log(`  Building count(code=${DEMO_BUILDING_CODE}): ${bCount}`);
+  console.log(`  Drawing count(R00): ${dCount}`);
   console.log(`  Planta: ${drawing.id}`);
-  console.log(`  PDF local: public/demo/mapaconcreto-demo.pdf`);
+  console.log(`  PDF local: public/demo/${DEMO_DRAWING_FILE}`);
   console.log(
-    "  Aceite: 40∩25×0,15 → 62,5%/3,75 m³; união A∪B; NF N:N; Slump; pilar indeterminado; viga multi-etapa; vazio; ocorrência",
+    "  Aceite: 40∩25×0,15 → 62,5%/3,75 m³; união A∪B; NF N:N; Slump; pilar; viga; vazio; ocorrência",
   );
-  console.log("  UI: /mapas → DEMO-MC-001 · /mapas/aceitacao · /painel · /rastreio");
 }
 
-main().catch((e) => {
-  console.error(e);
-  process.exit(1);
-});
+const isDirect =
+  process.argv[1] &&
+  (process.argv[1].endsWith("seed-mapas.mjs") ||
+    process.argv[1].includes("seed-mapas"));
+
+if (isDirect) {
+  main().catch((e) => {
+    console.error(e);
+    process.exit(1);
+  });
+}
