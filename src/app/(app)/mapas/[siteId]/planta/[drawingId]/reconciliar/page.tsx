@@ -15,6 +15,7 @@ import type { GeoJsonPolygon } from "@/lib/mapas/geometry";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input, Label } from "@/components/ui/input";
+import { ReconcileOverlay } from "@/components/mapas/reconcile-overlay";
 
 const STATUS_LABEL: Record<ReconcileStatus, string> = {
   orphan_on_source: "Órfã (origem)",
@@ -168,6 +169,35 @@ export default async function ReconciliarRevisaoPage({
         <Badge>Deslocadas: {report.summary.displaced}</Badge>
         <Badge>Só na nova: {report.summary.alreadyOnTarget}</Badge>
       </div>
+
+      <section className="rounded-lg border border-border bg-surface p-4">
+        <h3 className="font-semibold">Overlay origem × alvo</h3>
+        <p className="mb-2 text-xs text-ink-muted">
+          Comparação esquemática das geometrias (não reposiciona mapeamentos).
+        </p>
+        <ReconcileOverlay
+          sourceRings={(sourceRegions || [])
+            .filter((r) => !r.archived_at)
+            .map((r) => {
+              const g = r.geometry as GeoJsonPolygon;
+              const ring = (g?.coordinates?.[0] || []).map(
+                ([x, y]) => [Number(x), Number(y)] as [number, number],
+              );
+              return { id: r.id, name: r.name, ring };
+            })
+            .filter((r) => r.ring.length >= 3)}
+          targetRings={(targetRegions || [])
+            .filter((r) => !r.archived_at)
+            .map((r) => {
+              const g = r.geometry as GeoJsonPolygon;
+              const ring = (g?.coordinates?.[0] || []).map(
+                ([x, y]) => [Number(x), Number(y)] as [number, number],
+              );
+              return { id: r.id, name: r.name, ring };
+            })
+            .filter((r) => r.ring.length >= 3)}
+        />
+      </section>
 
       <ul className="text-xs text-ink-muted space-y-1">
         {report.notes.map((n) => (

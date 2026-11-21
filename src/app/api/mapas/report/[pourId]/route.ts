@@ -31,7 +31,7 @@ export async function GET(
 
   const { data: pourRegions } = await supabase
     .from("mc_pour_regions")
-    .select("region_id, mc_mapped_regions(name, area_m2, tool)")
+    .select("region_id, mc_mapped_regions(name, area_m2, tool, geometry, voids, color)")
     .eq("pour_id", pourId);
 
   const { data: intersections } = await supabase
@@ -128,14 +128,39 @@ export async function GET(
     generatedAt: new Date(),
     regions: (pourRegions || []).map((r) => {
       const region = r.mc_mapped_regions as
-        | { name: string; area_m2: number | null; tool: string }
-        | { name: string; area_m2: number | null; tool: string }[]
+        | {
+            name: string;
+            area_m2: number | null;
+            tool: string;
+            geometry?: { coordinates?: number[][][] };
+            voids?: { coordinates?: number[][][] }[];
+            color?: string | null;
+          }
+        | {
+            name: string;
+            area_m2: number | null;
+            tool: string;
+            geometry?: { coordinates?: number[][][] };
+            voids?: { coordinates?: number[][][] }[];
+            color?: string | null;
+          }[]
         | null;
       const row = Array.isArray(region) ? region[0] : region;
+      const ring = (row?.geometry?.coordinates?.[0] || []).map(
+        ([x, y]) => [Number(x), Number(y)] as [number, number],
+      );
+      const voids = (Array.isArray(row?.voids) ? row!.voids : []).map((v) =>
+        (v.coordinates?.[0] || []).map(
+          ([x, y]) => [Number(x), Number(y)] as [number, number],
+        ),
+      );
       return {
         name: row?.name || "Região",
         areaM2: row?.area_m2 != null ? Number(row.area_m2) : null,
         tool: row?.tool || "",
+        ringM: ring.length >= 3 ? ring : undefined,
+        voids: voids.filter((v) => v.length >= 3),
+        color: row?.color,
       };
     }),
     elements: (intersections || []).map((i) => {

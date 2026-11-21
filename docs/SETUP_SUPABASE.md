@@ -94,7 +94,7 @@ Seed cria org demo, templates Forma/Vigas/Lajes, projeto `DEMO-001`, prancha `VI
 
 Extras: `/indicators`, `/revisions/compare`, anotações, CSV, upload PDF/DXF/DWG, `/integrations`.
 
-Migrations extras após 00005: `00006_dwg_support.sql` (kind/preview + MIME CAD); `00007_mapaconcreto.sql` (MapaConcreto — obras, plantas, regiões, NFs/Slump); `00008_mapaconcreto_dxf.sql` (DXF layers/entities); `00009_mapaconcreto_rules.sql` (params viga + calc_memory + voids); `00010_mapaconcreto_revision_reconcile.sql` (revisões assistidas); `00011_mapaconcreto_dwg_ifc.sql` (DWG intermediário + campos IFC); `00012_mapaconcreto_gestao.sql` (ocorrências, notificações, histórico de status).
+Migrations extras após 00005 (ordem obrigatória): `00006_dwg_support.sql`; `00007_mapaconcreto.sql`; `00008_mapaconcreto_dxf.sql`; `00009_mapaconcreto_rules.sql`; `00010_mapaconcreto_revision_reconcile.sql`; `00011_mapaconcreto_dwg_ifc.sql`; `00012_mapaconcreto_gestao.sql`; `00013_mapaconcreto_polish.sql` (comp. executado por etapa). Ver tabela no README.
 
 CAD local:
 

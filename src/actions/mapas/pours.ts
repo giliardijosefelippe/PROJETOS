@@ -25,6 +25,13 @@ export async function createPourAction(formData: FormData) {
   const volumePlanned = Number(formData.get("volume_planned_m3") || 0) || null;
   const regionIds = formData.getAll("region_id").map(String).filter(Boolean);
   const elementIds = formData.getAll("element_id").map(String).filter(Boolean);
+  const stageLengths = new Map<string, number>();
+  for (const [key, value] of formData.entries()) {
+    if (!key.startsWith("executed_length_") || typeof value !== "string") continue;
+    const elementId = key.slice("executed_length_".length);
+    const n = Number(value);
+    if (elementId && Number.isFinite(n) && n > 0) stageLengths.set(elementId, n);
+  }
 
   if (!siteId || !code || !title) {
     redirect(`/mapas/${siteId}/concretagens?error=Código e título obrigatórios`);
@@ -71,6 +78,7 @@ export async function createPourAction(formData: FormData) {
         pour_id: pour.id,
         element_id,
         organization_id: session.organizationId,
+        executed_length_m: stageLengths.get(element_id) ?? null,
       })),
     );
   }

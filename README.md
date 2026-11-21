@@ -42,10 +42,21 @@ Documentação:
 
 Guia: [`docs/SETUP_SUPABASE.md`](./docs/SETUP_SUPABASE.md).
 
-Execute as migrations na ordem, **incluindo**:
+Execute as migrations **na ordem** (não pule):
 
-- `supabase/migrations/00001_init.sql` … `00006_dwg_support.sql` (conferência)
-- `supabase/migrations/00007_mapaconcreto.sql` (**MapaConcreto**)
+| Ordem | Arquivo | Conteúdo |
+|-------|---------|----------|
+| 00001–00005 | `00001_init` … | Conferência (orgs, checklists, auditoria) |
+| 00006 | `00006_dwg_support.sql` | MIME/preview CAD (conferência) |
+| **00007** | `00007_mapaconcreto.sql` | **MapaConcreto** base (obras, plantas, regiões, NFs) |
+| 00008 | `00008_mapaconcreto_dxf.sql` | DXF layers/entities |
+| 00009 | `00009_mapaconcreto_rules.sql` | Viga/calc_memory/voids |
+| 00010 | `00010_mapaconcreto_revision_reconcile.sql` | Revisões assistidas |
+| 00011 | `00011_mapaconcreto_dwg_ifc.sql` | DWG intermediário + IFC |
+| 00012 | `00012_mapaconcreto_gestao.sql` | Ocorrências, notificações, status |
+| 00013 | `00013_mapaconcreto_polish.sql` | Comp. executado por etapa (viga) |
+
+**Merge / stack sugerida:** `#11` Fase1 → `#12` DXF → `#14` boolean → `#15` revisões → `#16` DWG/IFC → `#17` gestão → polish tip.
 
 Buckets privados: `library`, `evidence`, `reports`.
 
@@ -98,28 +109,27 @@ npm run seed:mapas    # obra/planta/laje/região/NF/Slump de DEMONSTRAÇÃO
 Distinguir sempre: **teórico** · **estimado mapeado** · **NF** · **lançado/alocado** · **sobras/devoluções/outros**.  
 A diferença NF − teórico **não** é classificada automaticamente como desperdício.
 
-### Limitações (Fase 1–2)
+### Limitações (Fase 1–4 + polish)
 
 - PDF sem extração automática de elementos; calibração manual.
-- Cálculo automático confiável para **lajes de espessura constante**; pilares exigem altura ou ficam indeterminados.
-- **DXF (Fase 2):** importa layers/geometrias; **não** inventa lajes/pilares — use CSV/manual. Fixture: `fixtures/mapas/demo-laje-40m2.dxf`.
-- **Booleanas / regras (Fase 2B):** vazios, união acumulada, conflitos sem dupla contagem; vigas (seção×comp. executado), pilares (altura) e fundações simples com memória de cálculo.
-- **Revisões assistidas (Fase 2C):** nova revisão **não** move mapeamentos; `/reconciliar` classifica órfãs/deslocadas e registra aceitar/reassociar/arquivar com auditoria.
-- **DWG/IFC (Fase 3):** DWG via ODA→DXF intermediário (sem nativo/SDK pago); IFC STEP com GUID/Qto (volumes só se no arquivo); sem viewer 3D.
-- **Gestão (Fase 4):** painel de indicadores, auditoria, status de concretagem (sem aprovação estrutural automática), campo móvel, avisos in-app, relatório consolidado PDF/CSV.
-- Relatório PDF por concretagem + consolidado; mapa vetorial completo da planta é evolução.
+- Lajes com espessura constante: cálculo automático; pilares exigem altura ou ficam indeterminados.
+- **Vazios/ilhas:** toolbar na planta + motor booleano; relatório desenha vazios no esquema.
+- **Vigas multi-etapa:** soma de comprimentos executados por concretagem (teto no eixo); sem dedupe geométrico de trechos sobrepostos.
+- **DXF / DWG / IFC:** ver Fases 2–3; sem SDK pago; IFC sem viewer 3D.
+- **Reconciliação:** overlay esquemático origem×alvo; sem auto-reposicionar.
+- Relatório PDF: quantitativos + **mapa esquemático** das regiões (não pixel-perfect do PDF original).
+- Gestão: avisos in-app apenas (sem e-mail/push pago).
 
-### DXF / DWG / IFC — como testar
+### Como testar (MapaConcreto)
 
 ```bash
-npm run test   # DXF + IFC fixture + reconcile
-# Migrations 00008–00011
-npm run dev    # Obra → Importar DXF / DWG / IFC
-# Planta → Criar revisão → /reconciliar
+npm run test && npm run typecheck && npm run lint
+# Migrations 00007–00013 na ordem
+npm run dev
+# Planta → Vazio/ilha · Concretagem (comp. viga) · Relatório PDF · /reconciliar overlay
 
-# Serviço CAD (DWG precisa ODA no PATH):
+# CAD opcional (DWG):
 cd services/cad-convert && pip install -r requirements.txt
-# opcional: pip install ifcopenshell
 uvicorn app.main:app --port 8091
 # CAD_CONVERT_URL=http://127.0.0.1:8091
 ```

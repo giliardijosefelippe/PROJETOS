@@ -61,15 +61,15 @@ Obra → Pavimento → Importar PDF → Calibrar escala
 
 `diferenca_nf_teorico` é diferença entre métricas selecionadas; a UI **não** rotula como perda sem evidência.
 
-## 5. Limitações conscientes (Fase 1–2)
+## 5. Limitações conscientes (Fase 1–4 + polish)
 
 - PDF: renderização + calibração; sem OCR/extração automática de elementos.
-- Elementos planos (laje) com espessura constante: cálculo automático auditável.
-- Pilares / verticais: exigem altura ou ficam **indeterminados**.
-- **DXF (Fase 2):** parser ASCII TS + opcional `POST /parse` (ezdxf). Layers/entidades → modelo interno em metros. **Não** cria elementos estruturais automaticamente.
-- **Booleanas / regras (Fase 2B):** `boolean.ts` (vazios, união, conflitos) + `rules.ts` (viga/pilar/fundação) com memória de cálculo; contabilização por união.
-- DWG/IFC: Fase 3 (ver `services/cad-convert`; sem SDK pago sem autorização).
-- Sem SDK pago; alternativa local = PDF + CSV + DXF ASCII.
+- Laje com espessura constante: cálculo automático auditável; pilares exigem altura.
+- Vazios/ilhas: UI + `subtractVoids`; persistidos em `mc_mapped_regions.voids`.
+- Vigas multi-etapa: `accumulateBeamStages` soma `mc_pour_elements.executed_length_m` (teto no eixo).
+- DXF/DWG/IFC: Fases 2–3; `services/cad-convert`; sem SDK pago.
+- Relatório: PDFKit com mapa esquemático das regiões (+ vazios); sem raster do PDF original.
+- Migrations MapaConcreto: **00007 → 00013** (ver README).
 
 ## 6. Segurança e multi-tenant
 

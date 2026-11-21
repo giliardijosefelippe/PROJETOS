@@ -45,7 +45,7 @@ export default async function PlantaPage({
 
   const { data: regions } = await supabase
     .from("mc_mapped_regions")
-    .select("id, name, tool, color, area_m2, geometry")
+    .select("id, name, tool, color, area_m2, geometry, voids")
     .eq("drawing_revision_id", drawingId)
     .is("archived_at", null)
     .order("created_at");
@@ -228,6 +228,12 @@ export default async function PlantaPage({
               type: string;
               coordinates: number[][][];
             },
+            voids: Array.isArray(r.voids)
+              ? (r.voids as {
+                  type: string;
+                  coordinates: number[][][];
+                }[])
+              : [],
           }))}
         />
       )}

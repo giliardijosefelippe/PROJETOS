@@ -39,7 +39,7 @@ export default async function ConcretagensPage({
 
   const { data: elements } = await supabase
     .from("mc_structural_elements")
-    .select("id, code, name")
+    .select("id, code, name, kind")
     .eq("site_id", siteId);
 
   return (
@@ -105,14 +105,33 @@ export default async function ConcretagensPage({
         </fieldset>
         <fieldset>
           <legend className="text-sm font-medium">Elementos</legend>
-          <div className="mt-1 flex flex-wrap gap-3 text-sm">
+          <div className="mt-1 space-y-2 text-sm">
             {(elements || []).map((e) => (
-              <label key={e.id} className="flex items-center gap-1">
-                <input type="checkbox" name="element_id" value={e.id} />
-                {e.code} {e.name}
-              </label>
+              <div key={e.id} className="flex flex-wrap items-center gap-2">
+                <label className="flex items-center gap-1">
+                  <input type="checkbox" name="element_id" value={e.id} />
+                  {e.code} {e.name}{" "}
+                  <span className="text-ink-muted">[{e.kind}]</span>
+                </label>
+                {e.kind === "viga" && (
+                  <label className="flex items-center gap-1 text-xs text-ink-muted">
+                    Comp. executado nesta etapa (m)
+                    <Input
+                      name={`executed_length_${e.id}`}
+                      type="number"
+                      step="0.01"
+                      className="w-24"
+                      placeholder="—"
+                    />
+                  </label>
+                )}
+              </div>
             ))}
           </div>
+          <p className="mt-1 text-xs text-ink-muted">
+            Vigas: informe o comprimento executado por etapa (não inventado). A
+            acumulação soma etapas com teto no eixo.
+          </p>
         </fieldset>
         <Button type="submit">Criar concretagem</Button>
       </form>
