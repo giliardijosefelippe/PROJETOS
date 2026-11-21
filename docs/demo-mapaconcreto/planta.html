@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Planta — Demo MapaConcreto</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body data-page="planta">
+    <header class="topbar">
+      <div class="brand">
+        <strong>MapaConcreto</strong>
+        <span>Planta simulada · calibração e regiões</span>
+      </div>
+      <nav class="nav" aria-label="Principal">
+        <a href="index.html" data-nav="index">Obras</a>
+        <a href="planta.html" data-nav="planta">Planta</a>
+        <a href="concretagem.html" data-nav="concretagem">Concretagem</a>
+      </nav>
+      <span class="badge">Demonstração</span>
+    </header>
+
+    <main class="wrap">
+      <section class="hero">
+        <h1>Visualizador da planta (PDF simulado)</h1>
+        <p>
+          Canvas com laje 8×5&nbsp;m (40&nbsp;m²). Calibre a escala, desenhe a
+          região e confira o aceite: interseção 25&nbsp;m² →
+          <strong>62,5%</strong> e <strong>3,75&nbsp;m³</strong> (esp. 0,15&nbsp;m).
+        </p>
+      </section>
+
+      <section class="panel">
+        <div class="panel-hd">
+          <h2>Ferramentas</h2>
+          <div class="toolbar" id="tools">
+            <button type="button" class="btn secondary" data-tool="pan">Mover</button>
+            <button type="button" class="btn secondary" data-tool="calibrate">
+              Calibrar escala
+            </button>
+            <button type="button" class="btn secondary" data-tool="rectangle">
+              Retângulo
+            </button>
+            <button type="button" class="btn secondary" data-tool="polygon">
+              Polígono
+            </button>
+            <button type="button" class="btn secondary" data-tool="freehand">
+              Mão livre
+            </button>
+            <button type="button" class="btn secondary" id="btn-load-demo">
+              Região demo 25 m²
+            </button>
+            <button type="button" class="btn" id="btn-save">Salvar região</button>
+          </div>
+        </div>
+        <div class="layout-split">
+          <div class="stage">
+            <canvas id="plant" width="600" height="400" aria-label="Planta demo"></canvas>
+          </div>
+          <aside class="side">
+            <h3>Escala</h3>
+            <div class="stat" id="scale-stat">
+              <strong>—</strong>
+              <span>metros / px</span>
+            </div>
+            <label class="field">
+              Distância real (m)
+              <input id="real-m" type="number" step="0.01" min="0.01" value="5" />
+            </label>
+            <p class="muted" id="cal-hint">
+              Em “Calibrar”, clique dois pontos na barra azul (5,00&nbsp;m).
+            </p>
+
+            <h3>Laje demo</h3>
+            <div class="stat">
+              <strong id="slab-area">40 m²</strong>
+              <span id="slab-meta">8 × 5 m · esp. 0,15 m · teórico 6 m³</span>
+            </div>
+
+            <h3>Região mapeada</h3>
+            <div class="stat highlight" id="mapped-stat">
+              <strong>—</strong>
+              <span>% e volume estimado (sem inventar)</span>
+            </div>
+            <p class="status-line" id="status"></p>
+            <p class="muted">
+              Zoom: roda do mouse · Pan: ferramenta Mover ou botão do meio.
+            </p>
+            <a class="btn secondary" href="concretagem.html" style="width: 100%; text-align: center; display: inline-block; margin-top: 0.5rem">
+              Ir para concretagem →
+            </a>
+          </aside>
+        </div>
+        <div class="panel-bd">
+          <p class="note">
+            Isto é um <strong>PDF simulado em canvas</strong> para testar o fluxo
+            visual. O app real usa PDF.js + Supabase. Volumes só a partir da
+            geometria desenhada × espessura informada.
+          </p>
+        </div>
+      </section>
+    </main>
+
+    <script src="demo.js"></script>
+    <script>
+      McDemo.setCurrentNav();
+      const state = McDemo.load();
+      const canvas = document.getElementById("plant");
+      const ctx = canvas.getContext("2d");
+      const statusEl = document.getElementById("status");
+      const realInput = document.getElementById("real-m");
+
+      let tool = "rectangle";
+      let view = { scale: 1, ox: 0, oy: 0 };
+      let draft = [];
+      let freePts = [];
+      let calibrating = [];
+      let dragging = false;
+      let lastPan = null;
+
+      function setStatus(msg) {
+        statusEl.textContent = msg || "";
+      }
+
+      function worldFromEvent(ev) {
+        const rect = canvas.getBoundingClientRect();
+        const sx = ((ev.clientX - rect.left) / rect.width) * canvas.width;
+        const sy = ((ev.clientY - rect.top) / rect.height) * canvas.height;
+        return [(sx - view.ox) / view.scale, (sy - view.oy) / view.scale];
+      }
+
+      function toScreen(x, y) {
+        return [x * view.scale + view.ox, y * view.scale + view.oy];
+      }
+
+      function drawPlantBackground() {
+        ctx.fillStyle = "#f4f1ea";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // “Página” do PDF simulado
+        ctx.fillStyle = "#ffffff";
+        ctx.strokeStyle = "#cccccc";
+        ctx.lineWidth = 1;
+        ctx.fillRect(20, 20, 560, 360);
+        ctx.strokeRect(20, 20, 560, 360);
+
+        ctx.fillStyle = "#e00024";
+        ctx.font = "bold 16px Segoe UI, sans-serif";
+        ctx.fillText("DEMONSTRAÇÃO — MapaConcreto", 40, 48);
+        ctx.fillStyle = "#222";
+        ctx.font = "12px Segoe UI, sans-serif";
+        ctx.fillText(
+          "Planta fictícia 8,00 × 5,00 m (40 m²). Não é documento de obra real.",
+          40,
+          68,
+        );
+
+        // Laje em coordenadas de “PDF” (origem mundo ≈ 80,120 → 8m×5m com mpu 0.025)
+        const mpu = 0.025;
+        const origin = [80, 120];
+        const wPx = state.slab.widthM / mpu;
+        const hPx = state.slab.heightM / mpu;
+        ctx.save();
+        ctx.strokeStyle = "#222";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(origin[0], origin[1], wPx, hPx);
+        ctx.fillStyle = "rgba(23, 92, 211, 0.06)";
+        ctx.fillRect(origin[0], origin[1], wPx, hPx);
+        ctx.fillStyle = "#222";
+        ctx.font = "11px Segoe UI, sans-serif";
+        ctx.fillText("Laje demo 8,00 × 5,00 m (40 m²)", origin[0] + 10, origin[1] + 18);
+        ctx.restore();
+
+        // Barra de escala 5 m
+        ctx.strokeStyle = "#175cd3";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(90, 300);
+        ctx.lineTo(290, 300);
+        ctx.stroke();
+        ctx.fillStyle = "#175cd3";
+        ctx.font = "11px Segoe UI, sans-serif";
+        ctx.fillText("barra 5,00 m (calibrar estes extremos)", 90, 318);
+      }
+
+      function ringToPdfPx(ringM) {
+        // Mundo metros → px PDF com origem da laje em (80,120) e mpu 0.025
+        const mpu = 0.025;
+        const ox = 80;
+        const oy = 120;
+        return ringM.map(([x, y]) => [ox + x / mpu, oy + y / mpu]);
+      }
+
+      function pdfPxToMeters(px, py) {
+        const mpu =
+          (state.scale && state.scale.metersPerPx) ||
+          McDemo.metersPerPx(
+            state.scale.p1,
+            state.scale.p2,
+            state.scale.realM,
+          ) ||
+          0.025;
+        const ox = 80;
+        const oy = 120;
+        return [(px - ox) * mpu, (py - oy) * mpu];
+      }
+
+      function drawRegion(ringM, color) {
+        if (!ringM || ringM.length < 3) return;
+        const pts = ringToPdfPx(ringM);
+        ctx.beginPath();
+        const [x0, y0] = toScreen(pts[0][0], pts[0][1]);
+        ctx.moveTo(x0, y0);
+        for (let i = 1; i < pts.length; i++) {
+          const [x, y] = toScreen(pts[i][0], pts[i][1]);
+          ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+        ctx.fillStyle = color || "rgba(224, 0, 36, 0.28)";
+        ctx.strokeStyle = "#e00024";
+        ctx.lineWidth = 2;
+        ctx.fill();
+        ctx.stroke();
+      }
+
+      function drawDraft() {
+        if (tool === "calibrate" && calibrating.length) {
+          ctx.fillStyle = "#175cd3";
+          calibrating.forEach((p) => {
+            const [x, y] = toScreen(p[0], p[1]);
+            ctx.beginPath();
+            ctx.arc(x, y, 5, 0, Math.PI * 2);
+            ctx.fill();
+          });
+          if (calibrating.length === 2) {
+            ctx.strokeStyle = "#175cd3";
+            ctx.setLineDash([4, 3]);
+            ctx.beginPath();
+            const a = toScreen(calibrating[0][0], calibrating[0][1]);
+            const b = toScreen(calibrating[1][0], calibrating[1][1]);
+            ctx.moveTo(a[0], a[1]);
+            ctx.lineTo(b[0], b[1]);
+            ctx.stroke();
+            ctx.setLineDash([]);
+          }
+        }
+
+        const pts =
+          tool === "freehand"
+            ? freePts
+            : draft;
+        if (pts.length < 1) return;
+        ctx.strokeStyle = "#e00024";
+        ctx.fillStyle = "rgba(224,0,36,0.15)";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        const s0 = toScreen(pts[0][0], pts[0][1]);
+        ctx.moveTo(s0[0], s0[1]);
+        for (let i = 1; i < pts.length; i++) {
+          const s = toScreen(pts[i][0], pts[i][1]);
+          ctx.lineTo(s[0], s[1]);
+        }
+        if (tool === "rectangle" && pts.length === 2) {
+          const s1 = toScreen(pts[1][0], pts[1][1]);
+          ctx.strokeRect(
+            Math.min(s0[0], s1[0]),
+            Math.min(s0[1], s1[1]),
+            Math.abs(s1[0] - s0[0]),
+            Math.abs(s1[1] - s0[1]),
+          );
+          return;
+        }
+        if (tool !== "freehand" && pts.length >= 3) ctx.closePath();
+        ctx.stroke();
+      }
+
+      function paint() {
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.save();
+        ctx.translate(view.ox, view.oy);
+        ctx.scale(view.scale, view.scale);
+        drawPlantBackground();
+        ctx.restore();
+
+        if (state.region && state.region.ringM) {
+          drawRegion(state.region.ringM);
+        }
+        drawDraft();
+        updateSide();
+      }
+
+      function updateSide() {
+        const mpu =
+          state.scale.metersPerPx ||
+          McDemo.metersPerPx(state.scale.p1, state.scale.p2, state.scale.realM);
+        const scaleStat = document.getElementById("scale-stat");
+        if (mpu) {
+          scaleStat.querySelector("strong").textContent =
+            mpu.toFixed(4).replace(".", ",") + " m/px";
+          state.scale.calibrated = true;
+          state.scale.metersPerPx = mpu;
+        } else {
+          scaleStat.querySelector("strong").textContent = "pendente";
+        }
+
+        const mapped = McDemo.mappedFromRegion(
+          state.slab,
+          state.region && state.region.areaM2,
+        );
+        const mappedStat = document.getElementById("mapped-stat");
+        if (mapped.percent != null && mapped.volumeEstimadoM3 != null) {
+          mappedStat.querySelector("strong").textContent =
+            mapped.percent.toFixed(1).replace(".", ",") +
+            "% · " +
+            mapped.volumeEstimadoM3.toFixed(2).replace(".", ",") +
+            " m³";
+          mappedStat.querySelector("span").textContent =
+            "região " +
+            (state.region.areaM2 != null
+              ? state.region.areaM2.toFixed(2).replace(".", ",")
+              : "—") +
+            " m² ∩ laje " +
+            state.slab.areaM2 +
+            " m² × " +
+            state.slab.thicknessM +
+            " m";
+        } else {
+          mappedStat.querySelector("strong").textContent = "indeterminado";
+        }
+      }
+
+      function setTool(next) {
+        tool = next;
+        draft = [];
+        freePts = [];
+        calibrating = [];
+        document.querySelectorAll("#tools [data-tool]").forEach((b) => {
+          b.classList.toggle("active", b.getAttribute("data-tool") === tool);
+        });
+        setStatus(
+          tool === "calibrate"
+            ? "Clique dois pontos na barra de escala."
+            : tool === "polygon"
+              ? "Clique vértices; duplo clique para fechar."
+              : tool === "freehand"
+                ? "Arraste para traçar; solte para fechar."
+                : tool === "rectangle"
+                  ? "Clique dois cantos opostos do retângulo."
+                  : "Arraste para mover a planta.",
+        );
+      }
+
+      function finishRectangle() {
+        if (draft.length < 2) return;
+        const [a, b] = draft;
+        const ringPdf = [
+          [a[0], a[1]],
+          [b[0], a[1]],
+          [b[0], b[1]],
+          [a[0], b[1]],
+          [a[0], a[1]],
+        ];
+        const ringM = ringPdf.map(([x, y]) => pdfPxToMeters(x, y));
+        const area = McDemo.polygonArea(ringM);
+        state.region = { tool: "rectangle", ringM, areaM2: area };
+        draft = [];
+        McDemo.save(state);
+        setStatus(
+          "Região retângulo salva: " +
+            area.toFixed(2).replace(".", ",") +
+            " m²",
+        );
+        paint();
+      }
+
+      function finishPolygonOrFree(pts, toolName) {
+        if (pts.length < 3) {
+          setStatus("Precisa de pelo menos 3 pontos.");
+          return;
+        }
+        const closed = pts.slice();
+        if (
+          closed[0][0] !== closed[closed.length - 1][0] ||
+          closed[0][1] !== closed[closed.length - 1][1]
+        ) {
+          closed.push([closed[0][0], closed[0][1]]);
+        }
+        const ringM = closed.map(([x, y]) => pdfPxToMeters(x, y));
+        const area = McDemo.polygonArea(ringM);
+        state.region = { tool: toolName, ringM, areaM2: area };
+        draft = [];
+        freePts = [];
+        McDemo.save(state);
+        setStatus(
+          "Região salva: " + area.toFixed(2).replace(".", ",") + " m²",
+        );
+        paint();
+      }
+
+      canvas.addEventListener("wheel", (ev) => {
+        ev.preventDefault();
+        const [wx, wy] = worldFromEvent(ev);
+        const factor = ev.deltaY < 0 ? 1.08 : 1 / 1.08;
+        const next = Math.min(4, Math.max(0.5, view.scale * factor));
+        view.ox = ev.offsetX - wx * next;
+        view.oy = ev.offsetY - wy * next;
+        // offsetX relative to canvas CSS — use worldFromEvent screen space
+        const rect = canvas.getBoundingClientRect();
+        const sx = ((ev.clientX - rect.left) / rect.width) * canvas.width;
+        const sy = ((ev.clientY - rect.top) / rect.height) * canvas.height;
+        view.ox = sx - wx * next;
+        view.oy = sy - wy * next;
+        view.scale = next;
+        paint();
+      }, { passive: false });
+
+      canvas.addEventListener("pointerdown", (ev) => {
+        canvas.setPointerCapture(ev.pointerId);
+        const w = worldFromEvent(ev);
+        if (tool === "pan" || ev.button === 1) {
+          dragging = true;
+          lastPan = [ev.clientX, ev.clientY];
+          return;
+        }
+        if (tool === "calibrate") {
+          calibrating.push(w);
+          if (calibrating.length >= 2) {
+            const realM = Number(realInput.value);
+            const mpu = McDemo.metersPerPx(
+              calibrating[0],
+              calibrating[1],
+              realM,
+            );
+            if (!mpu) {
+              setStatus("Pontos coincidentes ou distância inválida.");
+              calibrating = [];
+            } else {
+              state.scale = {
+                calibrated: true,
+                p1: calibrating[0],
+                p2: calibrating[1],
+                realM,
+                metersPerPx: mpu,
+              };
+              McDemo.save(state);
+              setStatus(
+                "Escala salva: " +
+                  mpu.toFixed(4).replace(".", ",") +
+                  " m/px",
+              );
+              calibrating = [];
+            }
+          }
+          paint();
+          return;
+        }
+        if (tool === "rectangle") {
+          if (draft.length === 0) draft = [w];
+          else {
+            draft[1] = w;
+            finishRectangle();
+          }
+          paint();
+          return;
+        }
+        if (tool === "polygon") {
+          draft.push(w);
+          paint();
+          return;
+        }
+        if (tool === "freehand") {
+          freePts = [w];
+          dragging = true;
+          paint();
+        }
+      });
+
+      canvas.addEventListener("pointermove", (ev) => {
+        const w = worldFromEvent(ev);
+        if (tool === "pan" && dragging && lastPan) {
+          const dx =
+            ((ev.clientX - lastPan[0]) / canvas.getBoundingClientRect().width) *
+            canvas.width;
+          const dy =
+            ((ev.clientY - lastPan[1]) /
+              canvas.getBoundingClientRect().height) *
+            canvas.height;
+          view.ox += dx;
+          view.oy += dy;
+          lastPan = [ev.clientX, ev.clientY];
+          paint();
+          return;
+        }
+        if (tool === "rectangle" && draft.length === 1) {
+          draft[1] = w;
+          paint();
+          return;
+        }
+        if (tool === "freehand" && dragging) {
+          freePts.push(w);
+          paint();
+        }
+      });
+
+      canvas.addEventListener("pointerup", () => {
+        if (tool === "freehand" && dragging) {
+          dragging = false;
+          finishPolygonOrFree(freePts, "freehand");
+          return;
+        }
+        dragging = false;
+        lastPan = null;
+      });
+
+      canvas.addEventListener("dblclick", (ev) => {
+        if (tool === "polygon") {
+          ev.preventDefault();
+          finishPolygonOrFree(draft, "polygon");
+        }
+      });
+
+      document.querySelectorAll("#tools [data-tool]").forEach((b) => {
+        b.addEventListener("click", () => setTool(b.getAttribute("data-tool")));
+      });
+
+      document.getElementById("btn-load-demo").addEventListener("click", () => {
+        state.region = {
+          tool: "rectangle",
+          ringM: [
+            [0, 0],
+            [5, 0],
+            [5, 5],
+            [0, 5],
+            [0, 0],
+          ],
+          areaM2: 25,
+        };
+        state.scale = Object.assign({}, McDemo.DEFAULT.scale);
+        realInput.value = "5";
+        McDemo.save(state);
+        setStatus("Região demo 25 m² carregada (aceite 62,5% / 3,75 m³).");
+        paint();
+      });
+
+      document.getElementById("btn-save").addEventListener("click", () => {
+        if (tool === "rectangle" && draft.length === 2) finishRectangle();
+        else if (tool === "polygon") finishPolygonOrFree(draft, "polygon");
+        else if (tool === "freehand") finishPolygonOrFree(freePts, "freehand");
+        else if (state.region) {
+          McDemo.save(state);
+          setStatus("Estado da região já persistido neste navegador.");
+        } else setStatus("Desenhe uma região antes de salvar.");
+      });
+
+      setTool("rectangle");
+      paint();
+    </script>
+  </body>
+</html>

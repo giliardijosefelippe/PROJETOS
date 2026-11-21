@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Concretagem — Demo MapaConcreto</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body data-page="concretagem">
+    <header class="topbar">
+      <div class="brand">
+        <strong>MapaConcreto</strong>
+        <span>NF · Slump · volumes</span>
+      </div>
+      <nav class="nav" aria-label="Principal">
+        <a href="index.html" data-nav="index">Obras</a>
+        <a href="planta.html" data-nav="planta">Planta</a>
+        <a href="concretagem.html" data-nav="concretagem">Concretagem</a>
+      </nav>
+      <span class="badge">Demonstração</span>
+    </header>
+
+    <main class="wrap">
+      <section class="hero">
+        <h1>Concretagem e cargas</h1>
+        <p>
+          Compare teórico, estimado mapeado e NF. A diferença NF − teórico
+          <strong>não</strong> é rotulada como desperdício.
+        </p>
+      </section>
+
+      <section class="panel">
+        <div class="panel-hd">
+          <h2 id="pour-title">Concretagem</h2>
+          <div class="toolbar">
+            <a class="btn secondary" href="planta.html">← Planta</a>
+            <button type="button" class="btn" id="btn-save">Salvar demo</button>
+          </div>
+        </div>
+        <div class="panel-bd">
+          <div class="grid grid-2">
+            <div>
+              <h3 class="muted" style="margin-top: 0">Nota fiscal / caminhão</h3>
+              <label class="field">
+                Código da concretagem
+                <input id="pour-code" />
+              </label>
+              <label class="field">
+                Número da NF
+                <input id="nf" />
+              </label>
+              <label class="field">
+                Placa
+                <input id="plate" />
+              </label>
+              <label class="field">
+                Volume NF (m³)
+                <input id="vol-nf" type="number" step="0.01" min="0" />
+              </label>
+              <label class="field">
+                Volume devolvido / sobra (m³)
+                <input id="vol-ret" type="number" step="0.01" min="0" />
+              </label>
+              <label class="field">
+                Volume alocado às regiões (m³)
+                <input id="vol-alloc" type="number" step="0.01" min="0" />
+              </label>
+            </div>
+            <div>
+              <h3 class="muted" style="margin-top: 0">Slump Test</h3>
+              <label class="field">
+                Medido (mm)
+                <input id="slump-m" type="number" step="1" />
+              </label>
+              <label class="field">
+                Especificado (mm)
+                <input id="slump-s" type="number" step="1" />
+              </label>
+              <label class="field">
+                Tolerância (mm)
+                <input id="slump-t" type="number" step="1" />
+              </label>
+              <div class="stat" id="slump-stat">
+                <strong>—</strong>
+                <span>conformidade do ensaio (demo)</span>
+              </div>
+            </div>
+          </div>
+
+          <h3 class="muted">Comparativo de volumes</h3>
+          <table class="table" id="vol-table">
+            <thead>
+              <tr>
+                <th>Métrica</th>
+                <th>Valor</th>
+                <th>Significado</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+          <p class="note" id="vol-note"></p>
+          <p class="status-line" id="status"></p>
+        </div>
+      </section>
+    </main>
+
+    <script src="demo.js"></script>
+    <script>
+      McDemo.setCurrentNav();
+      const state = McDemo.load();
+
+      const fields = {
+        code: document.getElementById("pour-code"),
+        nf: document.getElementById("nf"),
+        plate: document.getElementById("plate"),
+        volNf: document.getElementById("vol-nf"),
+        volRet: document.getElementById("vol-ret"),
+        volAlloc: document.getElementById("vol-alloc"),
+        slumpM: document.getElementById("slump-m"),
+        slumpS: document.getElementById("slump-s"),
+        slumpT: document.getElementById("slump-t"),
+      };
+
+      function readForm() {
+        state.pour.code = fields.code.value.trim() || state.pour.code;
+        state.pour.nf = fields.nf.value.trim() || state.pour.nf;
+        state.pour.plate = fields.plate.value.trim();
+        state.pour.volumeNfM3 = Number(fields.volNf.value);
+        state.pour.volumeReturnedM3 = Number(fields.volRet.value);
+        state.pour.volumeAllocatedM3 = Number(fields.volAlloc.value);
+        state.pour.slumpMeasuredMm = Number(fields.slumpM.value);
+        state.pour.slumpSpecMm = Number(fields.slumpS.value);
+        state.pour.slumpToleranceMm = Number(fields.slumpT.value);
+      }
+
+      function fillForm() {
+        fields.code.value = state.pour.code;
+        fields.nf.value = state.pour.nf;
+        fields.plate.value = state.pour.plate;
+        fields.volNf.value = state.pour.volumeNfM3;
+        fields.volRet.value = state.pour.volumeReturnedM3;
+        fields.volAlloc.value = state.pour.volumeAllocatedM3;
+        fields.slumpM.value = state.pour.slumpMeasuredMm;
+        fields.slumpS.value = state.pour.slumpSpecMm;
+        fields.slumpT.value = state.pour.slumpToleranceMm;
+        document.getElementById("pour-title").textContent =
+          state.pour.code + " — " + state.pour.title;
+      }
+
+      function render() {
+        readForm();
+        const mapped = McDemo.mappedFromRegion(
+          state.slab,
+          state.region && state.region.areaM2,
+        );
+        const cmp = McDemo.compareVolumes({
+          volumeTeoricoM3: state.slab.volumeTeoricoM3,
+          volumeEstimadoMapeadoM3: mapped.volumeEstimadoM3 || 0,
+          volumeNfM3: state.pour.volumeNfM3,
+          volumeAlocadoM3: state.pour.volumeAllocatedM3,
+          volumeDevolvidoM3: state.pour.volumeReturnedM3,
+        });
+
+        const tbody = document.querySelector("#vol-table tbody");
+        const rows = [
+          [
+            "Teórico",
+            cmp.teorico.toFixed(3).replace(".", ",") + " m³",
+            "Projeto / cadastro da laje (40 m² × 0,15 m = 6 m³)",
+          ],
+          [
+            "Estimado mapeado",
+            mapped.volumeEstimadoM3 != null
+              ? mapped.volumeEstimadoM3.toFixed(3).replace(".", ",") + " m³"
+              : "indeterminado",
+            mapped.percent != null
+              ? "Região ∩ laje → " +
+                mapped.percent.toFixed(1).replace(".", ",") +
+                "%"
+              : "Sem região ou espessura",
+          ],
+          [
+            "NF",
+            cmp.nf.toFixed(3).replace(".", ",") + " m³",
+            "Volume documentado na nota fiscal",
+          ],
+          [
+            "Alocado",
+            cmp.alocado.toFixed(3).replace(".", ",") + " m³",
+            "Lançado / alocado às regiões",
+          ],
+          [
+            "Devolvido / sobra",
+            cmp.devolvido.toFixed(3).replace(".", ",") + " m³",
+            "Destino explícito — não é “desperdício” automático",
+          ],
+          [
+            "NF − teórico",
+            cmp.diferencaNfTeorico.toFixed(3).replace(".", ",") + " m³",
+            cmp.labels.diferencaNfTeorico,
+          ],
+          [
+            "Saldo de carga",
+            cmp.saldoCarga.toFixed(3).replace(".", ",") + " m³",
+            "NF − alocado − devolvido",
+          ],
+        ];
+        tbody.innerHTML = rows
+          .map(
+            (r) =>
+              `<tr><td>${r[0]}</td><td><strong>${r[1]}</strong></td><td class="muted">${r[2]}</td></tr>`,
+          )
+          .join("");
+
+        document.getElementById("vol-note").textContent =
+          "Demonstração. " + cmp.labels.note;
+
+        const tol = state.pour.slumpToleranceMm;
+        const ok =
+          Math.abs(state.pour.slumpMeasuredMm - state.pour.slumpSpecMm) <= tol;
+        const slumpStat = document.getElementById("slump-stat");
+        slumpStat.querySelector("strong").textContent = ok
+          ? "Conforme (demo)"
+          : "Não conforme (demo)";
+        slumpStat.querySelector("strong").className = ok ? "ok" : "warn";
+        slumpStat.querySelector("span").textContent =
+          "medido " +
+          state.pour.slumpMeasuredMm +
+          " mm · espec. " +
+          state.pour.slumpSpecMm +
+          " ± " +
+          tol +
+          " mm";
+      }
+
+      Object.values(fields).forEach((el) =>
+        el.addEventListener("input", render),
+      );
+
+      document.getElementById("btn-save").addEventListener("click", () => {
+        readForm();
+        McDemo.save(state);
+        document.getElementById("status").textContent =
+          "Salvo no localStorage deste navegador (demonstração).";
+        render();
+      });
+
+      fillForm();
+      render();
+    </script>
+  </body>
+</html>
