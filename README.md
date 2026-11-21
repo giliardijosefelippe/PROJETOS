@@ -104,15 +104,17 @@ A diferença NF − teórico **não** é classificada automaticamente como despe
 - Cálculo automático confiável para **lajes de espessura constante**; pilares exigem altura ou ficam indeterminados.
 - **DXF (Fase 2):** importa layers/geometrias; **não** inventa lajes/pilares — use CSV/manual. Fixture: `fixtures/mapas/demo-laje-40m2.dxf`.
 - **Booleanas / regras (Fase 2B):** vazios, união acumulada, conflitos sem dupla contagem; vigas (seção×comp. executado), pilares (altura) e fundações simples com memória de cálculo.
+- **Revisões assistidas (Fase 2C):** nova revisão **não** move mapeamentos; `/reconciliar` classifica órfãs/deslocadas e registra aceitar/reassociar/arquivar com auditoria.
 - DWG/IFC e SDK pagos **fora** deste incremento (alternativa: exportar DXF/PDF/CSV).
 - Relatório PDF consolida quantitativos; mapa vetorial completo da planta é evolução.
 
 ### DXF — como testar
 
 ```bash
-npm run test   # inclui parser DXF (laje demo 40 m²)
-# Migration 00008_mapaconcreto_dxf.sql
+npm run test   # inclui parser DXF (laje demo 40 m²) + reconcile
+# Migrations 00008–00010
 npm run dev    # Obra → Importar DXF → layers no visualizador
+# Planta → Criar revisão → /reconciliar → Aceitar / Reassociar / Arquivar
 
 # Opcional (ezdxf):
 cd services/cad-convert && uvicorn app.main:app --port 8091

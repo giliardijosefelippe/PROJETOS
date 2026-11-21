@@ -47,6 +47,7 @@ export default async function PlantaPage({
     .from("mc_mapped_regions")
     .select("id, name, tool, color, area_m2, geometry")
     .eq("drawing_revision_id", drawingId)
+    .is("archived_at", null)
     .order("created_at");
 
   const { data: intersections } = await supabase
@@ -96,28 +97,41 @@ export default async function PlantaPage({
             {drawing.is_demo && <Badge>Demonstração</Badge>}
           </p>
         </div>
-        <form action={createDrawingRevisionCopyAction} className="flex items-end gap-2">
-          <input type="hidden" name="site_id" value={siteId} />
-          <input type="hidden" name="drawing_id" value={drawingId} />
-          <div>
-            <Label htmlFor="revision_code">Nova revisão</Label>
-            <Input
-              id="revision_code"
-              name="revision_code"
-              placeholder="R01"
-              className="w-24"
-              required
-            />
-          </div>
-          <Button type="submit" variant="secondary" size="sm">
-            Criar revisão
-          </Button>
-        </form>
+        <div className="flex flex-wrap items-end gap-2">
+          {drawing.supersedes_revision_id ? (
+            <Link href={`/mapas/${siteId}/planta/${drawingId}/reconciliar`}>
+              <Button type="button" variant="secondary" size="sm">
+                Reconciliar mapeamentos
+              </Button>
+            </Link>
+          ) : null}
+          <form
+            action={createDrawingRevisionCopyAction}
+            className="flex items-end gap-2"
+          >
+            <input type="hidden" name="site_id" value={siteId} />
+            <input type="hidden" name="drawing_id" value={drawingId} />
+            <div>
+              <Label htmlFor="revision_code">Nova revisão</Label>
+              <Input
+                id="revision_code"
+                name="revision_code"
+                placeholder="R01"
+                className="w-24"
+                required
+              />
+            </div>
+            <Button type="submit" variant="secondary" size="sm">
+              Criar revisão
+            </Button>
+          </form>
+        </div>
       </div>
 
       <p className="text-xs text-ink-muted">
         Nova revisão reutiliza o arquivo imutável e{" "}
-        <strong>não move</strong> mapeamentos da revisão anterior.
+        <strong>não move</strong> mapeamentos da revisão anterior — use a
+        reconciliação assistida para aceitar, reassociar ou arquivar.
       </p>
 
       {sp.error && (

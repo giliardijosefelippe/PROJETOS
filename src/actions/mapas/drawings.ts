@@ -196,6 +196,7 @@ export async function createDrawingRevisionCopyAction(formData: FormData) {
   }
 
   // New revision reuses the same immutable file; mappings stay on the old revision.
+  // Never copies/repositions regions — user must reconcile explicitly.
   const { data, error } = await supabase
     .from("mc_drawing_revisions")
     .insert({
@@ -224,6 +225,7 @@ export async function createDrawingRevisionCopyAction(formData: FormData) {
       cad_entities: source.cad_entities || [],
       cad_warnings: source.cad_warnings || [],
       cad_bbox: source.cad_bbox,
+      supersedes_revision_id: sourceId,
       is_demo: false,
       created_by: session.userId,
     })
@@ -244,10 +246,11 @@ export async function createDrawingRevisionCopyAction(formData: FormData) {
     entity_id: data.id,
     payload: {
       from: sourceId,
-      note: "Nova revisão sem reposicionar mapeamentos antigos",
+      supersedes_revision_id: sourceId,
+      note: "Nova revisão sem reposicionar mapeamentos antigos; reconciliação assistida pendente",
     },
   });
 
   revalidatePath(`/mapas/${siteId}`);
-  redirect(`/mapas/${siteId}/planta/${data.id}`);
+  redirect(`/mapas/${siteId}/planta/${data.id}/reconciliar`);
 }
