@@ -106,7 +106,8 @@ A diferença NF − teórico **não** é classificada automaticamente como despe
 - **Booleanas / regras (Fase 2B):** vazios, união acumulada, conflitos sem dupla contagem; vigas (seção×comp. executado), pilares (altura) e fundações simples com memória de cálculo.
 - **Revisões assistidas (Fase 2C):** nova revisão **não** move mapeamentos; `/reconciliar` classifica órfãs/deslocadas e registra aceitar/reassociar/arquivar com auditoria.
 - **DWG/IFC (Fase 3):** DWG via ODA→DXF intermediário (sem nativo/SDK pago); IFC STEP com GUID/Qto (volumes só se no arquivo); sem viewer 3D.
-- Relatório PDF consolida quantitativos; mapa vetorial completo da planta é evolução.
+- **Gestão (Fase 4):** painel de indicadores, auditoria, status de concretagem (sem aprovação estrutural automática), campo móvel, avisos in-app, relatório consolidado PDF/CSV.
+- Relatório PDF por concretagem + consolidado; mapa vetorial completo da planta é evolução.
 
 ### DXF / DWG / IFC — como testar
 

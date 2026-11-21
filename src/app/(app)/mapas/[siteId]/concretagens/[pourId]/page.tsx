@@ -6,13 +6,23 @@ import {
   createDeliveryAction,
   createSlumpAction,
 } from "@/actions/mapas/pours";
+import { transitionPourStatusAction } from "@/actions/mapas/gestao";
 import { Button } from "@/components/ui/button";
-import { Input, Label } from "@/components/ui/input";
+import { Input, Label, Select } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { SiteNav } from "@/components/mapas/site-nav";
 import { compareVolumes } from "@/lib/mapas/geometry";
 import { computeAccumulatedForElement } from "@/lib/mapas/quantities";
+import {
+  allowedPourTransitions,
+  structuralApprovalDisclaimer,
+} from "@/lib/mapas/pour-workflow";
 import type { GeoJsonPolygon } from "@/lib/mapas/geometry";
-import type { McElementKind } from "@/lib/mapas/types";
+import {
+  POUR_STATUS_LABELS,
+  type McElementKind,
+  type McPourStatus,
+} from "@/lib/mapas/types";
 
 export default async function PourDetailPage({
   params,
@@ -178,9 +188,19 @@ export default async function PourDetailPage({
   });
 
   const firstDeliveryId = deliveries?.[0]?.id;
+  const currentStatus = pour.status as McPourStatus;
+  const nextStatuses = allowedPourTransitions(currentStatus);
+
+  const { data: statusHist } = await supabase
+    .from("mc_pour_status_history")
+    .select("from_status, to_status, justification, created_at")
+    .eq("pour_id", pourId)
+    .order("created_at", { ascending: false })
+    .limit(10);
 
   return (
     <div className="space-y-4">
+      <SiteNav siteId={siteId} current="/concretagens" />
       <div>
         <Link
           href={`/mapas/${siteId}/concretagens`}
@@ -192,6 +212,7 @@ export default async function PourDetailPage({
           <h2 className="text-2xl font-semibold">
             {pour.code} — {pour.title}
           </h2>
+          <Badge>{POUR_STATUS_LABELS[currentStatus] || pour.status}</Badge>
           {pour.is_demo && <Badge>Demonstração</Badge>}
         </div>
         <a
@@ -212,6 +233,54 @@ export default async function PourDetailPage({
           Salvo ({sp.ok}).
         </p>
       )}
+
+      <section className="rounded-lg border border-border bg-surface p-4 text-sm">
+        <h3 className="font-semibold">Status / aprovação operacional</h3>
+        <p className="mt-1 text-xs text-ink-muted">
+          {structuralApprovalDisclaimer()}
+        </p>
+        {nextStatuses.length > 0 ? (
+          <form
+            action={transitionPourStatusAction}
+            className="mt-3 flex flex-wrap items-end gap-2"
+          >
+            <input type="hidden" name="site_id" value={siteId} />
+            <input type="hidden" name="pour_id" value={pourId} />
+            <div>
+              <Label htmlFor="to_status">Novo status</Label>
+              <Select id="to_status" name="to_status" required>
+                {nextStatuses.map((s) => (
+                  <option key={s} value={s}>
+                    {POUR_STATUS_LABELS[s]}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div className="min-w-[12rem] flex-1">
+              <Label htmlFor="justification">Justificativa</Label>
+              <Input
+                id="justification"
+                name="justification"
+                placeholder="Obrigatória para conforme / NC / encerrada"
+              />
+            </div>
+            <Button type="submit" size="sm">
+              Registrar transição
+            </Button>
+          </form>
+        ) : (
+          <p className="mt-2 text-ink-muted">Nenhuma transição disponível.</p>
+        )}
+        {(statusHist || []).length > 0 && (
+          <ul className="mt-3 space-y-1 text-xs text-ink-muted">
+            {(statusHist || []).map((h, i) => (
+              <li key={i}>
+                {h.from_status || "—"} → {h.to_status}: {h.justification}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       <section className="rounded-lg border border-border bg-surface p-4 text-sm">
         <h3 className="font-semibold">Comparativo (esta concretagem)</h3>

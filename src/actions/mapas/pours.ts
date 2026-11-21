@@ -75,6 +75,18 @@ export async function createPourAction(formData: FormData) {
     );
   }
 
+  await supabase.from("audit_events").insert({
+    organization_id: session.organizationId,
+    actor_id: session.userId,
+    action: "mc.pour.create",
+    entity_type: "mc_concrete_pours",
+    entity_id: pour.id,
+    payload: {
+      before: null,
+      after: { code, title, status: "em_execucao", regionIds, elementIds },
+    },
+  });
+
   revalidatePath(`/mapas/${siteId}/concretagens`);
   redirect(`/mapas/${siteId}/concretagens/${pour.id}`);
 }
