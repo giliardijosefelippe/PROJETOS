@@ -53,6 +53,53 @@ export async function cadConvertHealth(): Promise<CadHealth> {
   }
 }
 
+export type CadParseResult = {
+  ok: boolean;
+  sourceFormat?: string;
+  parser?: string;
+  units?: { insunits: number | null; label: string; toMeters: number };
+  layers?: unknown[];
+  entities?: unknown[];
+  warnings?: string[];
+  error?: string;
+};
+
+/** Optional ezdxf parse when CAD_CONVERT_URL is up (MapaConcreto Fase 2). */
+export async function parseDxfViaService(
+  filename: string,
+  bytes: Buffer,
+): Promise<CadParseResult> {
+  const base = getCadConvertUrl();
+  const form = new FormData();
+  form.append(
+    "file",
+    new Blob([new Uint8Array(bytes)], { type: "application/dxf" }),
+    filename,
+  );
+  try {
+    const res = await fetch(`${base}/parse`, {
+      method: "POST",
+      body: form,
+      signal: AbortSignal.timeout(
+        Number(process.env.CAD_CONVERT_TIMEOUT_MS || 60_000),
+      ),
+    });
+    const payload = (await res.json().catch(() => null)) as CadParseResult | null;
+    if (!res.ok || !payload) {
+      return {
+        ok: false,
+        error: `HTTP ${res.status}`,
+      };
+    }
+    return { ...payload, ok: Boolean(payload.ok) };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "serviço indisponível",
+    };
+  }
+}
+
 export async function convertCadBundle(
   filename: string,
   bytes: Buffer,

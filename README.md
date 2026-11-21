@@ -98,12 +98,25 @@ npm run seed:mapas    # obra/planta/laje/região/NF/Slump de DEMONSTRAÇÃO
 Distinguir sempre: **teórico** · **estimado mapeado** · **NF** · **lançado/alocado** · **sobras/devoluções/outros**.  
 A diferença NF − teórico **não** é classificada automaticamente como desperdício.
 
-### Limitações (Fase 1)
+### Limitações (Fase 1–2)
 
 - PDF sem extração automática de elementos; calibração manual.
 - Cálculo automático confiável para **lajes de espessura constante**; pilares exigem altura ou ficam indeterminados.
-- DXF/DWG/IFC e SDK pagos **fora** do MVP (alternativa: exportar PDF/CSV).
+- **DXF (Fase 2):** importa layers/geometrias; **não** inventa lajes/pilares — use CSV/manual. Fixture: `fixtures/mapas/demo-laje-40m2.dxf`.
+- DWG/IFC e SDK pagos **fora** deste incremento (alternativa: exportar DXF/PDF/CSV).
 - Relatório PDF consolida quantitativos; mapa vetorial completo da planta é evolução.
+
+### DXF — como testar
+
+```bash
+npm run test   # inclui parser DXF (laje demo 40 m²)
+# Migration 00008_mapaconcreto_dxf.sql
+npm run dev    # Obra → Importar DXF → layers no visualizador
+
+# Opcional (ezdxf):
+cd services/cad-convert && uvicorn app.main:app --port 8091
+# POST /parse com multipart file
+```
 
 ## Critérios de aceite — MapaConcreto Fase 1
 
