@@ -511,7 +511,7 @@
         <div class="brand-text">
           <strong>CONF ARMADURA</strong>
           <span id="doc-label">Abra um PDF</span>
-          <span id="app-revision" class="rev-label" title="Versão app (0.mid.last — last 00–99)">0.1.15-20261122</span>
+          <span id="app-revision" class="rev-label" title="Versão app (0.mid.last — last 00–99)">0.1.16-20261122</span>
         </div>
       </div>
       <div class="top-actions">
@@ -1234,12 +1234,44 @@
   var STRUCT_CODE_RE = /\b((?:[PVL][A-Za-z]{0,2})[\-\s]?\d+)([A-Za-z])?(?=\b|[xX×]|$)/i;
   var DIM_ONLY_RE = /^(?:\d{1,3}\s*[xX×]\s*\d{1,3}.*|h\s*=\s*\d)/i;
 
+  function normalizeStructuralCode(raw) {
+    return String(raw || "").replace(/\s+/g, "");
+  }
+
+  /** All V/P/L codes in a string (OCR noise may contain more than one). */
+  function extractAllStructuralCodes(text) {
+    var s = String(text || "");
+    var re = new RegExp(STRUCT_CODE_RE.source, "gi");
+    var out = [];
+    var m;
+    while ((m = re.exec(s))) {
+      var code = normalizeStructuralCode(m[1]);
+      if (m[2] && !/^[xX×]$/.test(m[2])) code += m[2];
+      out.push({ code: code, index: m.index, len: m[0].length });
+    }
+    return out;
+  }
+
+  /**
+   * Pick the structural code to keep. Prefer the one next to WxH dims; never
+   * silently swap a locked stored id (VG-38) for a neighbor (VG-30).
+   */
   function extractStructuralCode(text) {
-    var m = String(text || "").match(STRUCT_CODE_RE);
-    if (!m) return "";
-    var code = String(m[1]).replace(/\s+/g, "");
-    if (m[2] && !/^[xX×]$/.test(m[2])) code += m[2];
-    return code;
+    var all = extractAllStructuralCodes(text);
+    if (!all.length) return "";
+    if (all.length === 1) return all[0].code;
+    var s = String(text || "");
+    for (var i = 0; i < all.length; i++) {
+      var after = s.slice(all[i].index + all[i].len, all[i].index + all[i].len + 28);
+      if (/\s*\d{1,3}\s*[xX×]\s*\d{1,3}/.test(after) || /^\s*[xX×]\s*\d{1,3}/.test(after)) {
+        return all[i].code;
+      }
+    }
+    var preferred = all.filter(function (c) {
+      return /^(?:VG|VR|VT|PG|LG|LR|LA|P)[\-]?\d+/i.test(c.code);
+    });
+    if (preferred.length) return preferred[preferred.length - 1].code;
+    return all[all.length - 1].code;
   }
 
   function classifyLabel(text) {
@@ -1348,9 +1380,21 @@
         var num = (stem.match(/\d+$/) || [""])[0];
         code = stem;
         rest = (num + "x" + glued[2] + (rest ? " " + rest : "")).replace(/\s+/g, " ").trim();
-      } else if (/^[xX×]/.test(rest)) {
-        var num2 = (code.match(/\d+$/) || [""])[0];
-        rest = (num2 + rest.replace(/^[xX×]/, "x") + "").trim();
+      } else if (/^[xX×]\s*\d/.test(rest)) {
+        // "VG-3830" + "x70" (OCR missing space before 30x70) → VG-38 · 30x70
+        var digs = (code.match(/(\d+)$/) || ["", ""])[1];
+        if (digs.length >= 4) {
+          var width = digs.slice(-2);
+          var idNum = digs.slice(0, -2);
+          if (idNum) {
+            code = code.replace(/\d+$/, idNum);
+            rest = (width + rest.replace(/^[xX×]/, "x")).trim();
+          } else {
+            rest = (digs + rest.replace(/^[xX×]/, "x")).trim();
+          }
+        } else {
+          rest = (digs + rest.replace(/^[xX×]/, "x")).trim();
+        }
       }
       // Strip neighboring OCR/rebar schedule — keep only real section dims.
       rest = extractDimsNearCode(rest);
@@ -1455,20 +1499,21 @@
   }
 
   function reportNameDims(item) {
-    // Prefer stored name+dims, but always re-clean so old OCR leftovers vanish in Relatório.
+    // Prefer stored structural id — never let noisy label re-parse change VG-38 → VG-30.
     var label = String(item.label || item.text || "").trim();
     var name = String(item.name || "").trim();
     var dims = String(item.dims || "").trim();
-    var raw = label;
-    if (!raw) raw = [name, dims].filter(Boolean).join(" ");
-    else if (name && extractStructuralCode(name)) {
-      // Re-parse from the noisiest available string so leftover schedule text is stripped.
-      raw = label.indexOf(name) >= 0 ? label : (name + " " + dims + " " + label);
+    var locked = extractStructuralCode(name);
+    if (locked) {
+      var dimsClean = extractDimsNearCode([dims, label].filter(Boolean).join(" "));
+      return {
+        name: locked,
+        dims: dimsClean,
+        display: locked + (dimsClean ? " · " + dimsClean : "")
+      };
     }
+    var raw = label || [name, dims].filter(Boolean).join(" ");
     var parts = splitLabelNameDims(raw);
-    if (!parts.name && name && extractStructuralCode(name)) {
-      parts = splitLabelNameDims(name + (dims ? " " + dims : ""));
-    }
     parts.dims = extractDimsNearCode(parts.dims || dims);
     parts.display = parts.name
       ? (parts.name + (parts.dims ? " · " + parts.dims : ""))
@@ -1812,17 +1857,19 @@
     var textTop = 800;
     var contentIds = pageLinesList.map(function (pageLines) {
       var parts = [];
-      // Red horizontal rules above+below each section header (PDF markup request).
+      // Red rules above+below section headers — nearly full page width (A4 595pt).
+      var ruleX0 = 28;
+      var ruleX1 = 567;
       pageLines.forEach(function (line, idx) {
         if (!isReportSectionHeader(line)) return;
         var y = textTop - idx * lineLeading;
-        var yTop = y + 10;
-        var yBot = y - 3;
+        var yTop = y + 11;
+        var yBot = y - 4;
         parts.push("q");
         parts.push("0.78 0.16 0.16 RG");
-        parts.push("1.6 w");
-        parts.push("50 " + yTop.toFixed(1) + " m 545 " + yTop.toFixed(1) + " l S");
-        parts.push("50 " + yBot.toFixed(1) + " m 545 " + yBot.toFixed(1) + " l S");
+        parts.push("2.2 w");
+        parts.push(ruleX0 + " " + yTop.toFixed(1) + " m " + ruleX1 + " " + yTop.toFixed(1) + " l S");
+        parts.push(ruleX0 + " " + yBot.toFixed(1) + " m " + ruleX1 + " " + yBot.toFixed(1) + " l S");
         parts.push("Q");
       });
       parts.push("BT", "/F1 10 Tf", String(lineLeading) + " TL", "50 " + textTop + " Td");

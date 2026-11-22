@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Auto Backup (API ≤30): include app sandbox so library/annots survive device restore.
+     Version updates keep data regardless; uninstall still clears the package. -->
+<full-backup-content>
+    <include domain="root" />
+    <include domain="file" />
+    <include domain="database" />
+    <include domain="sharedpref" />
+    <include domain="external" />
+</full-backup-content>

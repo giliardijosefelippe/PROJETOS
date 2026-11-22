@@ -53,7 +53,9 @@ Abrir HTML:
   npx --yes serve -l 5173
   http://localhost:5173/${STEM}.html
 
-APK: instalar ${STEM}.apk no Android.
+APK: instalar ${STEM}.apk no Android (mesma assinatura / applicationId).
+Atualizar o APK NÃO apaga conferências, biblioteca nem anotações
+(localStorage + IndexedDB + Download/ConfArmadura). Só desinstalar limpa.
 Nunca apague versões anteriores desta pasta.
 EOF
 

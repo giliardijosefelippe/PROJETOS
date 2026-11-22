@@ -32,6 +32,7 @@ Copy-Item -Force (Join-Path $AppDir "vendor\pdfjs\pdf.worker.min.js") (Join-Path
   "$Stem"
   "Arquivos: $Stem.html / $Stem.apk"
   "Manter versoes anteriores nesta pasta (nao sobrescrever/apagar)."
+  "Atualizar APK nao apaga biblioteca/anotacoes (mesmo applicationId)."
   "Serve: npx --yes serve -l 5173"
 ) | Set-Content -Encoding UTF8 (Join-Path $DesktopDir "COMO-ABRIR.txt")
 
