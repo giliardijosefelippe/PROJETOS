@@ -341,15 +341,19 @@
       padding-top: 4px;
     }
     .report-scroll h4 {
-      margin: 0 0 6px; font-size: 13px; color: var(--prumo-muted); font-weight: 700;
-      letter-spacing: 0.02em;
+      margin: 0 0 6px; font-size: 13px; color: #111; font-weight: 700;
+      letter-spacing: 0.01em;
+      border: 0; background: none; box-shadow: none;
     }
     .report-scroll .group-empty { color: var(--prumo-muted); font-size: 13px; margin: 0 0 8px; }
     .report-scroll h3 {
       margin: 0 0 10px; font-size: 12px; text-transform: uppercase;
       letter-spacing: 0.04em; color: var(--prumo-muted); line-height: 1.35;
       word-break: break-word;
-      padding-bottom: 2px;
+      padding-bottom: 5px;
+      border: 0;
+      border-bottom: 0.5px solid #c62828;
+      background: none; box-shadow: none;
     }
     .report-scroll ul { margin: 0; padding-left: 18px; color: var(--prumo-text); }
     .report-scroll li { margin-bottom: 6px; }
@@ -524,7 +528,7 @@
         <div class="brand-text">
           <strong>CONF ARMADURA</strong>
           <span id="doc-label">Abra um PDF</span>
-          <span id="app-revision" class="rev-label" title="Versão app (0.mid.last — last 00–99)">0.1.22-20261122</span>
+          <span id="app-revision" class="rev-label" title="Versão app (0.mid.last — last 00–99)">0.1.23-20261122</span>
         </div>
       </div>
       <div class="top-actions">
@@ -1627,6 +1631,13 @@
   var REPORT_SECTION_OK = "EM CONFORMIDADE COM O PROJETO";
   var REPORT_SECTION_NOTES = "NOTAS DE TEXTO";
 
+  function isReportSectionHeader(line) {
+    var t = String(line || "").trim();
+    return t === REPORT_SECTION_RISK
+      || t === REPORT_SECTION_OK
+      || t === REPORT_SECTION_NOTES;
+  }
+
   function isTextNoteItem(item) {
     if (!item || item.kind !== "note") return false;
     var mode = item.mode == null ? "text" : String(item.mode);
@@ -1780,6 +1791,14 @@
     { key: "laje", title: "Lajes (L)" },
     { key: "outro", title: "Outros" }
   ];
+
+  function isReportVplHeader(line) {
+    var t = String(line || "").trim();
+    for (var i = 0; i < VPL_SECTIONS.length; i++) {
+      if (t === VPL_SECTIONS[i].title) return true;
+    }
+    return false;
+  }
 
   function renderGroupedLisHtml(items, lineFn) {
     var groups = groupItemsByVpl(items);
@@ -1947,9 +1966,9 @@
       + "<style>body{font-family:system-ui,sans-serif;margin:24px;color:#122}h1{font-size:1.4rem}"
       + ".report-section{margin:1.1em 0 0.5em;padding-top:0.2em}"
       + ".report-vpl{margin:0.45em 0}.report-vpl+.report-vpl{margin-top:0.55em;padding-top:0.15em}"
-      + "h3{margin:0 0 0.4em;padding-bottom:0.1em;"
-      + "font-size:0.95rem;letter-spacing:0.03em;text-transform:uppercase;color:#122}"
-      + "h4{margin:0 0 0.3em;color:#355}"
+      + "h3{margin:0 0 0.45em;padding-bottom:0.35em;border-bottom:0.5pt solid #c62828;"
+      + "font-size:0.95rem;letter-spacing:0.03em;text-transform:uppercase;color:#122;background:none}"
+      + "h4{margin:0 0 0.3em;color:#111;font-weight:700;border:0;background:none}"
       + ".cards{display:flex;gap:12px;flex-wrap:wrap}.card{border:1px solid #ccc;border-radius:8px;padding:12px 16px}"
       + ".ok{color:#147a3d}.risk{color:#9a6b00}</style></head><body>"
       + "<h1>" + escapeHtml(model.title) + "</h1>"
@@ -2027,15 +2046,32 @@
     }
 
     var fontId = addObj("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>");
+    var fontBoldId = addObj("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>");
     var lineLeading = 14;
     var textTop = 800;
+    var fontRes = "/Font << /F1 " + fontId + " 0 R /F2 " + fontBoldId + " 0 R >>";
     var contentIds = pageLinesList.map(function (pageLines) {
       var parts = [];
-      // No red separator rules — section titles alone structure the Relatório PDF.
+      // Hairline red underline under main section titles only (not V/P/L).
+      var ruleX0 = 50;
+      var ruleX1 = 545;
+      pageLines.forEach(function (line, idx) {
+        if (!isReportSectionHeader(line)) return;
+        var y = textTop - idx * lineLeading;
+        var yBot = y - 2.5;
+        parts.push("q");
+        parts.push("0.78 0.16 0.16 RG");
+        parts.push("0.4 w");
+        parts.push(ruleX0 + " " + yBot.toFixed(1) + " m " + ruleX1 + " " + yBot.toFixed(1) + " l S");
+        parts.push("Q");
+      });
       parts.push("BT", "/F1 10 Tf", String(lineLeading) + " TL", "50 " + textTop + " Td");
       pageLines.forEach(function (line, idx) {
+        var bold = isReportVplHeader(line);
+        if (bold) parts.push("/F2 10 Tf");
         if (idx === 0) parts.push("(" + pdfEscapeLatin1(line) + ") Tj");
         else parts.push("T* (" + pdfEscapeLatin1(line) + ") Tj");
+        if (bold) parts.push("/F1 10 Tf");
       });
       parts.push("ET");
       var stream = parts.join("\n");
@@ -2044,7 +2080,7 @@
 
     var pageIds = contentIds.map(function (contentId) {
       return addObj("<< /Type /Page /Parent 0 0 R /MediaBox [0 0 595 842] "
-        + "/Resources << /Font << /F1 " + fontId + " 0 R >> >> "
+        + "/Resources << " + fontRes + " >> "
         + "/Contents " + contentId + " 0 R >>");
     });
     var pagesId = addObj("<< /Type /Pages /Kids ["
@@ -2052,7 +2088,7 @@
       + "] /Count " + pageIds.length + " >>");
     pageIds.forEach(function (id, idx) {
       objects[id - 1] = "<< /Type /Page /Parent " + pagesId + " 0 R /MediaBox [0 0 595 842] "
-        + "/Resources << /Font << /F1 " + fontId + " 0 R >> >> "
+        + "/Resources << " + fontRes + " >> "
         + "/Contents " + contentIds[idx] + " 0 R >>";
     });
     var catalogId = addObj("<< /Type /Catalog /Pages " + pagesId + " 0 R >>");
