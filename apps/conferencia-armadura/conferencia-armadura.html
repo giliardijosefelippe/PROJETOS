@@ -304,17 +304,28 @@
     }
     .prumo-footer .secondary { flex: 1; min-width: 0; }
     .report-footer .primary,
-    .report-footer .secondary { flex: 1 1 calc(50% - 8px); min-width: 140px; }
+    .report-footer .secondary { flex: 1 1 calc(50% - 8px); min-width: 120px; }
     .share-sheet-card { width: min(420px, 100%); max-height: none; }
-    .share-sheet-card .share-choice {
-      display: flex; flex-direction: column; gap: 8px;
+    .share-sheet-card .delivery-opts {
+      display: flex; flex-direction: column; gap: 8px; margin: 4px 0 12px;
     }
-    .share-sheet-card .share-choice .primary {
-      flex: none; width: 100%; min-height: 48px; text-align: center;
-      white-space: normal; line-height: 1.25; padding: 10px 12px;
+    .share-sheet-card .delivery-opt {
+      display: flex; align-items: flex-start; gap: 10px;
+      padding: 10px 12px; border-radius: 10px; cursor: pointer;
+      border: 1px solid var(--prumo-border); background: rgba(20, 53, 40, 0.55);
     }
-    .share-sheet-card .share-choice .primary.subtle {
-      background: #1a4a36; border-color: #3d8f6a;
+    .share-sheet-card .delivery-opt input {
+      margin-top: 3px; flex-shrink: 0; width: 18px; height: 18px;
+    }
+    .share-sheet-card .delivery-opt .delivery-label {
+      color: var(--prumo-text); font-size: 14px; font-weight: 700; line-height: 1.3;
+    }
+    .share-sheet-card .delivery-opt .delivery-label small {
+      display: block; color: var(--prumo-muted); font-size: 12px; font-weight: 500; margin-top: 2px;
+    }
+    .share-sheet-card .delivery-group-title {
+      margin: 6px 0 0; color: var(--prumo-muted); font-size: 12px;
+      text-transform: uppercase; letter-spacing: 0.04em; font-weight: 700;
     }
     .report-scroll .summary {
       display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px;
@@ -534,7 +545,7 @@
         <div class="brand-text">
           <strong>CONF ARMADURA</strong>
           <span id="doc-label">Abra um PDF</span>
-          <span id="app-revision" class="rev-label" title="Versão app (0.mid.last — last 00–99)">0.1.26-20261122</span>
+          <span id="app-revision" class="rev-label" title="Versão app (0.mid.last — last 00–99)">0.1.27-20261122</span>
         </div>
       </div>
       <div class="top-actions">
@@ -563,10 +574,8 @@
         <p class="prumo-hint">Conferência agrupada por <strong>Viga / Pilar / Laje</strong> (letra inicial do rótulo).</p>
         <div id="report-body" class="report-scroll"></div>
         <div class="prumo-footer report-footer">
-          <button type="button" id="btn-share-marked" class="primary">Enviar prancha marcada</button>
-          <button type="button" id="btn-export-marked" class="secondary">Exportar PDF marcado</button>
-          <button type="button" id="btn-share" class="secondary">Enviar relatório PDF</button>
-          <button type="button" id="btn-export-pdf" class="secondary">Exportar relatório PDF</button>
+          <button type="button" id="btn-report-send" class="primary">Enviar</button>
+          <button type="button" id="btn-report-export" class="secondary">Exportar</button>
         </div>
       </div>
     </div>
@@ -577,13 +586,32 @@
           <h3 id="share-sheet-title">Enviar</h3>
           <button type="button" id="btn-close-share" class="secondary">Fechar</button>
         </div>
-        <p class="prumo-hint">A <strong>prancha marcada</strong> inclui o desenho com ✓ verdes e ✕ vermelhos. O relatório PDF é só texto. Ambos abrem o compartilhar do aparelho.</p>
-        <div class="share-choice">
-          <button type="button" id="btn-share-marked-sheet" class="primary">Enviar prancha marcada</button>
-          <button type="button" id="btn-share-all" class="primary subtle">Enviar relatório PDF — tudo</button>
-          <button type="button" id="btn-share-nc-notes" class="primary subtle">Enviar relatório PDF — divirgência + notas</button>
-          <button type="button" id="btn-share-text-all" class="primary subtle">Enviar texto — tudo</button>
-          <button type="button" id="btn-share-text-nc-notes" class="primary subtle">Enviar texto — divirgência + notas</button>
+        <p class="prumo-hint" id="share-sheet-hint">Escolha o que incluir. Em seguida o aparelho abre o compartilhar (WhatsApp, e-mail…).</p>
+        <div class="delivery-opts">
+          <label class="delivery-opt" for="deliv-marked">
+            <input type="checkbox" id="deliv-marked" checked />
+            <span class="delivery-label">Prancha marcada
+              <small>PDF do desenho com ✓ verdes e ✕ vermelhos</small>
+            </span>
+          </label>
+          <p class="delivery-group-title">Relatório PDF</p>
+          <label class="delivery-opt" for="deliv-report-none">
+            <input type="radio" name="deliv-report" id="deliv-report-none" value="none" />
+            <span class="delivery-label">Não incluir</span>
+          </label>
+          <label class="delivery-opt" for="deliv-report-all">
+            <input type="radio" name="deliv-report" id="deliv-report-all" value="all" checked />
+            <span class="delivery-label">Tudo
+              <small>Conformidade + divirgência + notas</small>
+            </span>
+          </label>
+          <label class="delivery-opt" for="deliv-report-nc">
+            <input type="radio" name="deliv-report" id="deliv-report-nc" value="nc_notes" />
+            <span class="delivery-label">Divirgência + notas</span>
+          </label>
+        </div>
+        <div class="prumo-footer">
+          <button type="button" id="btn-delivery-go" class="primary">Compartilhar</button>
         </div>
       </div>
     </div>
@@ -1219,8 +1247,8 @@
   }
 
   /**
-   * Export-only: draw NC motivo beside each red mark, ~2× the verified label font,
-   * rotated to match the verified label’s PDF text orientation.
+   * Export-only: draw NC motivo above each red mark (page-up), centered on the
+   * mark box, ~2× verified label font, rotated to match label orientation.
    */
   function paintRiskReasonLabels(ctx, items, pageCssW, pageCssH) {
     var list = items || [];
@@ -1240,13 +1268,13 @@
       var padX = Math.max(4, Math.round(fs * 0.28));
       var padY = Math.max(3, Math.round(fs * 0.2));
       var lineH = Math.round(fs * 1.15);
-      var maxTextW = Math.max(80, Math.min(Math.min(pageW, pageH) * 0.42, fs * 18));
+      var maxTextW = Math.max(72, Math.min(Math.min(pageW, pageH) * 0.36, fs * 14));
       var angle = resolveItemTextAngle(item);
 
       ctx.save();
       ctx.font = "bold " + fs + "px sans-serif";
-      ctx.textBaseline = "top";
-      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      ctx.textAlign = "center";
       var lines = wrapCanvasTextLines(ctx, reason, maxTextW);
       if (!lines.length) { ctx.restore(); continue; }
       var textW = 0;
@@ -1260,31 +1288,25 @@
       var markY = Number(item.y) || 0;
       var markW = Number(item.w) || 0;
       var markH = Number(item.h) || 0;
-      var gap = Math.max(4, Math.round(fs * 0.25));
+      var gap = Math.max(4, Math.round(fs * 0.22));
       var cx = markW > 2 ? markX + markW / 2 : markX;
       var cy = markH > 2 ? markY + markH / 2 : markY;
-      // In label-local space (+X = reading direction), place motivo past the glyph run.
-      var halfAlong = Math.max(markW, markH, 8) / 2;
-      var bx = halfAlong + gap;
-      var by = -boxH / 2;
-      // If that would land far off-page, flip to the other side of the label.
-      var cos = Math.cos(angle);
-      var sin = Math.sin(angle);
-      function localToPage(lx, ly) {
-        return { x: cx + lx * cos - ly * sin, y: cy + lx * sin + ly * cos };
-      }
-      var corners = [
-        localToPage(bx, by),
-        localToPage(bx + boxW, by),
-        localToPage(bx, by + boxH),
-        localToPage(bx + boxW, by + boxH)
-      ];
-      var off = corners.some(function (p) {
-        return p.x < -8 || p.y < -8 || p.x > pageW + 8 || p.y > pageH + 8;
-      });
-      if (off) bx = -halfAlong - gap - boxW;
+      var markTop = markH > 2 ? markY : cy - Math.max(4, fs * 0.35);
+      var markBot = markH > 2 ? markY + markH : cy + Math.max(4, fs * 0.35);
 
-      ctx.translate(cx, cy);
+      // Page-space anchor: above mark, centered on mark X; rotate glyphs around that center.
+      var textCx = cx;
+      var textCy = markTop - gap - boxH / 2;
+      if (textCy - boxH / 2 < 4) textCy = markBot + gap + boxH / 2;
+      if (textCx - boxW / 2 < 4) textCx = 4 + boxW / 2;
+      if (textCx + boxW / 2 > pageW - 4) textCx = Math.max(4 + boxW / 2, pageW - 4 - boxW / 2);
+      if (textCy + boxH / 2 > pageH - 4 && textCy > markTop) {
+        textCy = Math.max(4 + boxH / 2, markTop - gap - boxH / 2);
+      }
+
+      var bx = -boxW / 2;
+      var by = -boxH / 2;
+      ctx.translate(textCx, textCy);
       ctx.rotate(angle);
       ctx.fillStyle = "rgba(255, 248, 246, 0.94)";
       ctx.strokeStyle = "#e00024";
@@ -1294,7 +1316,7 @@
       ctx.stroke();
       ctx.fillStyle = "#8a0014";
       for (var t = 0; t < lines.length; t++) {
-        ctx.fillText(lines[t], bx + padX, by + padY + t * lineH);
+        ctx.fillText(lines[t], 0, by + padY + t * lineH + lineH / 2);
       }
       ctx.restore();
     }
@@ -2277,7 +2299,7 @@
     // Annotations live in logical (scale=1) CSS coordinates — match paint on screen.
     ctx.setTransform(scale, 0, 0, scale, 0, 0);
     paintAnnotationsOnto(ctx, annotItems || []);
-    // NC motivo beside red marks (~2× verified label font) — export only.
+    // NC motivo above+centered on red marks (~2× verified label font) — export only.
     paintRiskReasonLabels(ctx, annotItems || [], logical.width, logical.height);
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     return canvas;
@@ -2302,7 +2324,7 @@
     return buildPdfFromJpegPages(pages);
   }
 
-  async function exportOrShareMarkedSheet(kindLabel) {
+  async function exportOrShareMarkedSheet(kindLabel, mode) {
     if (!state.pdf) {
       setHint("Abra uma prancha para enviar/exportar com marcações.");
       setTimeout(function () { setHint(""); }, 2200);
@@ -2311,7 +2333,12 @@
     setHint("Gerando prancha marcada…");
     try {
       var blob = await buildMarkedSheetPdfBlob();
-      await downloadOrShareBlob(markedSheetFileStem() + ".pdf", blob, kindLabel || "PDF marcado");
+      await downloadOrShareBlob(
+        markedSheetFileStem() + ".pdf",
+        blob,
+        kindLabel || "PDF marcado",
+        mode || "share"
+      );
     } catch (err) {
       console.warn(err);
       setHint("Falha ao gerar PDF da prancha marcada.");
@@ -2381,17 +2408,17 @@
     libraryBody: document.getElementById("library-body"),
     librarySearch: document.getElementById("library-search"),
     btnCloseLibrary: document.getElementById("btn-close-library"),
-    btnExportPdf: document.getElementById("btn-export-pdf"),
-    btnExportMarked: document.getElementById("btn-export-marked"),
-    btnShare: document.getElementById("btn-share"),
-    btnShareMarked: document.getElementById("btn-share-marked"),
+    btnReportSend: document.getElementById("btn-report-send"),
+    btnReportExport: document.getElementById("btn-report-export"),
     shareSheet: document.getElementById("share-sheet"),
+    shareSheetTitle: document.getElementById("share-sheet-title"),
+    shareSheetHint: document.getElementById("share-sheet-hint"),
     btnCloseShare: document.getElementById("btn-close-share"),
-    btnShareMarkedSheet: document.getElementById("btn-share-marked-sheet"),
-    btnShareAll: document.getElementById("btn-share-all"),
-    btnShareNcNotes: document.getElementById("btn-share-nc-notes"),
-    btnShareTextAll: document.getElementById("btn-share-text-all"),
-    btnShareTextNcNotes: document.getElementById("btn-share-text-nc-notes"),
+    btnDeliveryGo: document.getElementById("btn-delivery-go"),
+    delivMarked: document.getElementById("deliv-marked"),
+    delivReportNone: document.getElementById("deliv-report-none"),
+    delivReportAll: document.getElementById("deliv-report-all"),
+    delivReportNc: document.getElementById("deliv-report-nc"),
     textModal: document.getElementById("text-modal"),
     textInput: document.getElementById("text-input"),
     textModalTitle: document.getElementById("text-modal-title"),
@@ -2430,6 +2457,7 @@
     riskPending: null,
     modalMode: "note",
     lastReportModel: null,
+    deliveryMode: "share",
     recognizing: false,
     pdfDocKey: "",
     pageRasterCache: null,
@@ -4158,12 +4186,13 @@
   }
 
   /**
-   * Android WebView blocks <a download>. Write via Filesystem then Share
-   * (FileProvider) so the user can open/save the file. Desktop keeps blob download.
+   * Android WebView blocks <a download>. Write via Filesystem; Share opens the
+   * system sheet (Enviar). Export mode saves to device storage without Share.
    */
-  async function exportBlobNative(filename, blob, kindLabel) {
+  async function exportBlobNative(filename, blob, kindLabel, mode) {
     var fs = await ensureNativeFs();
     if (!fs) throw new Error("Filesystem indisponível neste dispositivo.");
+    var delivery = mode === "export" ? "export" : "share";
     var safeName = safeExportFilename(filename);
     var b64 = await blobToBase64(blob);
     var cacheFolder = "relatorios";
@@ -4194,7 +4223,7 @@
           recursive: true
         });
         if (dir.directory === "EXTERNAL_STORAGE") {
-          savedHint = "Também em " + folder;
+          savedHint = "Em " + folder;
         } else if (!savedHint) {
           savedHint = "Arquivo gravado no app";
         }
@@ -4202,15 +4231,27 @@
       } catch (err) {}
     }
 
+    if (delivery === "export") {
+      if (savedHint) {
+        setHint(kindLabel + " salvo. " + savedHint);
+        return { uri: null, savedHint: savedHint };
+      }
+      // Fall through to Share so user can still “Salvar em Arquivos”.
+    }
+
     var uriRes = await fs.getUri({ path: cachePath, directory: "CACHE" });
     var uri = uriRes && uriRes.uri;
     if (!uri) throw new Error("URI do arquivo indisponível.");
+
+    if (delivery === "export" && !savedHint) {
+      // No durable path — open Share as save fallback.
+    }
 
     var Share = capShare();
     if (!Share) {
       if (savedHint) {
         setHint(kindLabel + " salvo. " + savedHint);
-        return;
+        return { uri: uri, savedHint: savedHint };
       }
       throw new Error("Plugin Share indisponível.");
     }
@@ -4220,57 +4261,109 @@
       return /cancel/i.test(msg);
     }
 
-    try {
-      await Share.share({
-        title: safeName,
-        dialogTitle: "Exportar " + kindLabel,
-        files: [uri]
-      });
-      setHint(savedHint ? (kindLabel + " exportado. " + savedHint) : (kindLabel + " exportado."));
-    } catch (err) {
-      if (isCancel(err)) {
-        setHint(savedHint
-          ? (kindLabel + " salvo. " + savedHint)
-          : (kindLabel + " pronto (compartilhar cancelado)."));
-        return;
-      }
+    var dialogTitle = delivery === "export"
+      ? ("Salvar " + kindLabel)
+      : ("Enviar " + kindLabel);
+
+    if (delivery === "share" || !savedHint) {
       try {
         await Share.share({
           title: safeName,
-          text: "Relatório CONF ARMADURA",
-          url: uri,
-          dialogTitle: "Exportar " + kindLabel
+          dialogTitle: dialogTitle,
+          files: [uri]
         });
-        setHint(savedHint ? (kindLabel + " exportado. " + savedHint) : (kindLabel + " exportado."));
-      } catch (err2) {
-        if (isCancel(err2)) {
+        setHint(savedHint
+          ? (kindLabel + (delivery === "export" ? " salvo. " : " enviado. ") + savedHint)
+          : (kindLabel + (delivery === "export" ? " salvo." : " enviado.")));
+      } catch (err) {
+        if (isCancel(err)) {
           setHint(savedHint
             ? (kindLabel + " salvo. " + savedHint)
-            : (kindLabel + " pronto (compartilhar cancelado)."));
-          return;
+            : (kindLabel + " pronto (cancelado)."));
+          return { uri: uri, savedHint: savedHint };
         }
-        if (savedHint) {
-          setHint(kindLabel + " salvo. " + savedHint + " — abra pelos Arquivos.");
-          return;
+        try {
+          await Share.share({
+            title: safeName,
+            text: "CONF ARMADURA",
+            url: uri,
+            dialogTitle: dialogTitle
+          });
+          setHint(savedHint
+            ? (kindLabel + (delivery === "export" ? " salvo. " : " enviado. ") + savedHint)
+            : (kindLabel + (delivery === "export" ? " salvo." : " enviado.")));
+        } catch (err2) {
+          if (isCancel(err2)) {
+            setHint(savedHint
+              ? (kindLabel + " salvo. " + savedHint)
+              : (kindLabel + " pronto (cancelado)."));
+            return { uri: uri, savedHint: savedHint };
+          }
+          if (savedHint) {
+            setHint(kindLabel + " salvo. " + savedHint + " — abra pelos Arquivos.");
+            return { uri: uri, savedHint: savedHint };
+          }
+          throw err2;
         }
-        throw err2;
       }
     }
+    return { uri: uri, savedHint: savedHint };
   }
 
-  async function downloadOrShareBlob(filename, blob, kindLabel) {
+  /** Write one blob to cache and return content:// URI (Android). */
+  async function writeBlobToCacheUri(filename, blob) {
+    var fs = await ensureNativeFs();
+    if (!fs) throw new Error("Filesystem indisponível neste dispositivo.");
+    var safeName = safeExportFilename(filename);
+    var b64 = await blobToBase64(blob);
+    var cacheFolder = "relatorios";
+    var cachePath = cacheFolder + "/" + safeName;
+    try {
+      await fs.mkdir({ path: cacheFolder, directory: "CACHE", recursive: true });
+    } catch (e) {}
+    await fs.writeFile({
+      path: cachePath,
+      data: b64,
+      directory: "CACHE",
+      recursive: true
+    });
+    // Best-effort durable copy for Exportar / archival.
+    for (var d = 0; d < NATIVE_DIRS.length; d++) {
+      var dir = NATIVE_DIRS[d];
+      var folder = dir.folder + "/relatorios";
+      var path = folder + "/" + safeName;
+      try {
+        try {
+          await fs.mkdir({ path: folder, directory: dir.directory, recursive: true });
+        } catch (e2) {}
+        await fs.writeFile({
+          path: path,
+          data: b64,
+          directory: dir.directory,
+          recursive: true
+        });
+        break;
+      } catch (err) {}
+    }
+    var uriRes = await fs.getUri({ path: cachePath, directory: "CACHE" });
+    if (!uriRes || !uriRes.uri) throw new Error("URI do arquivo indisponível.");
+    return { uri: uriRes.uri, name: safeName };
+  }
+
+  async function downloadOrShareBlob(filename, blob, kindLabel, mode) {
+    var delivery = mode === "export" ? "export" : "share";
     if (!isNativeCapacitor()) {
       downloadBlob(filename, blob);
-      setHint(kindLabel + " exportado.");
+      setHint(kindLabel + (delivery === "export" ? " exportado." : " pronto."));
       setTimeout(function () { setHint(""); }, 1800);
       return;
     }
     setHint("Preparando " + kindLabel + "…");
     try {
-      await exportBlobNative(filename, blob, kindLabel);
+      await exportBlobNative(filename, blob, kindLabel, delivery);
     } catch (err) {
       console.warn(err);
-      setHint("Falha ao exportar " + kindLabel + " no Android.");
+      setHint("Falha ao " + (delivery === "export" ? "salvar" : "enviar") + " " + kindLabel + ".");
     }
     setTimeout(function () { setHint(""); }, 3200);
   }
@@ -4280,10 +4373,32 @@
     return state.lastReportModel;
   }
 
-  function openShareSheet() {
+  function readDeliverySelection() {
+    var marked = !!(els.delivMarked && els.delivMarked.checked);
+    var report = "none";
+    if (els.delivReportNc && els.delivReportNc.checked) report = "nc_notes";
+    else if (els.delivReportAll && els.delivReportAll.checked) report = "all";
+    else if (els.delivReportNone && els.delivReportNone.checked) report = "none";
+    return { marked: marked, report: report };
+  }
+
+  /** @param {"share"|"export"} mode */
+  function openDeliverySheet(mode) {
     if (!ensureReportModel()) return;
+    state.deliveryMode = mode === "export" ? "export" : "share";
     var sheet = els.shareSheet || document.getElementById("share-sheet");
     if (!sheet) return;
+    if (els.shareSheetTitle) {
+      els.shareSheetTitle.textContent = state.deliveryMode === "export" ? "Exportar" : "Enviar";
+    }
+    if (els.shareSheetHint) {
+      els.shareSheetHint.innerHTML = state.deliveryMode === "export"
+        ? "Escolha o que salvar no aparelho (Downloads/ConfArmadura/relatorios)."
+        : "Escolha o que incluir. Em seguida o aparelho abre o compartilhar (WhatsApp, e-mail…).";
+    }
+    if (els.btnDeliveryGo) {
+      els.btnDeliveryGo.textContent = state.deliveryMode === "export" ? "Salvar" : "Compartilhar";
+    }
     sheet.hidden = false;
     sheet.removeAttribute("hidden");
     sheet.style.display = "grid";
@@ -4297,65 +4412,92 @@
     sheet.style.display = "none";
   }
 
-  /** @param {"all"|"nc_notes"} scope @param {"pdf"|"text"} format */
-  function shareReportWithScope(scope, format) {
-    var base = ensureReportModel();
-    if (!base) return;
-    var model = filterReportModel(base, scope === "nc_notes" ? "nc_notes" : "all");
-    closeShareSheet();
-    if (format === "text") {
-      shareReportAsPlainText(model, scope);
+  async function runDeliverySelection() {
+    var mode = state.deliveryMode === "export" ? "export" : "share";
+    var sel = readDeliverySelection();
+    if (!sel.marked && sel.report === "none") {
+      setHint("Selecione a prancha marcada e/ou um relatório PDF.");
+      setTimeout(function () { setHint(""); }, 2200);
       return;
     }
-    // Primary path: real PDF file → Filesystem + Share on Android (same as Exportar PDF).
-    var text = buildPlainTextReport(model);
-    downloadOrShareBlob(
-      reportFileStem(model) + ".pdf",
-      buildPdfBlobFromText(text),
-      "PDF"
-    );
-  }
+    closeShareSheet();
 
-  function shareReportAsPlainText(model, scope) {
-    var text = buildPlainTextReport(model);
-    var title = scope === "nc_notes"
-      ? "CONF ARMADURA — divirgência + notas"
-      : "Relatório CONF ARMADURA";
-    if (navigator.share) {
-      navigator.share({ title: title, text: text }).then(function () {
-        setHint(scope === "nc_notes" ? "Texto (divirgência + notas) enviado." : "Texto completo enviado.");
-        setTimeout(function () { setHint(""); }, 1800);
-      }).catch(function (err) {
-        if (err && err.name === "AbortError") return;
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(text).then(function () {
-            setHint("Não foi possível abrir o compartilhar — texto copiado.");
-            setTimeout(function () { setHint(""); }, 2200);
-          }).catch(function () { window.prompt("Copie o relatório:", text); });
-        } else {
-          window.prompt("Copie o relatório:", text);
+    var files = [];
+    try {
+      if (sel.marked) {
+        if (!state.pdf) {
+          setHint("Abra uma prancha para incluir a prancha marcada.");
+          setTimeout(function () { setHint(""); }, 2400);
+          return;
         }
-      });
-    } else if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text).then(function () {
-        setHint("Compartilhar indisponível — texto copiado.");
-        setTimeout(function () { setHint(""); }, 2200);
-      }).catch(function () { window.prompt("Copie o relatório:", text); });
-    } else {
-      window.prompt("Copie o relatório:", text);
+        setHint("Gerando prancha marcada…");
+        files.push({
+          filename: markedSheetFileStem() + ".pdf",
+          blob: await buildMarkedSheetPdfBlob(),
+          label: "Prancha marcada"
+        });
+      }
+      if (sel.report !== "none") {
+        var base = ensureReportModel();
+        if (!base) return;
+        var model = filterReportModel(base, sel.report === "nc_notes" ? "nc_notes" : "all");
+        setHint("Gerando relatório PDF…");
+        files.push({
+          filename: reportFileStem(model) + ".pdf",
+          blob: buildPdfBlobFromText(buildPlainTextReport(model)),
+          label: sel.report === "nc_notes" ? "Relatório (NC+notas)" : "Relatório"
+        });
+      }
+    } catch (err) {
+      console.warn(err);
+      setHint("Falha ao gerar PDF.");
+      setTimeout(function () { setHint(""); }, 2800);
+      return;
     }
-  }
 
-  function exportPdf() {
-    var model = ensureReportModel();
-    if (!model) return;
-    // Always a real .pdf blob; on Android → write + share/save sheet.
-    var text = buildPlainTextReport(model);
-    downloadOrShareBlob(
-      reportFileStem(model) + ".pdf",
-      buildPdfBlobFromText(text),
-      "PDF"
-    );
+    if (!isNativeCapacitor()) {
+      files.forEach(function (f) { downloadBlob(f.filename, f.blob); });
+      setHint(files.length > 1
+        ? (files.length + " arquivos " + (mode === "export" ? "exportados." : "prontos."))
+        : (files[0].label + (mode === "export" ? " exportado." : " pronto.")));
+      setTimeout(function () { setHint(""); }, 2000);
+      return;
+    }
+
+    setHint(mode === "export" ? "Salvando…" : "Preparando compartilhar…");
+    try {
+      if (mode === "export" || files.length === 1) {
+        for (var i = 0; i < files.length; i++) {
+          await exportBlobNative(files[i].filename, files[i].blob, files[i].label, mode);
+        }
+      } else {
+        // Multi-file share: one Share sheet with all URIs.
+        var uris = [];
+        var names = [];
+        for (var j = 0; j < files.length; j++) {
+          var written = await writeBlobToCacheUri(files[j].filename, files[j].blob);
+          uris.push(written.uri);
+          names.push(written.name);
+        }
+        var Share = capShare();
+        if (!Share) throw new Error("Plugin Share indisponível.");
+        await Share.share({
+          title: names[0] || "CONF ARMADURA",
+          dialogTitle: "Enviar arquivos",
+          files: uris
+        });
+        setHint("Arquivos enviados.");
+      }
+    } catch (err2) {
+      var msg = String((err2 && (err2.message || err2.errorMessage || err2)) || "");
+      if (/cancel/i.test(msg)) {
+        setHint("Cancelado.");
+      } else {
+        console.warn(err2);
+        setHint("Falha ao " + (mode === "export" ? "salvar" : "enviar") + ".");
+      }
+    }
+    setTimeout(function () { setHint(""); }, 3200);
   }
 
   function isSideMenuOpen() {
@@ -4622,36 +4764,17 @@
         }
       });
     }
-    if (els.btnExportPdf) els.btnExportPdf.addEventListener("click", exportPdf);
-    if (els.btnExportMarked) {
-      els.btnExportMarked.addEventListener("click", function () {
-        exportOrShareMarkedSheet("PDF marcado");
-      });
+    if (els.btnReportSend) {
+      els.btnReportSend.addEventListener("click", function () { openDeliverySheet("share"); });
     }
-    if (els.btnShare) els.btnShare.addEventListener("click", openShareSheet);
-    if (els.btnShareMarked) {
-      els.btnShareMarked.addEventListener("click", function () {
-        exportOrShareMarkedSheet("Prancha marcada");
-      });
+    if (els.btnReportExport) {
+      els.btnReportExport.addEventListener("click", function () { openDeliverySheet("export"); });
     }
     if (els.btnCloseShare) els.btnCloseShare.addEventListener("click", closeShareSheet);
-    if (els.btnShareMarkedSheet) {
-      els.btnShareMarkedSheet.addEventListener("click", function () {
-        closeShareSheet();
-        exportOrShareMarkedSheet("Prancha marcada");
+    if (els.btnDeliveryGo) {
+      els.btnDeliveryGo.addEventListener("click", function () {
+        runDeliverySelection().catch(function (err) { console.warn(err); });
       });
-    }
-    if (els.btnShareAll) {
-      els.btnShareAll.addEventListener("click", function () { shareReportWithScope("all", "pdf"); });
-    }
-    if (els.btnShareNcNotes) {
-      els.btnShareNcNotes.addEventListener("click", function () { shareReportWithScope("nc_notes", "pdf"); });
-    }
-    if (els.btnShareTextAll) {
-      els.btnShareTextAll.addEventListener("click", function () { shareReportWithScope("all", "text"); });
-    }
-    if (els.btnShareTextNcNotes) {
-      els.btnShareTextNcNotes.addEventListener("click", function () { shareReportWithScope("nc_notes", "text"); });
     }
     if (els.shareSheet) {
       els.shareSheet.addEventListener("click", function (ev) {
