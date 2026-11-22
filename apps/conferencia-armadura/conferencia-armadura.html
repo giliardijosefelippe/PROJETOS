@@ -545,7 +545,7 @@
         <div class="brand-text">
           <strong>CONF ARMADURA</strong>
           <span id="doc-label">Abra um PDF</span>
-          <span id="app-revision" class="rev-label" title="Versão app (0.mid.last — last 00–99)">0.1.27-20261122</span>
+          <span id="app-revision" class="rev-label" title="Versão app (0.mid.last — last 00–99)">0.1.28-20261122</span>
         </div>
       </div>
       <div class="top-actions">
@@ -1247,8 +1247,8 @@
   }
 
   /**
-   * Export-only: draw NC motivo above each red mark (page-up), centered on the
-   * mark box, ~2× verified label font, rotated to match label orientation.
+   * Export-only: draw NC motivo outside above each red mark (no overlap),
+   * centered on the mark, ~(2× label − 1pt), rotated to match label orientation.
    */
   function paintRiskReasonLabels(ctx, items, pageCssW, pageCssH) {
     var list = items || [];
@@ -1264,7 +1264,8 @@
       if (!reason) continue;
 
       var labelFs = estimateVerifiedLabelFontPx(item);
-      var fs = Math.max(14, Math.min(48, Math.round(labelFs * 2)));
+      // ~2× verified label, then −1pt so motivo sits clearer outside the mark.
+      var fs = Math.max(12, Math.min(47, Math.round(labelFs * 2) - 1));
       var padX = Math.max(4, Math.round(fs * 0.28));
       var padY = Math.max(3, Math.round(fs * 0.2));
       var lineH = Math.round(fs * 1.15);
@@ -1288,20 +1289,34 @@
       var markY = Number(item.y) || 0;
       var markW = Number(item.w) || 0;
       var markH = Number(item.h) || 0;
-      var gap = Math.max(4, Math.round(fs * 0.22));
+      var gap = Math.max(6, Math.round(fs * 0.35));
       var cx = markW > 2 ? markX + markW / 2 : markX;
       var cy = markH > 2 ? markY + markH / 2 : markY;
       var markTop = markH > 2 ? markY : cy - Math.max(4, fs * 0.35);
       var markBot = markH > 2 ? markY + markH : cy + Math.max(4, fs * 0.35);
 
-      // Page-space anchor: above mark, centered on mark X; rotate glyphs around that center.
+      // Rotated AABB half-extents (local box ±w/2, ±h/2 around text center).
+      var cosA = Math.cos(angle);
+      var sinA = Math.sin(angle);
+      var halfDown = 0.5 * (Math.abs(boxW * sinA) + Math.abs(boxH * cosA));
+      var halfSide = 0.5 * (Math.abs(boxW * cosA) + Math.abs(boxH * sinA));
+
+      // Keep the entire rotated box outside above the mark (page-up).
       var textCx = cx;
-      var textCy = markTop - gap - boxH / 2;
-      if (textCy - boxH / 2 < 4) textCy = markBot + gap + boxH / 2;
-      if (textCx - boxW / 2 < 4) textCx = 4 + boxW / 2;
-      if (textCx + boxW / 2 > pageW - 4) textCx = Math.max(4 + boxW / 2, pageW - 4 - boxW / 2);
-      if (textCy + boxH / 2 > pageH - 4 && textCy > markTop) {
-        textCy = Math.max(4 + boxH / 2, markTop - gap - boxH / 2);
+      var textCy = markTop - gap - halfDown;
+      if (textCy - halfDown < 4) {
+        // Flip below mark if there is no room above.
+        textCy = markBot + gap + halfDown;
+      }
+      if (textCx - halfSide < 4) textCx = 4 + halfSide;
+      if (textCx + halfSide > pageW - 4) textCx = Math.max(4 + halfSide, pageW - 4 - halfSide);
+
+      // Final safety: if still intersecting the mark AABB, push fully clear.
+      var boxPageTop = textCy - halfDown;
+      var boxPageBot = textCy + halfDown;
+      if (boxPageBot > markTop - gap && boxPageTop < markBot + gap) {
+        textCy = markTop - gap - halfDown;
+        if (textCy - halfDown < 4) textCy = markBot + gap + halfDown;
       }
 
       var bx = -boxW / 2;
