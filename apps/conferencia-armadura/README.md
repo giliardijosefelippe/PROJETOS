@@ -40,7 +40,7 @@ Desktop: `npm run pack:desktop` → `desktop-dist/CONF ARMADURA <versão>.html` 
 3. Abra o APK e instale (**CONF ARMADURA**). Versão: `0.mid.last-YYYYMMDD` (last 00–99; depois mid++).
 4. Na 1ª abertura, permita armazenamento se o sistema pedir (gravação em Downloads).
 
-> Build **debug** (assinatura de debug). Para Play Store use `assembleRelease` com keystore.
+> Build **release** assinada com keystore estável do projeto (`android/keystore/conf-armadura.keystore`). Mesmo `applicationId` + mesma cert = update in-place (não apaga biblioteca/anotações). Não regenerar o keystore.
 
 ### Pasta da biblioteca no aparelho
 

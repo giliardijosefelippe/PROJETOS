@@ -53,9 +53,12 @@ Abrir HTML:
   npx --yes serve -l 5173
   http://localhost:5173/${STEM}.html
 
-APK: instalar ${STEM}.apk no Android (mesma assinatura / applicationId).
+APK: instalar ${STEM}.apk no Android (applicationId br.lunardeli.conferenciaarmadura +
+keystore estável android/keystore/conf-armadura.keystore).
 Atualizar o APK NÃO apaga conferências, biblioteca nem anotações
 (localStorage + IndexedDB + Download/ConfArmadura). Só desinstalar limpa.
+Exceção: 0.1.08-20261117 usou outro keystore efêmero — desinstale 0.1.08 uma vez
+antes de instalar 0.1.33+; depois os updates ficam in-place.
 Nunca apague versões anteriores desta pasta.
 EOF
 
