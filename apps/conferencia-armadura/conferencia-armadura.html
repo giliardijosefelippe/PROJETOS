@@ -511,7 +511,7 @@
         <div class="brand-text">
           <strong>CONF ARMADURA</strong>
           <span id="doc-label">Abra um PDF</span>
-          <span id="app-revision" class="rev-label" title="Versão app (0.mid.last — last 00–99)">0.1.14-20261122</span>
+          <span id="app-revision" class="rev-label" title="Versão app (0.mid.last — last 00–99)">0.1.15-20261122</span>
         </div>
       </div>
       <div class="top-actions">
@@ -540,7 +540,7 @@
         <p class="prumo-hint">Conferência agrupada por <strong>Viga / Pilar / Laje</strong> (letra inicial do rótulo).</p>
         <div id="report-body" class="report-scroll"></div>
         <div class="prumo-footer report-footer">
-          <button type="button" id="btn-share" class="primary">Compartilhar</button>
+          <button type="button" id="btn-share" class="primary">Enviar PDF</button>
           <button type="button" id="btn-export-pdf" class="secondary">Exportar PDF</button>
           <button type="button" id="btn-export-word" class="secondary">Exportar Word</button>
           <button type="button" id="btn-export-text" class="secondary">Copiar texto</button>
@@ -551,13 +551,15 @@
     <div id="share-sheet" class="modal prumo-modal" hidden>
       <div class="modal-card prumo-card share-sheet-card" role="dialog" aria-labelledby="share-sheet-title">
         <div class="prumo-head">
-          <h3 id="share-sheet-title">Compartilhar</h3>
+          <h3 id="share-sheet-title">Enviar relatório</h3>
           <button type="button" id="btn-close-share" class="secondary">Fechar</button>
         </div>
-        <p class="prumo-hint">Escolha o que enviar pelo compartilhamento do dispositivo.</p>
+        <p class="prumo-hint">Gera um arquivo <strong>PDF</strong> e abre o compartilhar do aparelho (WhatsApp, Drive, Arquivos…). Texto puro continua disponível abaixo.</p>
         <div class="share-choice">
-          <button type="button" id="btn-share-all" class="primary">Mandar tudo</button>
-          <button type="button" id="btn-share-nc-notes" class="primary subtle">Somente DIVIRGÊNCIA COM O PROJETO + notas de texto</button>
+          <button type="button" id="btn-share-all" class="primary">Enviar PDF — tudo</button>
+          <button type="button" id="btn-share-nc-notes" class="primary">Enviar PDF — divirgência + notas</button>
+          <button type="button" id="btn-share-text-all" class="primary subtle">Enviar texto — tudo</button>
+          <button type="button" id="btn-share-text-nc-notes" class="primary subtle">Enviar texto — divirgência + notas</button>
         </div>
       </div>
     </div>
@@ -1958,6 +1960,8 @@
     btnCloseShare: document.getElementById("btn-close-share"),
     btnShareAll: document.getElementById("btn-share-all"),
     btnShareNcNotes: document.getElementById("btn-share-nc-notes"),
+    btnShareTextAll: document.getElementById("btn-share-text-all"),
+    btnShareTextNcNotes: document.getElementById("btn-share-text-nc-notes"),
     textModal: document.getElementById("text-modal"),
     textInput: document.getElementById("text-input"),
     textModalTitle: document.getElementById("text-modal-title"),
@@ -3851,18 +3855,33 @@
     sheet.style.display = "none";
   }
 
-  function shareReportWithScope(scope) {
+  /** @param {"all"|"nc_notes"} scope @param {"pdf"|"text"} format */
+  function shareReportWithScope(scope, format) {
     var base = ensureReportModel();
     if (!base) return;
     var model = filterReportModel(base, scope === "nc_notes" ? "nc_notes" : "all");
-    var text = buildPlainTextReport(model);
     closeShareSheet();
+    if (format === "text") {
+      shareReportAsPlainText(model, scope);
+      return;
+    }
+    // Primary path: real PDF file → Filesystem + Share on Android (same as Exportar PDF).
+    var text = buildPlainTextReport(model);
+    downloadOrShareBlob(
+      reportFileStem(model) + ".pdf",
+      buildPdfBlobFromText(text),
+      "PDF"
+    );
+  }
+
+  function shareReportAsPlainText(model, scope) {
+    var text = buildPlainTextReport(model);
     var title = scope === "nc_notes"
-      ? "CONF ARMADURA — NC + notas"
+      ? "CONF ARMADURA — divirgência + notas"
       : "Relatório CONF ARMADURA";
     if (navigator.share) {
       navigator.share({ title: title, text: text }).then(function () {
-        setHint(scope === "nc_notes" ? "NC + notas enviados." : "Relatório completo enviado.");
+        setHint(scope === "nc_notes" ? "Texto (divirgência + notas) enviado." : "Texto completo enviado.");
         setTimeout(function () { setHint(""); }, 1800);
       }).catch(function (err) {
         if (err && err.name === "AbortError") return;
@@ -3888,6 +3907,7 @@
   function exportPdf() {
     var model = ensureReportModel();
     if (!model) return;
+    // Always a real .pdf blob; on Android → write + share/save sheet.
     var text = buildPlainTextReport(model);
     downloadOrShareBlob(
       reportFileStem(model) + ".pdf",
@@ -4176,10 +4196,16 @@
     if (els.btnShare) els.btnShare.addEventListener("click", openShareSheet);
     if (els.btnCloseShare) els.btnCloseShare.addEventListener("click", closeShareSheet);
     if (els.btnShareAll) {
-      els.btnShareAll.addEventListener("click", function () { shareReportWithScope("all"); });
+      els.btnShareAll.addEventListener("click", function () { shareReportWithScope("all", "pdf"); });
     }
     if (els.btnShareNcNotes) {
-      els.btnShareNcNotes.addEventListener("click", function () { shareReportWithScope("nc_notes"); });
+      els.btnShareNcNotes.addEventListener("click", function () { shareReportWithScope("nc_notes", "pdf"); });
+    }
+    if (els.btnShareTextAll) {
+      els.btnShareTextAll.addEventListener("click", function () { shareReportWithScope("all", "text"); });
+    }
+    if (els.btnShareTextNcNotes) {
+      els.btnShareTextNcNotes.addEventListener("click", function () { shareReportWithScope("nc_notes", "text"); });
     }
     if (els.shareSheet) {
       els.shareSheet.addEventListener("click", function (ev) {
