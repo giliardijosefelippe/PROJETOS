@@ -535,7 +535,7 @@
         <div class="brand-text">
           <strong>CONF ARMADURA</strong>
           <span id="doc-label">Abra um PDF</span>
-          <span id="app-revision" class="rev-label" title="Versão app (0.mid.last — last 00–99)">0.1.20-20261122</span>
+          <span id="app-revision" class="rev-label" title="Versão app (0.mid.last — last 00–99)">0.1.21-20261122</span>
         </div>
       </div>
       <div class="top-actions">
@@ -1153,11 +1153,12 @@
     for (var i = 0; i < list.length; i++) paintOne(ctx, list[i]);
   }
 
-  /** Approximate on-sheet structural label (“textinho”) size from the mark box. */
+  /** Glyph size of the verified label — use shorter AABB side (handles vertical text). */
   function estimateVerifiedLabelFontPx(item) {
+    var w = Number(item && item.w) || 0;
     var h = Number(item && item.h) || 0;
-    if (h > 2) return Math.max(5, Math.min(24, h * 0.9));
-    return 9;
+    var glyph = (w > 2 && h > 2) ? Math.min(w, h) : Math.max(h, 9);
+    return Math.max(5, Math.min(24, glyph * 0.9));
   }
 
   function wrapCanvasTextLines(ctx, text, maxWidth) {
@@ -1178,9 +1179,51 @@
     return lines;
   }
 
+  function snapCardinalAngle(rad) {
+    var a = Number(rad) || 0;
+    while (a <= -Math.PI) a += Math.PI * 2;
+    while (a > Math.PI) a -= Math.PI * 2;
+    var step = Math.PI / 2;
+    var snapped = Math.round(a / step) * step;
+    if (Math.abs(a - snapped) < (14 * Math.PI / 180)) return snapped;
+    return a;
+  }
+
+  /** Prefer stored angle; else PDF text hit; else tall AABB → vertical. */
+  function resolveItemTextAngle(item) {
+    if (item && typeof item.textAngle === "number" && isFinite(item.textAngle)) {
+      return snapCardinalAngle(item.textAngle);
+    }
+    var mark = {
+      x: Number(item && item.x) || 0,
+      y: Number(item && item.y) || 0,
+      w: Math.max(0, Number(item && item.w) || 0),
+      h: Math.max(0, Number(item && item.h) || 0)
+    };
+    var hits = state.textItems || [];
+    var best = null;
+    var bestScore = -Infinity;
+    for (var i = 0; i < hits.length; i++) {
+      var it = hits[i];
+      if (!it || typeof it.angle !== "number") continue;
+      if (!rectsIntersect(mark, it)) continue;
+      var s = String(it.str || "").trim();
+      var score = (it.w || 0) * (it.h || 0);
+      if (isStructuralToken(s)) score += 500;
+      if (/^(VG|VR|VT|LG|P)[\s\-]?\d/i.test(s)) score += 200;
+      if (score > bestScore) {
+        bestScore = score;
+        best = it;
+      }
+    }
+    if (best) return snapCardinalAngle(best.angle);
+    if (mark.h > 2 && mark.w > 2 && mark.h > mark.w * 1.35) return -Math.PI / 2;
+    return 0;
+  }
+
   /**
-   * Export-only: draw NC motivo beside each red mark, ~2× the verified label font.
-   * Does not paint on the live viewport (keeps the sheet uncluttered while conferring).
+   * Export-only: draw NC motivo beside each red mark, ~2× the verified label font,
+   * rotated to match the verified label’s PDF text orientation.
    */
   function paintRiskReasonLabels(ctx, items, pageCssW, pageCssH) {
     var list = items || [];
@@ -1200,7 +1243,8 @@
       var padX = Math.max(4, Math.round(fs * 0.28));
       var padY = Math.max(3, Math.round(fs * 0.2));
       var lineH = Math.round(fs * 1.15);
-      var maxTextW = Math.max(80, Math.min(pageW * 0.42, fs * 18));
+      var maxTextW = Math.max(80, Math.min(Math.min(pageW, pageH) * 0.42, fs * 18));
+      var angle = resolveItemTextAngle(item);
 
       ctx.save();
       ctx.font = "bold " + fs + "px sans-serif";
@@ -1220,20 +1264,34 @@
       var markW = Number(item.w) || 0;
       var markH = Number(item.h) || 0;
       var gap = Math.max(4, Math.round(fs * 0.25));
-      // Prefer right of mark; flip left / below if near page edge.
-      var bx = markW > 2 ? markX + markW + gap : markX + 16;
-      var by = markH > 2 ? markY + (markH - boxH) / 2 : markY - boxH / 2;
-      if (bx + boxW > pageW - 4) bx = Math.max(4, markX - gap - boxW);
-      if (bx < 4) {
-        bx = Math.max(4, Math.min(markX, pageW - boxW - 4));
-        by = markH > 2 ? markY + markH + gap : markY + 16;
+      var cx = markW > 2 ? markX + markW / 2 : markX;
+      var cy = markH > 2 ? markY + markH / 2 : markY;
+      // In label-local space (+X = reading direction), place motivo past the glyph run.
+      var halfAlong = Math.max(markW, markH, 8) / 2;
+      var bx = halfAlong + gap;
+      var by = -boxH / 2;
+      // If that would land far off-page, flip to the other side of the label.
+      var cos = Math.cos(angle);
+      var sin = Math.sin(angle);
+      function localToPage(lx, ly) {
+        return { x: cx + lx * cos - ly * sin, y: cy + lx * sin + ly * cos };
       }
-      if (by < 4) by = 4;
-      if (by + boxH > pageH - 4) by = Math.max(4, pageH - boxH - 4);
+      var corners = [
+        localToPage(bx, by),
+        localToPage(bx + boxW, by),
+        localToPage(bx, by + boxH),
+        localToPage(bx + boxW, by + boxH)
+      ];
+      var off = corners.some(function (p) {
+        return p.x < -8 || p.y < -8 || p.x > pageW + 8 || p.y > pageH + 8;
+      });
+      if (off) bx = -halfAlong - gap - boxW;
 
+      ctx.translate(cx, cy);
+      ctx.rotate(angle);
       ctx.fillStyle = "rgba(255, 248, 246, 0.94)";
       ctx.strokeStyle = "#e00024";
-      ctx.lineWidth = Math.max(1.2, fs / 14);
+      ctx.lineWidth = Math.max(0.8, fs / 18);
       roundRect(ctx, bx, by, boxW, boxH, Math.min(4, fs * 0.2));
       ctx.fill();
       ctx.stroke();
@@ -2786,6 +2844,25 @@
     return cluster;
   }
 
+  function dominantTextAngle(items) {
+    var list = items || [];
+    var best = null;
+    var bestScore = -Infinity;
+    for (var i = 0; i < list.length; i++) {
+      var it = list[i];
+      if (!it || typeof it.angle !== "number" || !isFinite(it.angle)) continue;
+      var s = String(it.str || "").trim();
+      var score = (it.w || 0) * (it.h || 0);
+      if (isStructuralToken(s)) score += 500;
+      if (/^(VG|VR|VT|LG|P)[\s\-]?\d/i.test(s)) score += 200;
+      if (score > bestScore) {
+        bestScore = score;
+        best = it;
+      }
+    }
+    return best ? best.angle : 0;
+  }
+
   function packTextCluster(use) {
     var filtered = (use || []).filter(function (it) {
       var s = String(it.str || "").trim();
@@ -2805,6 +2882,7 @@
       name: ordered.name,
       dims: ordered.dims,
       bbox: unionTextBounds(filtered.length ? filtered : use, 2),
+      angle: dominantTextAngle(filtered.length ? filtered : use),
       items: filtered
     };
   }
@@ -2818,7 +2896,7 @@
       if (rectsIntersect(sel, it)) hits.push(it);
     }
     if (!hits.length) {
-      return { label: "", name: "", dims: "", bbox: null, items: [] };
+      return { label: "", name: "", dims: "", bbox: null, angle: 0, items: [] };
     }
     hits.sort(function (a, b) {
       if (Math.abs(a.y - b.y) > Math.min(a.h, b.h) * 0.6) return a.y - b.y;
@@ -2983,10 +3061,11 @@
         name: fromPdf.name,
         dims: fromPdf.dims,
         source: "pdf-text",
-        bbox: fromPdf.bbox || null
+        bbox: fromPdf.bbox || null,
+        angle: typeof fromPdf.angle === "number" ? fromPdf.angle : 0
       };
     }
-    return { label: "", name: "", dims: "", source: "none", bbox: null };
+    return { label: "", name: "", dims: "", source: "none", bbox: null, angle: 0 };
   }
 
   function highlightBoxFromRecognition(sel, rec) {
@@ -3541,6 +3620,7 @@
     var parts = splitLabelNameDims(label);
     var elementType = classifyLabel(label);
     var box = highlightBoxFromRecognition(sel, rec);
+    var textAngle = typeof rec.angle === "number" ? rec.angle : 0;
     if (sel.mode === "ok") {
       annotations.add({
         kind: "ok",
@@ -3550,7 +3630,8 @@
         name: parts.name,
         dims: parts.dims,
         elementType: elementType,
-        source: rec.source
+        source: rec.source,
+        textAngle: textAngle
       });
       redrawAnnotations();
       setHint((parts.name || label).slice(0, 48) + " ✓");
@@ -3568,7 +3649,8 @@
         name: parts.name,
         dims: parts.dims,
         elementType: elementType,
-        source: rec.source
+        source: rec.source,
+        textAngle: textAngle
       };
       openRiskReasonModal();
     }
@@ -3639,7 +3721,8 @@
         name: "",
         dims: "",
         elementType: "elemento",
-        source: "manual"
+        source: "manual",
+        textAngle: (sel.h > sel.w * 1.35) ? -Math.PI / 2 : 0
       };
       openRiskReasonModal();
     }
@@ -3770,7 +3853,8 @@
         dims: p.dims || "",
         elementType: p.elementType,
         reason: text,
-        source: p.source
+        source: p.source,
+        textAngle: typeof p.textAngle === "number" ? p.textAngle : 0
       });
       state.riskPending = null;
       state.modalMode = "note";
