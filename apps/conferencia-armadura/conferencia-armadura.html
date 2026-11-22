@@ -545,7 +545,7 @@
         <div class="brand-text">
           <strong>CONF ARMADURA</strong>
           <span id="doc-label">Abra um PDF</span>
-          <span id="app-revision" class="rev-label" title="Versão app (0.mid.last — last 00–99)">0.1.29-20261122</span>
+          <span id="app-revision" class="rev-label" title="Versão app (0.mid.last — last 00–99)">0.1.30-20261122</span>
         </div>
       </div>
       <div class="top-actions">
@@ -1247,9 +1247,10 @@
   }
 
   /**
-   * Export-only: NC motivo outside-above the mark, centered on the mark axis.
-   * Horizontal: local −Y (page-up). Vertical: along reading axis toward page-up
-   * (not beside/left). ~(2× label − 1pt), rotated with the verified label.
+   * Export-only: NC motivo outside-above the red mark rectangle, centered on
+   * that rectangle’s center axis (page centerline for both H and V marks).
+   * Glyphs rotate with the label; box center stays on the red rect axis.
+   * ~(2× label − 1pt).
    */
   function paintRiskReasonLabels(ctx, items, pageCssW, pageCssH) {
     var list = items || [];
@@ -1288,57 +1289,43 @@
 
       var markX = Number(item.x) || 0;
       var markY = Number(item.y) || 0;
-      var markW = Number(item.w) || 0;
-      var markH = Number(item.h) || 0;
+      var markW = Math.max(0, Number(item.w) || 0);
+      var markH = Math.max(0, Number(item.h) || 0);
       var gap = Math.max(6, Math.round(fs * 0.35));
+      // Red rectangle geometric center — vertical marks share this centerline (page X).
       var cx = markW > 2 ? markX + markW / 2 : markX;
       var cy = markH > 2 ? markY + markH / 2 : markY;
+      var markTop = markH > 2 ? markY : cy - Math.max(4, fs * 0.35);
+      var markBot = markH > 2 ? markY + markH : cy + Math.max(4, fs * 0.35);
 
       var cosA = Math.cos(angle);
       var sinA = Math.sin(angle);
-      // Page AABB → half-extents in label-local axes (origin = mark center).
-      var halfAlong = 0.5 * (Math.abs(markW * cosA) + Math.abs(markH * sinA));
-      var halfPerp = 0.5 * (Math.abs(markW * sinA) + Math.abs(markH * cosA));
-      halfAlong = Math.max(halfAlong, 4);
-      halfPerp = Math.max(halfPerp, 4);
+      // Rotated text-box half-extents in page space.
+      var halfDown = 0.5 * (Math.abs(boxW * sinA) + Math.abs(boxH * cosA));
+      var halfSide = 0.5 * (Math.abs(boxW * cosA) + Math.abs(boxH * sinA));
 
-      function localToPage(lx, ly) {
-        return { x: cx + lx * cosA - ly * sinA, y: cy + lx * sinA + ly * cosA };
+      // Outside-above the red AABB (page-up), locked to the red rect center axis.
+      // Do not shift sideways — that made vertical motivos look “beside” the mark.
+      var textCx = cx;
+      var textCy = markTop - gap - halfDown;
+      if (textCy - halfDown < 4) {
+        textCy = markBot + gap + halfDown;
       }
-      function boxOffPage(bx0, by0) {
-        var corners = [
-          localToPage(bx0, by0),
-          localToPage(bx0 + boxW, by0),
-          localToPage(bx0, by0 + boxH),
-          localToPage(bx0 + boxW, by0 + boxH)
-        ];
-        return corners.some(function (p) {
-          return p.x < -8 || p.y < -8 || p.x > pageW + 8 || p.y > pageH + 8;
-        });
+      // Keep fully clear of the red rectangle in page Y.
+      if (textCy + halfDown > markTop - gap && textCy - halfDown < markBot + gap) {
+        if (markTop - gap - halfDown >= 4) textCy = markTop - gap - halfDown;
+        else textCy = markBot + gap + halfDown;
       }
+      // Soft page clamp on X without leaving the center axis when possible.
+      if (textCx - halfSide < 2) textCx = Math.min(cx, 2 + halfSide);
+      if (textCx + halfSide > pageW - 2) textCx = Math.max(cx, pageW - 2 - halfSide);
+      // Prefer staying on the red rect centerline whenever the box fits.
+      if (cx - halfSide >= 2 && cx + halfSide <= pageW - 2) textCx = cx;
 
-      // Page-up expressed in local coords: R^T * (0,-1) = (-sin, -cos).
-      var upLx = -sinA;
-      var upLy = -cosA;
-      var bx;
-      var by;
-      if (Math.abs(upLy) >= Math.abs(upLx)) {
-        // Horizontal-ish: outside on local Y (page-up), centered on mark axis (local X).
-        bx = -boxW / 2;
-        by = upLy < 0 ? (-halfPerp - gap - boxH) : (halfPerp + gap);
-        if (boxOffPage(bx, by)) by = upLy < 0 ? (halfPerp + gap) : (-halfPerp - gap - boxH);
-      } else {
-        // Vertical-ish: outside along reading axis toward page-up, centered on mark axis (local Y=0).
-        // Avoids sitting to the left/right of the mark.
-        bx = upLx < 0 ? (-halfAlong - gap - boxW) : (halfAlong + gap);
-        by = -boxH / 2;
-        if (boxOffPage(bx, by)) {
-          bx = upLx < 0 ? (halfAlong + gap) : (-halfAlong - gap - boxW);
-        }
-      }
-
-      ctx.translate(cx, cy);
+      ctx.translate(textCx, textCy);
       ctx.rotate(angle);
+      var bx = -boxW / 2;
+      var by = -boxH / 2;
       ctx.fillStyle = "rgba(255, 248, 246, 0.94)";
       ctx.strokeStyle = "#e00024";
       ctx.lineWidth = Math.max(0.8, fs / 18);
@@ -1347,7 +1334,7 @@
       ctx.stroke();
       ctx.fillStyle = "#8a0014";
       for (var t = 0; t < lines.length; t++) {
-        ctx.fillText(lines[t], bx + boxW / 2, by + padY + t * lineH + lineH / 2);
+        ctx.fillText(lines[t], 0, by + padY + t * lineH + lineH / 2);
       }
       ctx.restore();
     }
