@@ -511,7 +511,7 @@
         <div class="brand-text">
           <strong>CONF ARMADURA</strong>
           <span id="doc-label">Abra um PDF</span>
-          <span id="app-revision" class="rev-label" title="Versão app (0.mid.last — last 00–99)">0.1.12-20261122</span>
+          <span id="app-revision" class="rev-label" title="Versão app (0.mid.last — last 00–99)">0.1.13-20261122</span>
         </div>
       </div>
       <div class="top-actions">
@@ -1271,22 +1271,55 @@
     return "outro";
   }
 
+  /** True for section/dims tokens like 25x70, h=15 — not rebar schedule junk. */
+  function isDimLikeToken(str) {
+    var t = String(str || "").trim();
+    if (!t) return false;
+    return /^\d{1,3}\s*[xX×]\s*\d{1,3}(?:\s*\([^)]*\))?$/i.test(t)
+      || /^h\s*=\s*[\d.,]+$/i.test(t)
+      || /^e\s*=\s*[\d.,]+$/i.test(t)
+      || /^\d{1,3}\s*[xX×]$/i.test(t)
+      || /^[xX×]\s*\d{1,3}$/i.test(t);
+  }
+
+  /**
+   * Keep only WxH / h= / e= phrases. Drops OCR leftovers (N8, c/15, bare
+   * numbers, neighboring schedule text glued into the selection).
+   */
+  function extractDimsNearCode(text) {
+    var s = String(text || "").replace(/\s+/g, " ").trim();
+    if (!s) return "";
+    var dims = [];
+    var dimRe = /\b(\d{1,3})\s*[xX×]\s*(\d{1,3})(?:\s*\(([^)]*)\))?/g;
+    var m;
+    while ((m = dimRe.exec(s)) && dims.length < 2) {
+      var bit = m[1] + "x" + m[2];
+      if (m[3]) bit += "(" + m[3] + ")";
+      dims.push(bit);
+    }
+    var hm = s.match(/\bh\s*=\s*[\d.,]+/i);
+    if (hm) dims.push(hm[0].replace(/\s+/g, ""));
+    var em = s.match(/\be\s*=\s*[\d.,]+/i);
+    if (em) dims.push(em[0].replace(/\s+/g, ""));
+    return dedupeDimTokens(dims.join(" "));
+  }
+
   /** Collapse repeated dim phrases: "14x90 14x90 14x90" → "14x90". */
   function dedupeDimTokens(text) {
     var s = String(text || "").replace(/\s+/g, " ").trim();
     if (!s) return "";
     var phrases = [];
-    var re = /\d+\s*[xX×]\s*\d+(?:\s*\([^)]*\))?|h\s*=\s*[\d.,]+|[^\s]+/gi;
+    var re = /\d+\s*[xX×]\s*\d+(?:\s*\([^)]*\))?|h\s*=\s*[\d.,]+|e\s*=\s*[\d.,]+/gi;
     var m;
     while ((m = re.exec(s))) phrases.push(String(m[0]).replace(/\s+/g, " ").trim());
-    if (!phrases.length) return s;
+    if (!phrases.length) return "";
     var seen = Object.create(null);
     var out = [];
     for (var i = 0; i < phrases.length; i++) {
       var key = phrases[i].toLowerCase().replace(/\s+/g, "");
       if (seen[key]) continue;
       seen[key] = true;
-      out.push(phrases[i]);
+      out.push(phrases[i].replace(/\s*[xX×]\s*/, "x").replace(/\s+/g, ""));
     }
     return out.join(" ");
   }
@@ -1317,7 +1350,8 @@
         var num2 = (code.match(/\d+$/) || [""])[0];
         rest = (num2 + rest.replace(/^[xX×]/, "x") + "").trim();
       }
-      rest = dedupeDimTokens(rest);
+      // Strip neighboring OCR/rebar schedule — keep only real section dims.
+      rest = extractDimsNearCode(rest);
       return {
         name: code,
         dims: rest,
@@ -1327,8 +1361,13 @@
 
     // No structural code found — keep raw, but never invent a "name" from pure dims.
     if (DIM_ONLY_RE.test(s)) {
-      var onlyDims = dedupeDimTokens(s);
+      var onlyDims = extractDimsNearCode(s) || dedupeDimTokens(s);
       return { name: "", dims: onlyDims, display: onlyDims };
+    }
+    // Avoid dumping long OCR noise as the "name".
+    if (s.length > 40 || /\b(?:c\/\d|n\d+\b|[øØф])/i.test(s)) {
+      var dimsOnly = extractDimsNearCode(s);
+      return { name: "", dims: dimsOnly, display: dimsOnly || "—" };
     }
     return { name: s, dims: "", display: s };
   }
@@ -1392,41 +1431,43 @@
       docName: docName || "PDF sem nome",
       generatedAt: new Date().toISOString(),
       counts: {
-        ok: summary.ok.length,
+        ok: summary.ok.length
+          + summary.notes.filter(function (n) { return n.mode === "ok"; }).length,
         risk: summary.risk.length
-          + summary.notes.filter(function (n) { return n.mode === "risk"; }).length
-          + summary.strokes.filter(function (s) { return s.mode === "risk"; }).length,
+          + summary.notes.filter(function (n) { return n.mode === "risk"; }).length,
         notes: textNotes.length,
         strokes: summary.strokes.length,
-        total: summary.total
+        // Strokes/arrows stay on the sheet only — not report line items.
+        total: summary.ok.length + summary.risk.length + textNotes.length
+          + summary.notes.filter(function (n) { return n.mode === "ok" || n.mode === "risk"; }).length
       },
-      // Notas de texto (modo text / note tool) ficam só em "Notas de texto", não em OK/NC.
+      // OK/NC = selection marks (+ notas tipadas). Traços/setas não entram no relatório.
       risks: items.filter(function (i) {
-        return i.kind === "risk"
-          || (i.kind === "note" && i.mode === "risk")
-          || (i.kind === "stroke" && i.mode === "risk");
+        return i.kind === "risk" || (i.kind === "note" && i.mode === "risk");
       }),
       oks: items.filter(function (i) {
-        return i.kind === "ok"
-          || (i.kind === "note" && i.mode === "ok")
-          || (i.kind === "stroke" && i.mode === "ok");
+        return i.kind === "ok" || (i.kind === "note" && i.mode === "ok");
       }),
       notes: textNotes
     };
   }
 
   function reportNameDims(item) {
-    // Use one canonical string — joining name+dims+label+text tripled dims (14x90×3).
+    // Prefer stored name+dims, but always re-clean so old OCR leftovers vanish in Relatório.
     var label = String(item.label || item.text || "").trim();
     var name = String(item.name || "").trim();
     var dims = String(item.dims || "").trim();
     var raw = label;
     if (!raw) raw = [name, dims].filter(Boolean).join(" ");
-    else if (name && !extractStructuralCode(label) && extractStructuralCode(name)) {
-      raw = name + (dims ? " " + dims : "") + " " + label;
+    else if (name && extractStructuralCode(name)) {
+      // Re-parse from the noisiest available string so leftover schedule text is stripped.
+      raw = label.indexOf(name) >= 0 ? label : (name + " " + dims + " " + label);
     }
     var parts = splitLabelNameDims(raw);
-    parts.dims = dedupeDimTokens(parts.dims);
+    if (!parts.name && name && extractStructuralCode(name)) {
+      parts = splitLabelNameDims(name + (dims ? " " + dims : ""));
+    }
+    parts.dims = extractDimsNearCode(parts.dims || dims);
     parts.display = parts.name
       ? (parts.name + (parts.dims ? " · " + parts.dims : ""))
       : (parts.dims || parts.display || "");
@@ -2237,21 +2278,22 @@
   }
 
   function clusterAroundSeed(seed, pool, pad) {
-    var box = unionTextBounds([seed], pad);
+    // Only absorb section/dims tokens next to the structural code — never the
+    // neighboring rebar schedule (N8, c/15, bare numbers, etc.).
     var cluster = [seed];
+    var growPad = Math.min(pad == null ? 18 : pad, 22);
+    var box = unionTextBounds([seed], growPad);
     for (var i = 0; i < pool.length; i++) {
       var it = pool[i];
       if (it === seed) continue;
-      if (rectsIntersect(box, it)) {
-        cluster.push(it);
-      }
-    }
-    // Second pass: grow with dims near the expanded seed cluster
-    box = unionTextBounds(cluster, Math.max(8, pad * 0.45));
-    for (var j = 0; j < pool.length; j++) {
-      var extra = pool[j];
-      if (cluster.indexOf(extra) >= 0) continue;
-      if (rectsIntersect(box, extra)) cluster.push(extra);
+      var s = String(it.str || "").trim();
+      if (!isDimLikeToken(s) && !/^\d{1,3}\s*[xX×]\s*\d{1,3}/.test(s)) continue;
+      var sameLine = Math.abs((it.y + it.h / 2) - (seed.y + seed.h / 2))
+        <= Math.max(seed.h, it.h, 10) * 1.1;
+      var nearX = Math.abs(it.x - (seed.x + seed.w)) < 90
+        || Math.abs((it.x + it.w) - seed.x) < 90
+        || rectsIntersect(box, it);
+      if (sameLine && nearX) cluster.push(it);
     }
     cluster.sort(function (a, b) {
       if (Math.abs(a.y - b.y) > Math.min(a.h, b.h) * 0.6) return a.y - b.y;
@@ -2261,19 +2303,25 @@
   }
 
   function packTextCluster(use) {
+    var filtered = (use || []).filter(function (it) {
+      var s = String(it.str || "").trim();
+      if (!s) return false;
+      return isStructuralToken(s) || isDimLikeToken(s) || /^\d{1,3}\s*[xX×]\s*\d{1,3}/.test(s);
+    });
+    if (!filtered.length) filtered = (use || []).slice(0, 1);
     var parts = [];
-    for (var j = 0; j < use.length; j++) {
-      var s = String(use[j].str).trim();
+    for (var j = 0; j < filtered.length; j++) {
+      var s = String(filtered[j].str).trim();
       if (s) parts.push(s);
     }
     var joined = parts.join(" ").replace(/\s+/g, " ").trim();
     var ordered = splitLabelNameDims(joined);
     return {
-      label: ordered.display || joined,
+      label: ordered.display || (ordered.name ? ordered.name : ""),
       name: ordered.name,
       dims: ordered.dims,
-      bbox: unionTextBounds(use, 2),
-      items: use
+      bbox: unionTextBounds(filtered.length ? filtered : use, 2),
+      items: filtered
     };
   }
 
@@ -2314,10 +2362,10 @@
           best = st;
         }
       }
-      return packTextCluster(clusterAroundSeed(best, hits, 30));
+      return packTextCluster(clusterAroundSeed(best, hits, 18));
     }
 
-    // No structural token: take nearest hit + nearby neighbors
+    // No structural token: take nearest hit + nearby dim neighbors only
     var nearest = hits[0];
     var nearestDist = Infinity;
     for (var h = 0; h < hits.length; h++) {
@@ -2328,7 +2376,7 @@
         nearest = hit;
       }
     }
-    return packTextCluster(clusterAroundSeed(nearest, hits, 18));
+    return packTextCluster(clusterAroundSeed(nearest, hits, 14));
   }
 
   function snapSelectToText(sel) {
@@ -2401,7 +2449,8 @@
       var result = await Tesseract.recognize(crop, "eng", {
         logger: function () {}
       });
-      var label = cleanOcrText(result && result.data && result.data.text);
+      var label = splitLabelNameDims(cleanOcrText(result && result.data && result.data.text)).display
+        || cleanOcrText(result && result.data && result.data.text);
       var bbox = null;
       var words = (result && result.data && result.data.words) || [];
       var useful = words.filter(function (w) {
