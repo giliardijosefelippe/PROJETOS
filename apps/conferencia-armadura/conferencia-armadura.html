@@ -511,7 +511,7 @@
         <div class="brand-text">
           <strong>CONF ARMADURA</strong>
           <span id="doc-label">Abra um PDF</span>
-          <span id="app-revision" class="rev-label" title="Versão app (0.mid.last — last 00–99)">0.1.16-20261122</span>
+          <span id="app-revision" class="rev-label" title="Versão app (0.mid.last — last 00–99)">0.1.17-20261122</span>
         </div>
       </div>
       <div class="top-actions">
@@ -540,8 +540,10 @@
         <p class="prumo-hint">Conferência agrupada por <strong>Viga / Pilar / Laje</strong> (letra inicial do rótulo).</p>
         <div id="report-body" class="report-scroll"></div>
         <div class="prumo-footer report-footer">
-          <button type="button" id="btn-share" class="primary">Enviar PDF</button>
-          <button type="button" id="btn-export-pdf" class="secondary">Exportar PDF</button>
+          <button type="button" id="btn-share-marked" class="primary">Enviar prancha marcada</button>
+          <button type="button" id="btn-export-marked" class="secondary">Exportar PDF marcado</button>
+          <button type="button" id="btn-share" class="secondary">Enviar relatório PDF</button>
+          <button type="button" id="btn-export-pdf" class="secondary">Exportar relatório PDF</button>
           <button type="button" id="btn-export-word" class="secondary">Exportar Word</button>
           <button type="button" id="btn-export-text" class="secondary">Copiar texto</button>
         </div>
@@ -551,13 +553,14 @@
     <div id="share-sheet" class="modal prumo-modal" hidden>
       <div class="modal-card prumo-card share-sheet-card" role="dialog" aria-labelledby="share-sheet-title">
         <div class="prumo-head">
-          <h3 id="share-sheet-title">Enviar relatório</h3>
+          <h3 id="share-sheet-title">Enviar</h3>
           <button type="button" id="btn-close-share" class="secondary">Fechar</button>
         </div>
-        <p class="prumo-hint">Gera um arquivo <strong>PDF</strong> e abre o compartilhar do aparelho (WhatsApp, Drive, Arquivos…). Texto puro continua disponível abaixo.</p>
+        <p class="prumo-hint">A <strong>prancha marcada</strong> inclui o desenho com ✓ verdes e ✕ vermelhos. O relatório PDF é só texto. Ambos abrem o compartilhar do aparelho.</p>
         <div class="share-choice">
-          <button type="button" id="btn-share-all" class="primary">Enviar PDF — tudo</button>
-          <button type="button" id="btn-share-nc-notes" class="primary">Enviar PDF — divirgência + notas</button>
+          <button type="button" id="btn-share-marked-sheet" class="primary">Enviar prancha marcada</button>
+          <button type="button" id="btn-share-all" class="primary subtle">Enviar relatório PDF — tudo</button>
+          <button type="button" id="btn-share-nc-notes" class="primary subtle">Enviar relatório PDF — divirgência + notas</button>
           <button type="button" id="btn-share-text-all" class="primary subtle">Enviar texto — tudo</button>
           <button type="button" id="btn-share-text-nc-notes" class="primary subtle">Enviar texto — divirgência + notas</button>
         </div>
@@ -1117,7 +1120,13 @@
   function paintAnnotations(ctx, items, draft) {
     clearAnnoCanvasPixels(ctx);
     var all = draft ? items.concat([draft]) : items;
-    for (var i = 0; i < all.length; i++) paintOne(ctx, all[i]);
+    paintAnnotationsOnto(ctx, all);
+  }
+
+  /** Paint marks without clearing (for export compositing onto a page raster). */
+  function paintAnnotationsOnto(ctx, items) {
+    var list = items || [];
+    for (var i = 0; i < list.length; i++) paintOne(ctx, list[i]);
   }
 
   function paintOne(ctx, item) {
@@ -1937,6 +1946,229 @@
     return "CONF-ARMADURA-" + base + "-" + tag;
   }
 
+  function markedSheetFileStem() {
+    var base = String(state.docName || "prancha")
+      .replace(/\.[Pp][Dd][Ff]$/, "")
+      .replace(/[^\w\-À-ÿ]+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .slice(0, 48) || "prancha";
+    return "CONF-ARMADURA-" + base + "-marcada";
+  }
+
+  function concatU8(chunks) {
+    var total = 0;
+    for (var i = 0; i < chunks.length; i++) total += chunks[i].length;
+    var out = new Uint8Array(total);
+    var off = 0;
+    for (var j = 0; j < chunks.length; j++) {
+      out.set(chunks[j], off);
+      off += chunks[j].length;
+    }
+    return out;
+  }
+
+  function latin1ToU8(str) {
+    var s = String(str);
+    var u = new Uint8Array(s.length);
+    for (var i = 0; i < s.length; i++) u[i] = s.charCodeAt(i) & 0xff;
+    return u;
+  }
+
+  /**
+   * Build a multi-page PDF from JPEG rasters (binary-safe).
+   * pages: [{ width, height, jpeg: Uint8Array }]
+   */
+  function buildPdfFromJpegPages(pages) {
+    var list = pages || [];
+    if (!list.length) throw new Error("Nenhuma página para o PDF marcado.");
+    var objects = []; // each: Uint8Array body (without obj wrapper)
+
+    function addObj(bodyU8) {
+      objects.push(bodyU8);
+      return objects.length;
+    }
+
+    function addObjStr(body) {
+      return addObj(latin1ToU8(body));
+    }
+
+    var pageIds = [];
+    var contentIds = [];
+    var imageIds = [];
+    for (var p = 0; p < list.length; p++) {
+      var pg = list[p];
+      var w = Math.max(1, Math.floor(pg.width));
+      var h = Math.max(1, Math.floor(pg.height));
+      var jpeg = pg.jpeg;
+      var imgHeader = latin1ToU8(
+        "<< /Type /XObject /Subtype /Image /Width " + w + " /Height " + h
+        + " /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length "
+        + jpeg.length + " >>\nstream\n"
+      );
+      var imgFooter = latin1ToU8("\nendstream");
+      var imgId = addObj(concatU8([imgHeader, jpeg, imgFooter]));
+      imageIds.push(imgId);
+      var content = "q\n" + w + " 0 0 " + h + " 0 0 cm\n/Im0 Do\nQ\n";
+      var contentId = addObjStr("<< /Length " + content.length + " >>\nstream\n" + content + "endstream");
+      contentIds.push(contentId);
+      // Placeholder page — Parent rewritten after pagesId known
+      pageIds.push(addObjStr(
+        "<< /Type /Page /Parent 0 0 R /MediaBox [0 0 " + w + " " + h + "] "
+        + "/Resources << /XObject << /Im0 " + imgId + " 0 R >> >> "
+        + "/Contents " + contentId + " 0 R >>"
+      ));
+    }
+
+    var pagesId = addObjStr(
+      "<< /Type /Pages /Kids ["
+      + pageIds.map(function (id) { return id + " 0 R"; }).join(" ")
+      + "] /Count " + pageIds.length + " >>"
+    );
+    for (var i = 0; i < pageIds.length; i++) {
+      var pg2 = list[i];
+      var ww = Math.max(1, Math.floor(pg2.width));
+      var hh = Math.max(1, Math.floor(pg2.height));
+      objects[pageIds[i] - 1] = latin1ToU8(
+        "<< /Type /Page /Parent " + pagesId + " 0 R /MediaBox [0 0 " + ww + " " + hh + "] "
+        + "/Resources << /XObject << /Im0 " + imageIds[i] + " 0 R >> >> "
+        + "/Contents " + contentIds[i] + " 0 R >>"
+      );
+    }
+    var catalogId = addObjStr("<< /Type /Catalog /Pages " + pagesId + " 0 R >>");
+
+    var chunks = [latin1ToU8("%PDF-1.4\n")];
+    var offsets = [0];
+    var lengthSoFar = chunks[0].length;
+    for (var o = 0; o < objects.length; o++) {
+      offsets.push(lengthSoFar);
+      var head = latin1ToU8(String(o + 1) + " 0 obj\n");
+      var tail = latin1ToU8("\nendobj\n");
+      chunks.push(head, objects[o], tail);
+      lengthSoFar += head.length + objects[o].length + tail.length;
+    }
+    var xrefPos = lengthSoFar;
+    var xref = "xref\n0 " + (objects.length + 1) + "\n";
+    xref += "0000000000 65535 f \n";
+    for (var x = 1; x <= objects.length; x++) {
+      var off = String(offsets[x]);
+      while (off.length < 10) off = "0" + off;
+      xref += off + " 00000 n \n";
+    }
+    xref += "trailer\n<< /Size " + (objects.length + 1) + " /Root " + catalogId + " 0 R >>\n";
+    xref += "startxref\n" + xrefPos + "\n%%EOF";
+    chunks.push(latin1ToU8(xref));
+    return new Blob([concatU8(chunks)], { type: "application/pdf" });
+  }
+
+  function canvasToJpegU8(canvas, quality) {
+    var q = quality == null ? 0.88 : quality;
+    return new Promise(function (resolve, reject) {
+      if (!canvas) {
+        reject(new Error("Canvas indisponível para JPEG."));
+        return;
+      }
+      function fromDataUrl() {
+        try {
+          var dataUrl = canvas.toDataURL("image/jpeg", q);
+          var m = String(dataUrl).match(/^data:image\/jpeg;base64,(.+)$/i);
+          if (!m) {
+            reject(new Error("Falha ao gerar JPEG da prancha."));
+            return;
+          }
+          resolve(base64ToBytes(m[1]));
+        } catch (err) {
+          reject(err);
+        }
+      }
+      if (typeof canvas.toBlob !== "function") {
+        fromDataUrl();
+        return;
+      }
+      try {
+        canvas.toBlob(function (blob) {
+          if (!blob) {
+            fromDataUrl();
+            return;
+          }
+          if (blob.arrayBuffer) {
+            blob.arrayBuffer().then(function (buf) {
+              resolve(new Uint8Array(buf));
+            }).catch(function () { fromDataUrl(); });
+          } else {
+            var reader = new FileReader();
+            reader.onload = function () {
+              resolve(new Uint8Array(reader.result));
+            };
+            reader.onerror = function () { fromDataUrl(); };
+            reader.readAsArrayBuffer(blob);
+          }
+        }, "image/jpeg", q);
+      } catch (e) {
+        fromDataUrl();
+      }
+    });
+  }
+
+  /**
+   * Rasterize one PDF page and composite OK/NC (and other) annotations in page CSS space.
+   */
+  async function renderMarkedPageCanvas(pdfDoc, pageNumber, annotItems) {
+    var page = await pdfDoc.getPage(pageNumber);
+    var logical = page.getViewport({ scale: 1, rotation: 0 });
+    var maxEdge = isNativeCapacitor() ? 2200 : 3200;
+    var scale = Math.min(2.2, maxEdge / Math.max(logical.width, logical.height, 1));
+    if (scale < 0.35) scale = 0.35;
+    var viewport = page.getViewport({ scale: scale, rotation: 0 });
+    var canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.floor(viewport.width));
+    canvas.height = Math.max(1, Math.floor(viewport.height));
+    var ctx = canvas.getContext("2d", { alpha: false });
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    await page.render({ canvasContext: ctx, viewport: viewport }).promise;
+    // Annotations live in logical (scale=1) CSS coordinates — match paint on screen.
+    ctx.setTransform(scale, 0, 0, scale, 0, 0);
+    paintAnnotationsOnto(ctx, annotItems || []);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    return canvas;
+  }
+
+  async function buildMarkedSheetPdfBlob() {
+    if (!state.pdf) throw new Error("Abra uma prancha antes de exportar.");
+    await ensurePdfJs();
+    var numPages = state.pdf.numPages || 1;
+    var annots = annotations.list();
+    var pages = [];
+    for (var n = 1; n <= numPages; n++) {
+      // Viewer currently stores marks for the open sheet; apply to page 1 (and only page if single).
+      var items = n === 1 ? annots : [];
+      var canvas = await renderMarkedPageCanvas(state.pdf, n, items);
+      var jpeg = await canvasToJpegU8(canvas, isNativeCapacitor() ? 0.82 : 0.88);
+      pages.push({ width: canvas.width, height: canvas.height, jpeg: jpeg });
+      // Free canvas pixels ASAP on low-memory Android.
+      canvas.width = 1;
+      canvas.height = 1;
+    }
+    return buildPdfFromJpegPages(pages);
+  }
+
+  async function exportOrShareMarkedSheet(kindLabel) {
+    if (!state.pdf) {
+      setHint("Abra uma prancha para enviar/exportar com marcações.");
+      setTimeout(function () { setHint(""); }, 2200);
+      return;
+    }
+    setHint("Gerando prancha marcada…");
+    try {
+      var blob = await buildMarkedSheetPdfBlob();
+      await downloadOrShareBlob(markedSheetFileStem() + ".pdf", blob, kindLabel || "PDF marcado");
+    } catch (err) {
+      console.warn(err);
+      setHint("Falha ao gerar PDF da prancha marcada.");
+      setTimeout(function () { setHint(""); }, 2800);
+    }
+  }
+
   /* ---- Wake lock ---- */
   var wakeEnabled = true;
   var wakeLock = null;
@@ -2000,11 +2232,14 @@
     librarySearch: document.getElementById("library-search"),
     btnCloseLibrary: document.getElementById("btn-close-library"),
     btnExportPdf: document.getElementById("btn-export-pdf"),
+    btnExportMarked: document.getElementById("btn-export-marked"),
     btnExportWord: document.getElementById("btn-export-word"),
     btnExportText: document.getElementById("btn-export-text"),
     btnShare: document.getElementById("btn-share"),
+    btnShareMarked: document.getElementById("btn-share-marked"),
     shareSheet: document.getElementById("share-sheet"),
     btnCloseShare: document.getElementById("btn-close-share"),
+    btnShareMarkedSheet: document.getElementById("btn-share-marked-sheet"),
     btnShareAll: document.getElementById("btn-share-all"),
     btnShareNcNotes: document.getElementById("btn-share-nc-notes"),
     btnShareTextAll: document.getElementById("btn-share-text-all"),
@@ -4238,10 +4473,26 @@
       });
     }
     if (els.btnExportPdf) els.btnExportPdf.addEventListener("click", exportPdf);
+    if (els.btnExportMarked) {
+      els.btnExportMarked.addEventListener("click", function () {
+        exportOrShareMarkedSheet("PDF marcado");
+      });
+    }
     if (els.btnExportWord) els.btnExportWord.addEventListener("click", exportWord);
     if (els.btnExportText) els.btnExportText.addEventListener("click", copyText);
     if (els.btnShare) els.btnShare.addEventListener("click", openShareSheet);
+    if (els.btnShareMarked) {
+      els.btnShareMarked.addEventListener("click", function () {
+        exportOrShareMarkedSheet("Prancha marcada");
+      });
+    }
     if (els.btnCloseShare) els.btnCloseShare.addEventListener("click", closeShareSheet);
+    if (els.btnShareMarkedSheet) {
+      els.btnShareMarkedSheet.addEventListener("click", function () {
+        closeShareSheet();
+        exportOrShareMarkedSheet("Prancha marcada");
+      });
+    }
     if (els.btnShareAll) {
       els.btnShareAll.addEventListener("click", function () { shareReportWithScope("all", "pdf"); });
     }
