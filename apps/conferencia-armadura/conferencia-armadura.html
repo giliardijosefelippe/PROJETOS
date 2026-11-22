@@ -334,8 +334,9 @@
     .report-scroll h4:first-child { margin-top: 4px; }
     .report-scroll .group-empty { color: var(--prumo-muted); font-size: 13px; margin: 0 0 8px; }
     .report-scroll h3 {
-      margin: 12px 0 6px; font-size: 13px; text-transform: uppercase;
-      letter-spacing: 0.06em; color: var(--prumo-muted);
+      margin: 14px 0 8px; font-size: 12px; text-transform: uppercase;
+      letter-spacing: 0.04em; color: var(--prumo-muted); line-height: 1.35;
+      word-break: break-word;
     }
     .report-scroll ul { margin: 0; padding-left: 18px; color: var(--prumo-text); }
     .report-scroll li { margin-bottom: 6px; }
@@ -510,7 +511,7 @@
         <div class="brand-text">
           <strong>CONF ARMADURA</strong>
           <span id="doc-label">Abra um PDF</span>
-          <span id="app-revision" class="rev-label" title="Versão app (0.mid.last — last 00–99)">0.1.10-20261122</span>
+          <span id="app-revision" class="rev-label" title="Versão app (0.mid.last — last 00–99)">0.1.11-20261122</span>
         </div>
       </div>
       <div class="top-actions">
@@ -556,7 +557,7 @@
         <p class="prumo-hint">Escolha o que enviar pelo compartilhamento do dispositivo.</p>
         <div class="share-choice">
           <button type="button" id="btn-share-all" class="primary">Mandar tudo</button>
-          <button type="button" id="btn-share-nc-notes" class="primary subtle">Somente não conformes + notas de texto</button>
+          <button type="button" id="btn-share-nc-notes" class="primary subtle">Somente DIVIRGÊNCIA COM O PROJETO + notas de texto</button>
         </div>
       </div>
     </div>
@@ -1356,6 +1357,18 @@
       .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
 
+  // Section titles — spelling kept as requested (DIVIRGÊNCIA).
+  var REPORT_SECTION_RISK = "DIVIRGÊNCIA COM O PROJETO";
+  var REPORT_SECTION_OK = "EM CONFORMIDADE COM O PROJETO";
+  var REPORT_SECTION_NOTES = "NOTAS DE TEXTO";
+
+  function isReportSectionHeader(line) {
+    var t = String(line || "").trim();
+    return t === REPORT_SECTION_RISK
+      || t === REPORT_SECTION_OK
+      || t === REPORT_SECTION_NOTES;
+  }
+
   function isTextNoteItem(item) {
     if (!item || item.kind !== "note") return false;
     var mode = item.mode == null ? "text" : String(item.mode);
@@ -1513,7 +1526,7 @@
     return ''
       + '<div class="summary">'
       + '<div class="stat ok"><strong>' + model.counts.ok + '</strong><span>Conferidos</span></div>'
-      + '<div class="stat risk"><strong>' + model.counts.risk + '</strong><span>Não conformes</span></div>'
+      + '<div class="stat risk"><strong>' + model.counts.risk + '</strong><span>Divirgência</span></div>'
       + '<div class="stat"><strong>' + model.counts.total + '</strong><span>Marcações</span></div>'
       + '</div>'
       + '<p><strong>Documento:</strong> ' + escapeHtml(model.docName) + '<br/>'
@@ -1525,11 +1538,11 @@
       + ' · P ' + riskGroups.pilar.length
       + ' · L ' + riskGroups.laje.length
       + '</p>'
-      + '<h3>Não conformes</h3>'
-      + (model.risks.length ? riskBlock.html : '<p>Nenhum não conforme marcado.</p>')
-      + '<h3>Já conferidos (OK)</h3>'
-      + (model.oks.length ? okBlock.html : '<p>Nenhum elemento conferido.</p>')
-      + '<h3>Notas de texto</h3>'
+      + '<h3>' + escapeHtml(REPORT_SECTION_RISK) + '</h3>'
+      + (model.risks.length ? riskBlock.html : '<p>Nenhuma divirgência marcada.</p>')
+      + '<h3>' + escapeHtml(REPORT_SECTION_OK) + '</h3>'
+      + (model.oks.length ? okBlock.html : '<p>Nenhum elemento em conformidade.</p>')
+      + '<h3>' + escapeHtml(REPORT_SECTION_NOTES) + '</h3>'
       + (noteLis ? '<ul>' + noteLis + '</ul>' : '<p>Sem notas.</p>');
   }
 
@@ -1562,7 +1575,7 @@
     }
     var textNotes = (model.notes || []).filter(isTextNoteItem);
     return {
-      title: model.title + " (não conformes + notas)",
+      title: model.title + " (" + REPORT_SECTION_RISK + " + notas)",
       docName: model.docName,
       generatedAt: model.generatedAt,
       shareScope: "nc_notes",
@@ -1587,21 +1600,21 @@
       "Gerado em: " + fmtTime(model.generatedAt),
       "",
       scoped
-        ? ("Resumo: " + model.counts.risk + " não conformes · " + model.counts.notes + " notas de texto")
-        : ("Resumo: " + model.counts.ok + " conferidos · " + model.counts.risk + " não conformes · " + model.counts.total + " marcações")
+        ? ("Resumo: " + model.counts.risk + " divirgência · " + model.counts.notes + " notas de texto")
+        : ("Resumo: " + model.counts.ok + " em conformidade · " + model.counts.risk + " divirgência · " + model.counts.total + " marcações")
     ];
-    appendGroupedPlain(lines, "NÃO CONFORMES", model.risks, function (r, i) {
+    appendGroupedPlain(lines, REPORT_SECTION_RISK, model.risks, function (r, i) {
       var line = (i + 1) + ". " + reportHeadText(r) + " — Não conforme";
       if (r.reason) line += " · motivo: " + r.reason;
       line += " (" + fmtTime(r.createdAt) + ")";
       return line;
     });
     if (!scoped) {
-      appendGroupedPlain(lines, "JÁ CONFERIDOS (OK)", model.oks, function (r, i) {
+      appendGroupedPlain(lines, REPORT_SECTION_OK, model.oks, function (r, i) {
         return (i + 1) + ". " + reportHeadText(r) + " — conferido";
       });
     }
-    lines.push("", "NOTAS DE TEXTO");
+    lines.push("", REPORT_SECTION_NOTES);
     if (!model.notes.length) lines.push("- Nenhuma");
     model.notes.forEach(function (r) {
       lines.push("- " + (r.text || "(vazia)") + " [" + labelFor(r) + "]");
@@ -1613,12 +1626,22 @@
     var bodyHtml = renderReportHtmlFragment(model)
       .replace(/<div class="summary">[\s\S]*?<\/div>\s*<p><strong>Documento:[\s\S]*?<\/p>/, "");
     if (model.shareScope === "nc_notes") {
-      bodyHtml = bodyHtml.replace(/<h3>Já conferidos \(OK\)<\/h3>[\s\S]*?(?=<h3>Notas de texto<\/h3>)/, "");
+      var okHeading = "<h3>" + REPORT_SECTION_OK + "</h3>";
+      var notesHeading = "<h3>" + REPORT_SECTION_NOTES + "</h3>";
+      var okRe = new RegExp(
+        okHeading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+        + "[\\s\\S]*?(?="
+        + notesHeading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+        + ")"
+      );
+      bodyHtml = bodyHtml.replace(okRe, "");
     }
     return "<!DOCTYPE html><html lang=\"pt-BR\"><head><meta charset=\"UTF-8\" /><title>"
       + escapeHtml(model.title) + "</title>"
       + "<style>body{font-family:system-ui,sans-serif;margin:24px;color:#122}h1{font-size:1.4rem}"
-      + "h3{margin-top:1.2em}h4{margin:0.8em 0 0.3em;color:#355}"
+      + "h3{margin:1.2em 0 0.4em;padding:0.35em 0;border-top:2px solid #c62828;border-bottom:2px solid #c62828;"
+      + "font-size:0.95rem;letter-spacing:0.03em;text-transform:uppercase;color:#122}"
+      + "h4{margin:0.8em 0 0.3em;color:#355}"
       + ".cards{display:flex;gap:12px;flex-wrap:wrap}.card{border:1px solid #ccc;border-radius:8px;padding:12px 16px}"
       + ".ok{color:#147a3d}.risk{color:#9a6b00}</style></head><body>"
       + "<h1>" + escapeHtml(model.title) + "</h1>"
@@ -1627,8 +1650,8 @@
       + '<div class="cards">'
       + (model.shareScope === "nc_notes"
         ? ""
-        : '<div class="card ok"><strong>' + model.counts.ok + '</strong><br/>Trechos OK</div>')
-      + '<div class="card risk"><strong>' + model.counts.risk + '</strong><br/>Não conformes</div>'
+        : '<div class="card ok"><strong>' + model.counts.ok + '</strong><br/>Em conformidade</div>')
+      + '<div class="card risk"><strong>' + model.counts.risk + '</strong><br/>Divirgência</div>'
       + '<div class="card"><strong>' + model.counts.notes + '</strong><br/>Notas</div>'
       + "</div>"
       + bodyHtml
@@ -1696,8 +1719,24 @@
     }
 
     var fontId = addObj("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>");
+    var lineLeading = 14;
+    var textTop = 800;
     var contentIds = pageLinesList.map(function (pageLines) {
-      var parts = ["BT", "/F1 10 Tf", "14 TL", "50 800 Td"];
+      var parts = [];
+      // Red horizontal rules above+below each section header (PDF markup request).
+      pageLines.forEach(function (line, idx) {
+        if (!isReportSectionHeader(line)) return;
+        var y = textTop - idx * lineLeading;
+        var yTop = y + 10;
+        var yBot = y - 3;
+        parts.push("q");
+        parts.push("0.78 0.16 0.16 RG");
+        parts.push("1.6 w");
+        parts.push("50 " + yTop.toFixed(1) + " m 545 " + yTop.toFixed(1) + " l S");
+        parts.push("50 " + yBot.toFixed(1) + " m 545 " + yBot.toFixed(1) + " l S");
+        parts.push("Q");
+      });
+      parts.push("BT", "/F1 10 Tf", String(lineLeading) + " TL", "50 " + textTop + " Td");
       pageLines.forEach(function (line, idx) {
         if (idx === 0) parts.push("(" + pdfEscapeLatin1(line) + ") Tj");
         else parts.push("T* (" + pdfEscapeLatin1(line) + ") Tj");
