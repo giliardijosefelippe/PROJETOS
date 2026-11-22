@@ -545,7 +545,7 @@
         <div class="brand-text">
           <strong>CONF ARMADURA</strong>
           <span id="doc-label">Abra um PDF</span>
-          <span id="app-revision" class="rev-label" title="Versão app (0.mid.last — last 00–99)">0.1.30-20261122</span>
+          <span id="app-revision" class="rev-label" title="Versão app (0.mid.last — last 00–99)">0.1.31-20261122</span>
         </div>
       </div>
       <div class="top-actions">
@@ -1247,10 +1247,10 @@
   }
 
   /**
-   * Export-only: NC motivo outside-above the red mark rectangle, centered on
-   * that rectangle’s center axis (page centerline for both H and V marks).
-   * Glyphs rotate with the label; box center stays on the red rect axis.
-   * ~(2× label − 1pt).
+   * Export-only: NC motivo centered on the red mark AABB center.
+   * Anchor = mark center → rotate → draw box/text centered at origin so
+   * rotated vertical text does not drift left/beside the rect.
+   * Outside-above only for near-horizontal labels (page-up). ~(2× − 1pt).
    */
   function paintRiskReasonLabels(ctx, items, pageCssW, pageCssH) {
     var list = items || [];
@@ -1272,7 +1272,18 @@
       var padY = Math.max(3, Math.round(fs * 0.2));
       var lineH = Math.round(fs * 1.15);
       var maxTextW = Math.max(72, Math.min(Math.min(pageW, pageH) * 0.36, fs * 14));
+
+      var markX = Number(item.x) || 0;
+      var markY = Number(item.y) || 0;
+      var markW = Math.max(0, Number(item.w) || 0);
+      var markH = Math.max(0, Number(item.h) || 0);
+      // Prefer red-rect aspect for orientation — wrong textAngle made vertical
+      // motivos draw as wide horizontal strings sitting left of the thin rect.
       var angle = resolveItemTextAngle(item);
+      if (markH > 2 && markW > 2) {
+        if (markH > markW * 1.35) angle = -Math.PI / 2;
+        else if (markW > markH * 1.35) angle = 0;
+      }
 
       ctx.save();
       ctx.font = "bold " + fs + "px sans-serif";
@@ -1287,41 +1298,42 @@
       var boxW = textW + padX * 2;
       var boxH = lines.length * lineH + padY * 2;
 
-      var markX = Number(item.x) || 0;
-      var markY = Number(item.y) || 0;
-      var markW = Math.max(0, Number(item.w) || 0);
-      var markH = Math.max(0, Number(item.h) || 0);
       var gap = Math.max(6, Math.round(fs * 0.35));
-      // Red rectangle geometric center — vertical marks share this centerline (page X).
+      // Red mark AABB center — text box center must land here (after rotation).
       var cx = markW > 2 ? markX + markW / 2 : markX;
       var cy = markH > 2 ? markY + markH / 2 : markY;
-      var markTop = markH > 2 ? markY : cy - Math.max(4, fs * 0.35);
-      var markBot = markH > 2 ? markY + markH : cy + Math.max(4, fs * 0.35);
 
       var cosA = Math.cos(angle);
       var sinA = Math.sin(angle);
-      // Rotated text-box half-extents in page space.
-      var halfDown = 0.5 * (Math.abs(boxW * sinA) + Math.abs(boxH * cosA));
-      var halfSide = 0.5 * (Math.abs(boxW * cosA) + Math.abs(boxH * sinA));
+      var halfPerp = 0.5 * (Math.abs(markW * sinA) + Math.abs(markH * cosA));
+      halfPerp = Math.max(halfPerp, 4);
 
-      // Outside-above the red AABB (page-up), locked to the red rect center axis.
-      // Do not shift sideways — that made vertical motivos look “beside” the mark.
-      var textCx = cx;
-      var textCy = markTop - gap - halfDown;
-      if (textCy - halfDown < 4) {
-        textCy = markBot + gap + halfDown;
-      }
-      // Keep fully clear of the red rectangle in page Y.
-      if (textCy + halfDown > markTop - gap && textCy - halfDown < markBot + gap) {
-        if (markTop - gap - halfDown >= 4) textCy = markTop - gap - halfDown;
-        else textCy = markBot + gap + halfDown;
-      }
-      // Soft page clamp on X without leaving the center axis when possible.
-      if (textCx - halfSide < 2) textCx = Math.min(cx, 2 + halfSide);
-      if (textCx + halfSide > pageW - 2) textCx = Math.max(cx, pageW - 2 - halfSide);
-      // Prefer staying on the red rect centerline whenever the box fits.
-      if (cx - halfSide >= 2 && cx + halfSide <= pageW - 2) textCx = cx;
+      // Cardinal vertical? Keep text center on AABB center (no local−Y nudge → page-left).
+      var aAbs = Math.abs(angle);
+      while (aAbs > Math.PI) aAbs -= Math.PI * 2;
+      aAbs = Math.abs(aAbs);
+      var isVertical = Math.abs(aAbs - Math.PI / 2) < 0.4 || (markH > markW * 1.35);
 
+      // Local offset of text-box CENTER from mark center.
+      var localOffX = 0;
+      var localOffY = 0;
+      if (!isVertical) {
+        // Horizontal: outside-above in local −Y (page-up), still centered on mark axis.
+        localOffY = -(halfPerp + gap + boxH / 2);
+        var trialY = cy + localOffY; // angle≈0
+        if (trialY - boxH / 2 < 4) localOffY = halfPerp + gap + boxH / 2;
+      }
+
+      // Page position of text center = markCenter + R * localOffset.
+      var textCx = cx + localOffX * cosA - localOffY * sinA;
+      var textCy = cy + localOffX * sinA + localOffY * cosA;
+      // Hard lock vertical marks to AABB center (fixes left/beside drift).
+      if (isVertical) {
+        textCx = cx;
+        textCy = cy;
+      }
+
+      // Anchor at text center, then rotate — box drawn centered on origin.
       ctx.translate(textCx, textCy);
       ctx.rotate(angle);
       var bx = -boxW / 2;
