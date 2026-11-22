@@ -348,12 +348,18 @@
     .report-scroll .group-empty { color: var(--prumo-muted); font-size: 13px; margin: 0 0 8px; }
     .report-scroll h3 {
       margin: 0 0 10px; font-size: 12px; text-transform: uppercase;
-      letter-spacing: 0.04em; color: var(--prumo-muted); line-height: 1.35;
+      letter-spacing: 0.04em; color: var(--prumo-text); font-weight: 700;
+      line-height: 1.35;
       word-break: break-word;
       padding-bottom: 5px;
       border: 0;
       border-bottom: 0.5px solid #c62828;
       background: none; box-shadow: none;
+    }
+    /* Match .report-vpl margin-top after section title (space under red line). */
+    .report-scroll .report-section.report-notes > ul,
+    .report-scroll .report-section.report-notes > p {
+      margin-top: 10px;
     }
     .report-scroll ul { margin: 0; padding-left: 18px; color: var(--prumo-text); }
     .report-scroll li { margin-bottom: 6px; }
@@ -528,7 +534,7 @@
         <div class="brand-text">
           <strong>CONF ARMADURA</strong>
           <span id="doc-label">Abra um PDF</span>
-          <span id="app-revision" class="rev-label" title="Versão app (0.mid.last — last 00–99)">0.1.23-20261122</span>
+          <span id="app-revision" class="rev-label" title="Versão app (0.mid.last — last 00–99)">0.1.24-20261122</span>
         </div>
       </div>
       <div class="top-actions">
@@ -1872,7 +1878,7 @@
       + '<h3>' + escapeHtml(REPORT_SECTION_OK) + '</h3>'
       + (model.oks.length ? okBlock.html : '<p>Nenhum elemento em conformidade.</p>')
       + '</section>'
-      + '<section class="report-section">'
+      + '<section class="report-section report-notes">'
       + '<h3>' + escapeHtml(REPORT_SECTION_NOTES) + '</h3>'
       + (noteLis ? '<ul>' + noteLis + '</ul>' : '<p>Sem notas.</p>')
       + '</section>';
@@ -1944,6 +1950,8 @@
       });
     }
     lines.push("", REPORT_SECTION_NOTES);
+    // Blank line after section title — same gap as before "Vigas (V)" under Divergência.
+    lines.push("");
     if (!model.notes.length) lines.push("- Nenhuma");
     model.notes.forEach(function (r) {
       lines.push("- " + (r.text || "(vazia)") + " [" + labelFor(r) + "]");
@@ -1966,8 +1974,9 @@
       + "<style>body{font-family:system-ui,sans-serif;margin:24px;color:#122}h1{font-size:1.4rem}"
       + ".report-section{margin:1.1em 0 0.5em;padding-top:0.2em}"
       + ".report-vpl{margin:0.45em 0}.report-vpl+.report-vpl{margin-top:0.55em;padding-top:0.15em}"
+      + ".report-notes>ul,.report-notes>p{margin-top:0.55em}"
       + "h3{margin:0 0 0.45em;padding-bottom:0.35em;border-bottom:0.5pt solid #c62828;"
-      + "font-size:0.95rem;letter-spacing:0.03em;text-transform:uppercase;color:#122;background:none}"
+      + "font-size:0.95rem;font-weight:700;letter-spacing:0.03em;text-transform:uppercase;color:#122;background:none}"
       + "h4{margin:0 0 0.3em;color:#111;font-weight:700;border:0;background:none}"
       + ".cards{display:flex;gap:12px;flex-wrap:wrap}.card{border:1px solid #ccc;border-radius:8px;padding:12px 16px}"
       + ".ok{color:#147a3d}.risk{color:#9a6b00}</style></head><body>"
@@ -2067,7 +2076,7 @@
       });
       parts.push("BT", "/F1 10 Tf", String(lineLeading) + " TL", "50 " + textTop + " Td");
       pageLines.forEach(function (line, idx) {
-        var bold = isReportVplHeader(line);
+        var bold = isReportSectionHeader(line) || isReportVplHeader(line);
         if (bold) parts.push("/F2 10 Tf");
         if (idx === 0) parts.push("(" + pdfEscapeLatin1(line) + ") Tj");
         else parts.push("T* (" + pdfEscapeLatin1(line) + ") Tj");
