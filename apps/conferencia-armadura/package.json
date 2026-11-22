@@ -1,6 +1,6 @@
 {
   "name": "conf-armadura",
-  "version": "0.1.08-20261117",
+  "version": "0.1.09-20261122",
   "private": true,
   "description": "CONF ARMADURA — HTML/mobile conferência de armadura in loco (PDF, relatório OK/risco, wake lock).",
   "type": "module",

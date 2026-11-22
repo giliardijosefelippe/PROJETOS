@@ -489,7 +489,7 @@
         <div class="brand-text">
           <strong>CONF ARMADURA</strong>
           <span id="doc-label">Abra um PDF</span>
-          <span id="app-revision" class="rev-label" title="Versão app (0.mid.last — last 00–99)">0.1.08-20261117</span>
+          <span id="app-revision" class="rev-label" title="Versão app (0.mid.last — last 00–99)">0.1.09-20261122</span>
         </div>
       </div>
       <div class="top-actions">
@@ -1159,14 +1159,16 @@
       ctx.lineTo(x2 - head * Math.cos(angle + 0.4), y2 - head * Math.sin(angle + 0.4));
       ctx.closePath(); ctx.fill();
     } else if (kind === "note") {
+      // T / Notas de texto (mode "text") stay report-only — no blue floating box on the PDF.
+      var noteMode = item.mode == null ? "text" : String(item.mode);
+      if (noteMode !== "ok" && noteMode !== "risk") {
+        ctx.restore();
+        return;
+      }
       x = item.x; y = item.y;
       var text = String(item.text || "");
-      var bg = item.mode === "ok" ? "rgba(31,157,85,0.92)"
-        : item.mode === "risk" ? "rgba(232,163,23,0.95)"
-        : "rgba(42,120,150,0.94)";
-      var fg = item.mode === "ok" ? "#d8ffe8"
-        : item.mode === "risk" ? "#2a1f05"
-        : "#e8f7fc";
+      var bg = noteMode === "ok" ? "rgba(31,157,85,0.92)" : "rgba(232,163,23,0.95)";
+      var fg = noteMode === "ok" ? "#d8ffe8" : "#2a1f05";
       ctx.font = "bold 12px sans-serif";
       var pad = 6;
       var w = Math.max(40, ctx.measureText(text || " ").width + pad * 2);
@@ -3159,8 +3161,8 @@
     closeNoteModal();
     redrawAnnotations();
     if (noteMode === "text") {
-      setHint("Nota salva no relatório (Notas de texto).");
-      setTimeout(function () { setHint(""); }, 1800);
+      setHint("Nota salva no relatório (Notas de texto) — sem caixa no desenho.");
+      setTimeout(function () { setHint(""); }, 2200);
     }
   }
 
