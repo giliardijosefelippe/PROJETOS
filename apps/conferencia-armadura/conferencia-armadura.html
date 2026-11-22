@@ -511,7 +511,7 @@
         <div class="brand-text">
           <strong>CONF ARMADURA</strong>
           <span id="doc-label">Abra um PDF</span>
-          <span id="app-revision" class="rev-label" title="Versão app (0.mid.last — last 00–99)">0.1.11-20261122</span>
+          <span id="app-revision" class="rev-label" title="Versão app (0.mid.last — last 00–99)">0.1.12-20261122</span>
         </div>
       </div>
       <div class="top-actions">
@@ -679,6 +679,14 @@
   function capFilesystem() {
     try {
       return (window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.Filesystem) || null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function capShare() {
+    try {
+      return (window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.Share) || null;
     } catch (e) {
       return null;
     }
@@ -3588,6 +3596,138 @@
     setTimeout(function () { URL.revokeObjectURL(url); }, 1500);
   }
 
+  function blobToBase64(blob) {
+    return blob.arrayBuffer().then(function (buf) {
+      return bytesToBase64(new Uint8Array(buf));
+    });
+  }
+
+  function safeExportFilename(name) {
+    return String(name || "relatorio")
+      .replace(/[^\w.\-À-ÿ]+/g, "_")
+      .replace(/_+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .slice(0, 96) || "relatorio";
+  }
+
+  /**
+   * Android WebView blocks <a download>. Write via Filesystem then Share
+   * (FileProvider) so the user can open/save the file. Desktop keeps blob download.
+   */
+  async function exportBlobNative(filename, blob, kindLabel) {
+    var fs = await ensureNativeFs();
+    if (!fs) throw new Error("Filesystem indisponível neste dispositivo.");
+    var safeName = safeExportFilename(filename);
+    var b64 = await blobToBase64(blob);
+    var cacheFolder = "relatorios";
+    var cachePath = cacheFolder + "/" + safeName;
+    try {
+      await fs.mkdir({ path: cacheFolder, directory: "CACHE", recursive: true });
+    } catch (e) {}
+    await fs.writeFile({
+      path: cachePath,
+      data: b64,
+      directory: "CACHE",
+      recursive: true
+    });
+
+    var savedHint = "";
+    for (var d = 0; d < NATIVE_DIRS.length; d++) {
+      var dir = NATIVE_DIRS[d];
+      var folder = dir.folder + "/relatorios";
+      var path = folder + "/" + safeName;
+      try {
+        try {
+          await fs.mkdir({ path: folder, directory: dir.directory, recursive: true });
+        } catch (e2) {}
+        await fs.writeFile({
+          path: path,
+          data: b64,
+          directory: dir.directory,
+          recursive: true
+        });
+        if (dir.directory === "EXTERNAL_STORAGE") {
+          savedHint = "Também em " + folder;
+        } else if (!savedHint) {
+          savedHint = "Arquivo gravado no app";
+        }
+        break;
+      } catch (err) {}
+    }
+
+    var uriRes = await fs.getUri({ path: cachePath, directory: "CACHE" });
+    var uri = uriRes && uriRes.uri;
+    if (!uri) throw new Error("URI do arquivo indisponível.");
+
+    var Share = capShare();
+    if (!Share) {
+      if (savedHint) {
+        setHint(kindLabel + " salvo. " + savedHint);
+        return;
+      }
+      throw new Error("Plugin Share indisponível.");
+    }
+
+    function isCancel(err) {
+      var msg = String((err && (err.message || err.errorMessage || err)) || "");
+      return /cancel/i.test(msg);
+    }
+
+    try {
+      await Share.share({
+        title: safeName,
+        dialogTitle: "Exportar " + kindLabel,
+        files: [uri]
+      });
+      setHint(savedHint ? (kindLabel + " exportado. " + savedHint) : (kindLabel + " exportado."));
+    } catch (err) {
+      if (isCancel(err)) {
+        setHint(savedHint
+          ? (kindLabel + " salvo. " + savedHint)
+          : (kindLabel + " pronto (compartilhar cancelado)."));
+        return;
+      }
+      try {
+        await Share.share({
+          title: safeName,
+          text: "Relatório CONF ARMADURA",
+          url: uri,
+          dialogTitle: "Exportar " + kindLabel
+        });
+        setHint(savedHint ? (kindLabel + " exportado. " + savedHint) : (kindLabel + " exportado."));
+      } catch (err2) {
+        if (isCancel(err2)) {
+          setHint(savedHint
+            ? (kindLabel + " salvo. " + savedHint)
+            : (kindLabel + " pronto (compartilhar cancelado)."));
+          return;
+        }
+        if (savedHint) {
+          setHint(kindLabel + " salvo. " + savedHint + " — abra pelos Arquivos.");
+          return;
+        }
+        throw err2;
+      }
+    }
+  }
+
+  async function downloadOrShareBlob(filename, blob, kindLabel) {
+    if (!isNativeCapacitor()) {
+      downloadBlob(filename, blob);
+      setHint(kindLabel + " exportado.");
+      setTimeout(function () { setHint(""); }, 1800);
+      return;
+    }
+    setHint("Preparando " + kindLabel + "…");
+    try {
+      await exportBlobNative(filename, blob, kindLabel);
+    } catch (err) {
+      console.warn(err);
+      setHint("Falha ao exportar " + kindLabel + " no Android.");
+    }
+    setTimeout(function () { setHint(""); }, 3200);
+  }
+
   function ensureReportModel() {
     if (!state.lastReportModel) openReport();
     return state.lastReportModel;
@@ -3662,17 +3802,21 @@
     var model = ensureReportModel();
     if (!model) return;
     var text = buildPlainTextReport(model);
-    downloadBlob(reportFileStem(model) + ".pdf", buildPdfBlobFromText(text));
-    setHint("PDF exportado.");
-    setTimeout(function () { setHint(""); }, 1800);
+    downloadOrShareBlob(
+      reportFileStem(model) + ".pdf",
+      buildPdfBlobFromText(text),
+      "PDF"
+    );
   }
 
   function exportWord() {
     var model = ensureReportModel();
     if (!model) return;
-    downloadBlob(reportFileStem(model) + ".doc", buildWordBlob(model));
-    setHint("Word exportado.");
-    setTimeout(function () { setHint(""); }, 1800);
+    downloadOrShareBlob(
+      reportFileStem(model) + ".doc",
+      buildWordBlob(model),
+      "Word"
+    );
   }
 
   function isSideMenuOpen() {
