@@ -339,6 +339,27 @@
     }
     .report-scroll ul { margin: 0; padding-left: 18px; color: var(--prumo-text); }
     .report-scroll li { margin-bottom: 6px; }
+    .report-scroll li.report-note-row {
+      list-style: none; margin-left: -18px; padding: 6px 0;
+      display: flex; align-items: flex-start; gap: 8px;
+      border-bottom: 1px solid var(--prumo-border);
+    }
+    .report-scroll li.report-note-row:last-child { border-bottom: 0; }
+    .report-scroll li.report-note-row .report-note-text {
+      flex: 1; min-width: 0; word-break: break-word;
+    }
+    .report-scroll li.report-note-row .report-note-text::before {
+      content: "– ";
+      color: var(--prumo-muted);
+    }
+    .report-scroll button.report-note-del {
+      flex-shrink: 0; min-height: 36px; padding: 0 10px; border-radius: 8px;
+      border: 1px solid #7a3030; background: rgba(80, 20, 24, 0.45);
+      color: #ffc9c9; font-weight: 700; font-size: 12px; cursor: pointer;
+    }
+    .report-scroll button.report-note-del:active {
+      background: rgba(120, 28, 34, 0.7);
+    }
     .primary, .secondary {
       min-height: 44px; border-radius: 10px; padding: 0 14px; font-size: 14px;
       border: 1px solid var(--border); font-weight: 700; cursor: pointer;
@@ -489,7 +510,7 @@
         <div class="brand-text">
           <strong>CONF ARMADURA</strong>
           <span id="doc-label">Abra um PDF</span>
-          <span id="app-revision" class="rev-label" title="Versão app (0.mid.last — last 00–99)">0.1.09-20261122</span>
+          <span id="app-revision" class="rev-label" title="Versão app (0.mid.last — last 00–99)">0.1.10-20261122</span>
         </div>
       </div>
       <div class="top-actions">
@@ -1054,8 +1075,9 @@
         return true;
       },
       getById: function (id) {
+        var sid = id == null ? "" : String(id);
         for (var i = 0; i < items.length; i++) {
-          if (items[i].id === id) return items[i];
+          if (String(items[i].id) === sid) return items[i];
         }
         return null;
       },
@@ -1334,9 +1356,16 @@
       .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
 
+  function isTextNoteItem(item) {
+    if (!item || item.kind !== "note") return false;
+    var mode = item.mode == null ? "text" : String(item.mode);
+    return mode === "text" || (mode !== "ok" && mode !== "risk");
+  }
+
   function buildReportModel(docName, annotations) {
     var summary = annotations.summarize();
     var items = annotations.list();
+    var textNotes = summary.notes.filter(isTextNoteItem);
     return {
       title: "Relatório de conferência de armadura",
       docName: docName || "PDF sem nome",
@@ -1346,7 +1375,7 @@
         risk: summary.risk.length
           + summary.notes.filter(function (n) { return n.mode === "risk"; }).length
           + summary.strokes.filter(function (s) { return s.mode === "risk"; }).length,
-        notes: summary.notes.length,
+        notes: textNotes.length,
         strokes: summary.strokes.length,
         total: summary.total
       },
@@ -1361,7 +1390,7 @@
           || (i.kind === "note" && i.mode === "ok")
           || (i.kind === "stroke" && i.mode === "ok");
       }),
-      notes: summary.notes
+      notes: textNotes
     };
   }
 
@@ -1455,7 +1484,9 @@
     return { html: html, any: any || !!(items && items.length) };
   }
 
-  function renderReportHtmlFragment(model) {
+  /** @param {{ interactive?: boolean }} [opts] interactive=true adds Excluir on text notes (Relatório UI only). */
+  function renderReportHtmlFragment(model, opts) {
+    var interactive = !!(opts && opts.interactive);
     var riskBlock = renderGroupedLisHtml(model.risks, function (r, idx) {
       var tail = " — Não conforme";
       if (r.reason) tail += " · motivo: " + escapeHtml(String(r.reason));
@@ -1466,7 +1497,16 @@
       return "<li><strong>#" + (idx + 1) + "</strong> " + reportHeadHtml(r) + " — conferido</li>";
     });
     var noteLis = model.notes.map(function (r) {
-      return "<li>" + escapeHtml(String(r.text || "(vazia)")) + " <em>(" + escapeHtml(labelFor(r)) + ")</em></li>";
+      var body = escapeHtml(String(r.text || "(vazia)"))
+        + " <em>(" + escapeHtml(labelFor(r)) + ")</em>";
+      if (!interactive || !r.id) {
+        return "<li>" + body + "</li>";
+      }
+      return '<li class="report-note-row" data-note-id="' + escapeHtml(String(r.id)) + '">'
+        + '<span class="report-note-text">' + body + "</span>"
+        + '<button type="button" class="report-note-del" data-act="del-note" data-note-id="'
+        + escapeHtml(String(r.id)) + '" title="Excluir esta nota">Excluir</button>'
+        + "</li>";
     }).join("");
     var okGroups = groupItemsByVpl(model.oks);
     var riskGroups = groupItemsByVpl(model.risks);
@@ -1512,12 +1552,6 @@
         lines.push(lineFn(item, idx));
       });
     });
-  }
-
-  function isTextNoteItem(item) {
-    if (!item || item.kind !== "note") return false;
-    var mode = item.mode == null ? "text" : String(item.mode);
-    return mode === "text" || (mode !== "ok" && mode !== "risk");
   }
 
   /** @param {"all"|"nc_notes"} scope */
@@ -2428,12 +2462,18 @@
     if (!item || !els.deleteModal) return;
     state.deleteTargetId = item.id;
     var label = item.label || item.text || item.name || (item.kind === "ok" ? "OK" : "Não conforme");
-    var kindLabel = item.kind === "ok" ? "✓ OK" : "✕ Não conforme";
+    var kindLabel = item.kind === "ok"
+      ? "✓ OK"
+      : item.kind === "note"
+        ? "nota de texto"
+        : "✕ Não conforme";
     if (els.deleteModalTitle) els.deleteModalTitle.textContent = "Excluir " + kindLabel + "?";
     if (els.deleteModalBody) {
+      var where = item.kind === "note"
+        ? " será removida do relatório e do autosave."
+        : " será removida do PDF, do relatório e do autosave.";
       els.deleteModalBody.textContent =
-        (label ? ("“" + String(label).slice(0, 80) + "”") : "Esta marcação")
-        + " será removida do PDF, do relatório e do autosave.";
+        (label ? ("“" + String(label).slice(0, 80) + "”") : "Esta marcação") + where;
     }
     els.deleteModal.hidden = false;
     els.deleteModal.removeAttribute("hidden");
@@ -2472,7 +2512,24 @@
     if (removed) {
       setHint("Marcação excluída.");
       setTimeout(function () { setHint(""); }, 1600);
+      refreshReportIfOpen();
     }
+  }
+
+  function isReportOpen() {
+    var panel = els.reportPanel || document.getElementById("report-panel");
+    return !!(panel && !panel.hidden && panel.style.display !== "none");
+  }
+
+  function refreshReportIfOpen() {
+    if (!isReportOpen()) {
+      state.lastReportModel = null;
+      return;
+    }
+    var body = els.reportBody || document.getElementById("report-body");
+    var model = buildReportModel(state.docName, annotations);
+    state.lastReportModel = model;
+    if (body) body.innerHTML = renderReportHtmlFragment(model, { interactive: true });
   }
 
   function finishToMove() {
@@ -3460,7 +3517,7 @@
       var body = els.reportBody || document.getElementById("report-body");
       var model = buildReportModel(state.docName, annotations);
       state.lastReportModel = model;
-      if (body) body.innerHTML = renderReportHtmlFragment(model);
+      if (body) body.innerHTML = renderReportHtmlFragment(model, { interactive: true });
       if (panel) {
         panel.hidden = false;
         panel.removeAttribute("hidden");
@@ -3792,6 +3849,24 @@
     if (els.reportPanel) {
       els.reportPanel.addEventListener("click", function (ev) {
         if (ev.target === els.reportPanel) closeReport();
+      });
+    }
+    if (els.reportBody) {
+      els.reportBody.addEventListener("click", function (e) {
+        var btn = e.target && e.target.closest ? e.target.closest("button[data-act=\"del-note\"]") : null;
+        if (!btn) return;
+        e.preventDefault();
+        e.stopPropagation();
+        var noteId = btn.getAttribute("data-note-id");
+        if (!noteId) return;
+        var item = annotations.getById(noteId);
+        if (!item || !isTextNoteItem(item)) {
+          setHint("Nota não encontrada.");
+          setTimeout(function () { setHint(""); }, 1600);
+          refreshReportIfOpen();
+          return;
+        }
+        openDeleteAnnotationModal(item);
       });
     }
     if (els.libraryBody) {
