@@ -535,7 +535,7 @@
         <div class="brand-text">
           <strong>CONF ARMADURA</strong>
           <span id="doc-label">Abra um PDF</span>
-          <span id="app-revision" class="rev-label" title="Versão app (0.mid.last — last 00–99)">0.1.18-20261122</span>
+          <span id="app-revision" class="rev-label" title="Versão app (0.mid.last — last 00–99)">0.1.19-20261122</span>
         </div>
       </div>
       <div class="top-actions">
@@ -1151,6 +1151,98 @@
   function paintAnnotationsOnto(ctx, items) {
     var list = items || [];
     for (var i = 0; i < list.length; i++) paintOne(ctx, list[i]);
+  }
+
+  /** Approximate on-sheet structural label (“textinho”) size from the mark box. */
+  function estimateVerifiedLabelFontPx(item) {
+    var h = Number(item && item.h) || 0;
+    if (h > 2) return Math.max(5, Math.min(24, h * 0.9));
+    return 9;
+  }
+
+  function wrapCanvasTextLines(ctx, text, maxWidth) {
+    var words = String(text || "").split(/\s+/).filter(Boolean);
+    if (!words.length) return [];
+    var lines = [];
+    var cur = words[0];
+    for (var i = 1; i < words.length; i++) {
+      var trial = cur + " " + words[i];
+      if (ctx.measureText(trial).width <= maxWidth) {
+        cur = trial;
+      } else {
+        lines.push(cur);
+        cur = words[i];
+      }
+    }
+    lines.push(cur);
+    return lines;
+  }
+
+  /**
+   * Export-only: draw NC motivo beside each red mark, ~2× the verified label font.
+   * Does not paint on the live viewport (keeps the sheet uncluttered while conferring).
+   */
+  function paintRiskReasonLabels(ctx, items, pageCssW, pageCssH) {
+    var list = items || [];
+    var pageW = Math.max(1, Number(pageCssW) || 0);
+    var pageH = Math.max(1, Number(pageCssH) || 0);
+    for (var i = 0; i < list.length; i++) {
+      var item = list[i];
+      if (!item) continue;
+      var isRiskMark = item.kind === "risk"
+        || (item.kind === "note" && String(item.mode) === "risk" && item.reason);
+      if (!isRiskMark) continue;
+      var reason = scrubReportToken(item.reason || "");
+      if (!reason) continue;
+
+      var labelFs = estimateVerifiedLabelFontPx(item);
+      var fs = Math.max(14, Math.min(48, Math.round(labelFs * 2)));
+      var padX = Math.max(4, Math.round(fs * 0.28));
+      var padY = Math.max(3, Math.round(fs * 0.2));
+      var lineH = Math.round(fs * 1.15);
+      var maxTextW = Math.max(80, Math.min(pageW * 0.42, fs * 18));
+
+      ctx.save();
+      ctx.font = "bold " + fs + "px sans-serif";
+      ctx.textBaseline = "top";
+      ctx.textAlign = "left";
+      var lines = wrapCanvasTextLines(ctx, reason, maxTextW);
+      if (!lines.length) { ctx.restore(); continue; }
+      var textW = 0;
+      for (var L = 0; L < lines.length; L++) {
+        textW = Math.max(textW, ctx.measureText(lines[L]).width);
+      }
+      var boxW = textW + padX * 2;
+      var boxH = lines.length * lineH + padY * 2;
+
+      var markX = Number(item.x) || 0;
+      var markY = Number(item.y) || 0;
+      var markW = Number(item.w) || 0;
+      var markH = Number(item.h) || 0;
+      var gap = Math.max(4, Math.round(fs * 0.25));
+      // Prefer right of mark; flip left / below if near page edge.
+      var bx = markW > 2 ? markX + markW + gap : markX + 16;
+      var by = markH > 2 ? markY + (markH - boxH) / 2 : markY - boxH / 2;
+      if (bx + boxW > pageW - 4) bx = Math.max(4, markX - gap - boxW);
+      if (bx < 4) {
+        bx = Math.max(4, Math.min(markX, pageW - boxW - 4));
+        by = markH > 2 ? markY + markH + gap : markY + 16;
+      }
+      if (by < 4) by = 4;
+      if (by + boxH > pageH - 4) by = Math.max(4, pageH - boxH - 4);
+
+      ctx.fillStyle = "rgba(255, 248, 246, 0.94)";
+      ctx.strokeStyle = "#e00024";
+      ctx.lineWidth = Math.max(1.2, fs / 14);
+      roundRect(ctx, bx, by, boxW, boxH, Math.min(4, fs * 0.2));
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = "#8a0014";
+      for (var t = 0; t < lines.length; t++) {
+        ctx.fillText(lines[t], bx + padX, by + padY + t * lineH);
+      }
+      ctx.restore();
+    }
   }
 
   function paintOne(ctx, item) {
@@ -2195,6 +2287,8 @@
     // Annotations live in logical (scale=1) CSS coordinates — match paint on screen.
     ctx.setTransform(scale, 0, 0, scale, 0, 0);
     paintAnnotationsOnto(ctx, annotItems || []);
+    // NC motivo beside red marks (~2× verified label font) — export only.
+    paintRiskReasonLabels(ctx, annotItems || [], logical.width, logical.height);
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     return canvas;
   }
