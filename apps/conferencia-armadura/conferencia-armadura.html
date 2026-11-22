@@ -534,7 +534,7 @@
         <div class="brand-text">
           <strong>CONF ARMADURA</strong>
           <span id="doc-label">Abra um PDF</span>
-          <span id="app-revision" class="rev-label" title="Versão app (0.mid.last — last 00–99)">0.1.25-20261122</span>
+          <span id="app-revision" class="rev-label" title="Versão app (0.mid.last — last 00–99)">0.1.26-20261122</span>
         </div>
       </div>
       <div class="top-actions">
@@ -567,8 +567,6 @@
           <button type="button" id="btn-export-marked" class="secondary">Exportar PDF marcado</button>
           <button type="button" id="btn-share" class="secondary">Enviar relatório PDF</button>
           <button type="button" id="btn-export-pdf" class="secondary">Exportar relatório PDF</button>
-          <button type="button" id="btn-export-word" class="secondary">Exportar Word</button>
-          <button type="button" id="btn-export-text" class="secondary">Copiar texto</button>
         </div>
       </div>
     </div>
@@ -1959,41 +1957,6 @@
     return lines.join("\n");
   }
 
-  function buildExportableHtmlDocument(model) {
-    var bodyHtml = renderReportHtmlFragment(model)
-      .replace(/<div class="summary">[\s\S]*?<\/div>\s*<p><strong>Documento:[\s\S]*?<\/p>/, "");
-    if (model.shareScope === "nc_notes") {
-      // Drop entire OK section between Divirgência and Notas.
-      bodyHtml = bodyHtml.replace(
-        /<section class="report-section">\s*<h3>[^<]*EM CONFORMIDADE[\s\S]*?<\/section>/i,
-        ""
-      );
-    }
-    return "<!DOCTYPE html><html lang=\"pt-BR\"><head><meta charset=\"UTF-8\" /><title>"
-      + escapeHtml(model.title) + "</title>"
-      + "<style>body{font-family:system-ui,sans-serif;margin:24px;color:#122}h1{font-size:1.4rem}"
-      + ".report-section{margin:1.1em 0 0.5em;padding-top:0.2em}"
-      + ".report-vpl{margin:0.45em 0}.report-vpl+.report-vpl{margin-top:0.55em;padding-top:0.15em}"
-      + ".report-notes>ul,.report-notes>p{margin-top:0.55em}"
-      + "h3{margin:0 0 0.45em;padding-bottom:0.35em;border-bottom:0.5pt solid #c62828;"
-      + "font-size:0.95rem;font-weight:700;letter-spacing:0.03em;text-transform:uppercase;color:#122;background:none}"
-      + "h4{margin:0 0 0.3em;color:#111;font-weight:700;border:0;background:none}"
-      + ".cards{display:flex;gap:12px;flex-wrap:wrap}.card{border:1px solid #ccc;border-radius:8px;padding:12px 16px}"
-      + ".ok{color:#147a3d}.risk{color:#9a6b00}</style></head><body>"
-      + "<h1>" + escapeHtml(model.title) + "</h1>"
-      + "<p><strong>Documento:</strong> " + escapeHtml(model.docName) + "<br/>"
-      + "<strong>Gerado em:</strong> " + escapeHtml(fmtTime(model.generatedAt)) + "</p>"
-      + '<div class="cards">'
-      + (model.shareScope === "nc_notes"
-        ? ""
-        : '<div class="card ok"><strong>' + model.counts.ok + '</strong><br/>Em conformidade</div>')
-      + '<div class="card risk"><strong>' + model.counts.risk + '</strong><br/>Divirgência</div>'
-      + '<div class="card"><strong>' + model.counts.notes + '</strong><br/>Notas</div>'
-      + "</div>"
-      + bodyHtml
-      + "</body></html>";
-  }
-
   function wrapTextLines(text, maxChars) {
     var raw = String(text || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
     var out = [];
@@ -2119,17 +2082,6 @@
     pdf += "trailer\n<< /Size " + (objects.length + 1) + " /Root " + catalogId + " 0 R >>\n";
     pdf += "startxref\n" + xrefPos + "\n%%EOF";
     return new Blob([pdf], { type: "application/pdf" });
-  }
-
-  function buildWordBlob(model) {
-    var html = buildExportableHtmlDocument(model);
-    var doc = "<html xmlns:o='urn:schemas-microsoft-com:office:office' "
-      + "xmlns:w='urn:schemas-microsoft-com:office:word' "
-      + "xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'>"
-      + "<!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View></w:WordDocument></xml><![endif]-->"
-      + "</head><body>" + html.replace(/^[\s\S]*<body[^>]*>/i, "").replace(/<\/body>[\s\S]*$/i, "")
-      + "</body></html>";
-    return new Blob(["\ufeff", doc], { type: "application/msword" });
   }
 
   function reportFileStem(model) {
@@ -2431,8 +2383,6 @@
     btnCloseLibrary: document.getElementById("btn-close-library"),
     btnExportPdf: document.getElementById("btn-export-pdf"),
     btnExportMarked: document.getElementById("btn-export-marked"),
-    btnExportWord: document.getElementById("btn-export-word"),
-    btnExportText: document.getElementById("btn-export-text"),
     btnShare: document.getElementById("btn-share"),
     btnShareMarked: document.getElementById("btn-share-marked"),
     shareSheet: document.getElementById("share-sheet"),
@@ -4330,20 +4280,6 @@
     return state.lastReportModel;
   }
 
-  function copyText() {
-    var model = ensureReportModel();
-    if (!model) return;
-    var text = buildPlainTextReport(model);
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text).then(function () {
-        setHint("Relatório copiado.");
-        setTimeout(function () { setHint(""); }, 1800);
-      }).catch(function () { window.prompt("Copie o relatório:", text); });
-    } else {
-      window.prompt("Copie o relatório:", text);
-    }
-  }
-
   function openShareSheet() {
     if (!ensureReportModel()) return;
     var sheet = els.shareSheet || document.getElementById("share-sheet");
@@ -4419,16 +4355,6 @@
       reportFileStem(model) + ".pdf",
       buildPdfBlobFromText(text),
       "PDF"
-    );
-  }
-
-  function exportWord() {
-    var model = ensureReportModel();
-    if (!model) return;
-    downloadOrShareBlob(
-      reportFileStem(model) + ".doc",
-      buildWordBlob(model),
-      "Word"
     );
   }
 
@@ -4702,8 +4628,6 @@
         exportOrShareMarkedSheet("PDF marcado");
       });
     }
-    if (els.btnExportWord) els.btnExportWord.addEventListener("click", exportWord);
-    if (els.btnExportText) els.btnExportText.addEventListener("click", copyText);
     if (els.btnShare) els.btnShare.addEventListener("click", openShareSheet);
     if (els.btnShareMarked) {
       els.btnShareMarked.addEventListener("click", function () {
