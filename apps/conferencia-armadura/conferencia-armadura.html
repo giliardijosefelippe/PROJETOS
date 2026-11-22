@@ -511,7 +511,7 @@
         <div class="brand-text">
           <strong>CONF ARMADURA</strong>
           <span id="doc-label">Abra um PDF</span>
-          <span id="app-revision" class="rev-label" title="Versão app (0.mid.last — last 00–99)">0.1.13-20261122</span>
+          <span id="app-revision" class="rev-label" title="Versão app (0.mid.last — last 00–99)">0.1.14-20261122</span>
         </div>
       </div>
       <div class="top-actions">
@@ -1491,31 +1491,75 @@
     return groups;
   }
 
+  /** Drop stray "?" / placeholder dashes from OCR so Relatório stays clean. */
+  function scrubReportToken(s) {
+    return String(s || "")
+      .replace(/\?/g, "")
+      .replace(/^[\s\-–—]+|[\s\-–—]+$/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
   function reportHeadHtml(item) {
     var parts = reportNameDims(item);
-    if (parts.name) {
-      return "<strong>" + escapeHtml(parts.name) + "</strong>"
-        + (parts.dims ? " · " + escapeHtml(parts.dims) : "");
+    var name = scrubReportToken(parts.name);
+    var dims = scrubReportToken(parts.dims);
+    if (name) {
+      return "<strong>" + escapeHtml(name) + "</strong>"
+        + (dims ? " · " + escapeHtml(dims) : "");
     }
-    // Prefer any code still buried in display; never lead with bare dims if we can help it.
-    var code = extractStructuralCode(parts.display || item.label || item.text || "");
+    var code = scrubReportToken(extractStructuralCode(parts.display || item.label || item.text || ""));
     if (code) {
       var rest = splitLabelNameDims((parts.display || "") + " " + code);
+      var restDims = scrubReportToken(rest.dims);
       return "<strong>" + escapeHtml(code) + "</strong>"
-        + (rest.dims ? " · " + escapeHtml(rest.dims) : "");
+        + (restDims ? " · " + escapeHtml(restDims) : "");
     }
-    return escapeHtml(parts.display || item.label || item.text || "—");
+    var fallback = scrubReportToken(parts.display || item.label || item.text || "");
+    return escapeHtml(fallback || "—");
   }
 
   function reportHeadText(item) {
     var parts = reportNameDims(item);
-    if (parts.name) return parts.name + (parts.dims ? " · " + parts.dims : "");
-    var code = extractStructuralCode(parts.display || item.label || item.text || "");
+    var name = scrubReportToken(parts.name);
+    var dims = scrubReportToken(parts.dims);
+    if (name) return name + (dims ? " · " + dims : "");
+    var code = scrubReportToken(extractStructuralCode(parts.display || item.label || item.text || ""));
     if (code) {
       var rest = splitLabelNameDims((parts.display || "") + " " + code);
-      return code + (rest.dims ? " · " + rest.dims : "");
+      var restDims = scrubReportToken(rest.dims);
+      return code + (restDims ? " · " + restDims : "");
     }
-    return parts.display || item.label || item.text || "—";
+    return scrubReportToken(parts.display || item.label || item.text || "") || "—";
+  }
+
+  /** NC: `1. VG-17 · 25x70 FALTOU O 2F (12/11/2026, 21:14:41)` — no "Não conforme · motivo:". */
+  function formatRiskReportLineText(item, idx) {
+    var head = reportHeadText(item);
+    var reason = scrubReportToken(item.reason || "");
+    var when = fmtTime(item.createdAt);
+    var line = (idx + 1) + ". " + head;
+    if (reason) line += " " + reason;
+    if (when && when !== "—") line += " (" + when + ")";
+    return line;
+  }
+
+  /** OK: `1. VG-9 · 30x70` — section header already says EM CONFORMIDADE. */
+  function formatOkReportLineText(item, idx) {
+    return (idx + 1) + ". " + reportHeadText(item);
+  }
+
+  function formatRiskReportLineHtml(item, idx) {
+    var reason = scrubReportToken(item.reason || "");
+    var when = fmtTime(item.createdAt);
+    var html = "<li><strong>" + (idx + 1) + ".</strong> " + reportHeadHtml(item);
+    if (reason) html += " " + escapeHtml(reason);
+    if (when && when !== "—") html += " <em>(" + escapeHtml(when) + ")</em>";
+    return html + "</li>";
+  }
+
+  function formatOkReportLineHtml(item, idx) {
+    return "<li><strong>" + (idx + 1) + ".</strong> " + reportHeadHtml(item) + "</li>";
   }
 
   var VPL_SECTIONS = [
@@ -1550,13 +1594,10 @@
   function renderReportHtmlFragment(model, opts) {
     var interactive = !!(opts && opts.interactive);
     var riskBlock = renderGroupedLisHtml(model.risks, function (r, idx) {
-      var tail = " — Não conforme";
-      if (r.reason) tail += " · motivo: " + escapeHtml(String(r.reason));
-      return "<li><strong>#" + (idx + 1) + "</strong> " + reportHeadHtml(r) + tail
-        + " <em>(" + escapeHtml(fmtTime(r.createdAt)) + ")</em></li>";
+      return formatRiskReportLineHtml(r, idx);
     });
     var okBlock = renderGroupedLisHtml(model.oks, function (r, idx) {
-      return "<li><strong>#" + (idx + 1) + "</strong> " + reportHeadHtml(r) + " — conferido</li>";
+      return formatOkReportLineHtml(r, idx);
     });
     var noteLis = model.notes.map(function (r) {
       var body = escapeHtml(String(r.text || "(vazia)"))
@@ -1653,14 +1694,11 @@
         : ("Resumo: " + model.counts.ok + " em conformidade · " + model.counts.risk + " divirgência · " + model.counts.total + " marcações")
     ];
     appendGroupedPlain(lines, REPORT_SECTION_RISK, model.risks, function (r, i) {
-      var line = (i + 1) + ". " + reportHeadText(r) + " — Não conforme";
-      if (r.reason) line += " · motivo: " + r.reason;
-      line += " (" + fmtTime(r.createdAt) + ")";
-      return line;
+      return formatRiskReportLineText(r, i);
     });
     if (!scoped) {
       appendGroupedPlain(lines, REPORT_SECTION_OK, model.oks, function (r, i) {
-        return (i + 1) + ". " + reportHeadText(r) + " — conferido";
+        return formatOkReportLineText(r, i);
       });
     }
     lines.push("", REPORT_SECTION_NOTES);
