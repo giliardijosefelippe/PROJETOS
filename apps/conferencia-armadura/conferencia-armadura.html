@@ -534,7 +534,7 @@
         <div class="brand-text">
           <strong>CONF ARMADURA</strong>
           <span id="doc-label">Abra um PDF</span>
-          <span id="app-revision" class="rev-label" title="Versão app (0.mid.last — last 00–99)">0.1.24-20261122</span>
+          <span id="app-revision" class="rev-label" title="Versão app (0.mid.last — last 00–99)">0.1.25-20261122</span>
         </div>
       </div>
       <div class="top-actions">
@@ -1762,13 +1762,13 @@
     return scrubReportToken(parts.display || item.label || item.text || "") || "—";
   }
 
-  /** NC: `1. VG-17 · 25x70 FALTOU O 2F (12/11/2026, 21:14:41)` — no "Não conforme · motivo:". */
+  /** NC: `1. VG-17 · 25x70 - FALTOU O 2F (12/11/2026, 21:14:41)` — no "Não conforme · motivo:". */
   function formatRiskReportLineText(item, idx) {
     var head = reportHeadText(item);
     var reason = scrubReportToken(item.reason || "");
     var when = fmtTime(item.createdAt);
     var line = (idx + 1) + ". " + head;
-    if (reason) line += " " + reason;
+    if (reason) line += " - " + reason;
     if (when && when !== "—") line += " (" + when + ")";
     return line;
   }
@@ -1782,7 +1782,7 @@
     var reason = scrubReportToken(item.reason || "");
     var when = fmtTime(item.createdAt);
     var html = "<li><strong>" + (idx + 1) + ".</strong> " + reportHeadHtml(item);
-    if (reason) html += " " + escapeHtml(reason);
+    if (reason) html += " - " + escapeHtml(reason);
     if (when && when !== "—") html += " <em>(" + escapeHtml(when) + ")</em>";
     return html + "</li>";
   }
