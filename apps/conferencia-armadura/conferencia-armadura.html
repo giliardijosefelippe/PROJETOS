@@ -545,7 +545,7 @@
         <div class="brand-text">
           <strong>CONF ARMADURA</strong>
           <span id="doc-label">Abra um PDF</span>
-          <span id="app-revision" class="rev-label" title="Versão app (0.mid.last — last 00–99)">0.1.28-20261122</span>
+          <span id="app-revision" class="rev-label" title="Versão app (0.mid.last — last 00–99)">0.1.29-20261122</span>
         </div>
       </div>
       <div class="top-actions">
@@ -1247,8 +1247,9 @@
   }
 
   /**
-   * Export-only: draw NC motivo outside above each red mark (no overlap),
-   * centered on the mark, ~(2× label − 1pt), rotated to match label orientation.
+   * Export-only: NC motivo outside-above the mark, centered on the mark axis.
+   * Horizontal: local −Y (page-up). Vertical: along reading axis toward page-up
+   * (not beside/left). ~(2× label − 1pt), rotated with the verified label.
    */
   function paintRiskReasonLabels(ctx, items, pageCssW, pageCssH) {
     var list = items || [];
@@ -1292,36 +1293,51 @@
       var gap = Math.max(6, Math.round(fs * 0.35));
       var cx = markW > 2 ? markX + markW / 2 : markX;
       var cy = markH > 2 ? markY + markH / 2 : markY;
-      var markTop = markH > 2 ? markY : cy - Math.max(4, fs * 0.35);
-      var markBot = markH > 2 ? markY + markH : cy + Math.max(4, fs * 0.35);
 
-      // Rotated AABB half-extents (local box ±w/2, ±h/2 around text center).
       var cosA = Math.cos(angle);
       var sinA = Math.sin(angle);
-      var halfDown = 0.5 * (Math.abs(boxW * sinA) + Math.abs(boxH * cosA));
-      var halfSide = 0.5 * (Math.abs(boxW * cosA) + Math.abs(boxH * sinA));
+      // Page AABB → half-extents in label-local axes (origin = mark center).
+      var halfAlong = 0.5 * (Math.abs(markW * cosA) + Math.abs(markH * sinA));
+      var halfPerp = 0.5 * (Math.abs(markW * sinA) + Math.abs(markH * cosA));
+      halfAlong = Math.max(halfAlong, 4);
+      halfPerp = Math.max(halfPerp, 4);
 
-      // Keep the entire rotated box outside above the mark (page-up).
-      var textCx = cx;
-      var textCy = markTop - gap - halfDown;
-      if (textCy - halfDown < 4) {
-        // Flip below mark if there is no room above.
-        textCy = markBot + gap + halfDown;
+      function localToPage(lx, ly) {
+        return { x: cx + lx * cosA - ly * sinA, y: cy + lx * sinA + ly * cosA };
       }
-      if (textCx - halfSide < 4) textCx = 4 + halfSide;
-      if (textCx + halfSide > pageW - 4) textCx = Math.max(4 + halfSide, pageW - 4 - halfSide);
-
-      // Final safety: if still intersecting the mark AABB, push fully clear.
-      var boxPageTop = textCy - halfDown;
-      var boxPageBot = textCy + halfDown;
-      if (boxPageBot > markTop - gap && boxPageTop < markBot + gap) {
-        textCy = markTop - gap - halfDown;
-        if (textCy - halfDown < 4) textCy = markBot + gap + halfDown;
+      function boxOffPage(bx0, by0) {
+        var corners = [
+          localToPage(bx0, by0),
+          localToPage(bx0 + boxW, by0),
+          localToPage(bx0, by0 + boxH),
+          localToPage(bx0 + boxW, by0 + boxH)
+        ];
+        return corners.some(function (p) {
+          return p.x < -8 || p.y < -8 || p.x > pageW + 8 || p.y > pageH + 8;
+        });
       }
 
-      var bx = -boxW / 2;
-      var by = -boxH / 2;
-      ctx.translate(textCx, textCy);
+      // Page-up expressed in local coords: R^T * (0,-1) = (-sin, -cos).
+      var upLx = -sinA;
+      var upLy = -cosA;
+      var bx;
+      var by;
+      if (Math.abs(upLy) >= Math.abs(upLx)) {
+        // Horizontal-ish: outside on local Y (page-up), centered on mark axis (local X).
+        bx = -boxW / 2;
+        by = upLy < 0 ? (-halfPerp - gap - boxH) : (halfPerp + gap);
+        if (boxOffPage(bx, by)) by = upLy < 0 ? (halfPerp + gap) : (-halfPerp - gap - boxH);
+      } else {
+        // Vertical-ish: outside along reading axis toward page-up, centered on mark axis (local Y=0).
+        // Avoids sitting to the left/right of the mark.
+        bx = upLx < 0 ? (-halfAlong - gap - boxW) : (halfAlong + gap);
+        by = -boxH / 2;
+        if (boxOffPage(bx, by)) {
+          bx = upLx < 0 ? (halfAlong + gap) : (-halfAlong - gap - boxW);
+        }
+      }
+
+      ctx.translate(cx, cy);
       ctx.rotate(angle);
       ctx.fillStyle = "rgba(255, 248, 246, 0.94)";
       ctx.strokeStyle = "#e00024";
@@ -1331,7 +1347,7 @@
       ctx.stroke();
       ctx.fillStyle = "#8a0014";
       for (var t = 0; t < lines.length; t++) {
-        ctx.fillText(lines[t], 0, by + padY + t * lineH + lineH / 2);
+        ctx.fillText(lines[t], bx + boxW / 2, by + padY + t * lineH + lineH / 2);
       }
       ctx.restore();
     }
