@@ -328,27 +328,17 @@
     .report-scroll .stat.ok strong { color: #7ddea8; }
     .report-scroll .stat.risk strong { color: #ffcc66; }
     .report-scroll .report-section {
-      margin: 18px 0 8px;
-      padding-top: 12px;
-      border-top: 1px solid #c62828;
+      margin: 16px 0 8px;
+      padding-top: 4px;
     }
-    .report-scroll .report-section:first-of-type { margin-top: 10px; }
-    .report-scroll hr.report-section-rule {
-      border: 0; height: 0; margin: 18px 0 0;
-      border-top: 1px solid #c62828;
-    }
+    .report-scroll .report-section:first-of-type { margin-top: 8px; }
     .report-scroll .report-vpl {
       margin: 10px 0 6px;
-      padding-top: 8px;
+      padding-top: 2px;
     }
     .report-scroll .report-vpl + .report-vpl {
-      border-top: 0.75px solid rgba(198, 40, 40, 0.5);
-      margin-top: 12px;
-      padding-top: 10px;
-    }
-    .report-scroll hr.report-vpl-rule {
-      border: 0; height: 0; margin: 10px 0;
-      border-top: 0.75px solid rgba(198, 40, 40, 0.5);
+      margin-top: 10px;
+      padding-top: 4px;
     }
     .report-scroll h4 {
       margin: 0 0 6px; font-size: 13px; color: var(--prumo-muted); font-weight: 700;
@@ -359,8 +349,7 @@
       margin: 0 0 10px; font-size: 12px; text-transform: uppercase;
       letter-spacing: 0.04em; color: var(--prumo-muted); line-height: 1.35;
       word-break: break-word;
-      padding-bottom: 6px;
-      border-bottom: 1px solid #c62828;
+      padding-bottom: 2px;
     }
     .report-scroll ul { margin: 0; padding-left: 18px; color: var(--prumo-text); }
     .report-scroll li { margin-bottom: 6px; }
@@ -535,7 +524,7 @@
         <div class="brand-text">
           <strong>CONF ARMADURA</strong>
           <span id="doc-label">Abra um PDF</span>
-          <span id="app-revision" class="rev-label" title="Versão app (0.mid.last — last 00–99)">0.1.21-20261122</span>
+          <span id="app-revision" class="rev-label" title="Versão app (0.mid.last — last 00–99)">0.1.22-20261122</span>
         </div>
       </div>
       <div class="top-actions">
@@ -1637,21 +1626,6 @@
   var REPORT_SECTION_RISK = "DIVIRGÊNCIA COM O PROJETO";
   var REPORT_SECTION_OK = "EM CONFORMIDADE COM O PROJETO";
   var REPORT_SECTION_NOTES = "NOTAS DE TEXTO";
-  /** Plain-text/PDF sentinel drawn as a full-width rule (not shown as glyphs). */
-  var REPORT_SEP_MARKER = "⟦SEP⟧";
-
-  function isReportSectionHeader(line) {
-    var t = String(line || "").trim();
-    return t === REPORT_SECTION_RISK
-      || t === REPORT_SECTION_OK
-      || t === REPORT_SECTION_NOTES;
-  }
-
-  function isReportSepLine(line) {
-    var t = String(line || "").trim();
-    if (t === REPORT_SEP_MARKER) return true;
-    return /^[─\-–—=\u2500]{6,}$/.test(t);
-  }
 
   function isTextNoteItem(item) {
     if (!item || item.kind !== "note") return false;
@@ -1807,14 +1781,6 @@
     { key: "outro", title: "Outros" }
   ];
 
-  function isReportVplHeader(line) {
-    var t = String(line || "").trim();
-    for (var i = 0; i < VPL_SECTIONS.length; i++) {
-      if (t === VPL_SECTIONS[i].title) return true;
-    }
-    return false;
-  }
-
   function renderGroupedLisHtml(items, lineFn) {
     var groups = groupItemsByVpl(items);
     var html = "";
@@ -1894,18 +1860,15 @@
   }
 
   function appendGroupedPlain(lines, title, items, lineFn) {
-    lines.push("", REPORT_SEP_MARKER, title);
+    lines.push("", title);
     if (!items.length) {
       lines.push("- Nenhum");
       return;
     }
     var groups = groupItemsByVpl(items);
-    var firstVpl = true;
     VPL_SECTIONS.forEach(function (sec) {
       var list = groups[sec.key] || [];
       if (!list.length && sec.key === "outro") return;
-      if (!firstVpl) lines.push(REPORT_SEP_MARKER);
-      firstVpl = false;
       lines.push("", sec.title);
       if (!list.length) {
         lines.push("- Nenhum");
@@ -1961,7 +1924,7 @@
         return formatOkReportLineText(r, i);
       });
     }
-    lines.push("", REPORT_SEP_MARKER, REPORT_SECTION_NOTES);
+    lines.push("", REPORT_SECTION_NOTES);
     if (!model.notes.length) lines.push("- Nenhuma");
     model.notes.forEach(function (r) {
       lines.push("- " + (r.text || "(vazia)") + " [" + labelFor(r) + "]");
@@ -1982,10 +1945,9 @@
     return "<!DOCTYPE html><html lang=\"pt-BR\"><head><meta charset=\"UTF-8\" /><title>"
       + escapeHtml(model.title) + "</title>"
       + "<style>body{font-family:system-ui,sans-serif;margin:24px;color:#122}h1{font-size:1.4rem}"
-      + ".report-section{margin:1.25em 0 0.6em;padding-top:0.6em;border-top:1px solid #c62828}"
-      + "hr.report-section-rule{border:0;border-top:1px solid #c62828;margin:1.1em 0 0}"
-      + ".report-vpl{margin:0.55em 0}.report-vpl+.report-vpl{border-top:0.75px solid #c62828;padding-top:0.55em;margin-top:0.7em}"
-      + "h3{margin:0 0 0.45em;padding-bottom:0.3em;border-bottom:1px solid #c62828;"
+      + ".report-section{margin:1.1em 0 0.5em;padding-top:0.2em}"
+      + ".report-vpl{margin:0.45em 0}.report-vpl+.report-vpl{margin-top:0.55em;padding-top:0.15em}"
+      + "h3{margin:0 0 0.4em;padding-bottom:0.1em;"
       + "font-size:0.95rem;letter-spacing:0.03em;text-transform:uppercase;color:#122}"
       + "h4{margin:0 0 0.3em;color:#355}"
       + ".cards{display:flex;gap:12px;flex-wrap:wrap}.card{border:1px solid #ccc;border-radius:8px;padding:12px 16px}"
@@ -2069,38 +2031,11 @@
     var textTop = 800;
     var contentIds = pageLinesList.map(function (pageLines) {
       var parts = [];
-      // Red rules — nearly full page width (A4 595pt).
-      // Major sections: thick above+below. V/P/L + SEP markers: thinner single rule.
-      var ruleX0 = 28;
-      var ruleX1 = 567;
-      pageLines.forEach(function (line, idx) {
-        var y = textTop - idx * lineLeading;
-        if (isReportSectionHeader(line)) {
-          var yTop = y + 11;
-          var yBot = y - 4;
-          parts.push("q");
-          parts.push("0.78 0.16 0.16 RG");
-          parts.push("0.7 w");
-          parts.push(ruleX0 + " " + yTop.toFixed(1) + " m " + ruleX1 + " " + yTop.toFixed(1) + " l S");
-          parts.push(ruleX0 + " " + yBot.toFixed(1) + " m " + ruleX1 + " " + yBot.toFixed(1) + " l S");
-          parts.push("Q");
-          return;
-        }
-        if (isReportSepLine(line) || isReportVplHeader(line)) {
-          var yMid = isReportSepLine(line) ? y + 3 : y + 10;
-          parts.push("q");
-          parts.push("0.78 0.16 0.16 RG");
-          parts.push(isReportSepLine(line) ? "0.7 w" : "0.5 w");
-          parts.push(ruleX0 + " " + yMid.toFixed(1) + " m " + ruleX1 + " " + yMid.toFixed(1) + " l S");
-          parts.push("Q");
-        }
-      });
+      // No red separator rules — section titles alone structure the Relatório PDF.
       parts.push("BT", "/F1 10 Tf", String(lineLeading) + " TL", "50 " + textTop + " Td");
       pageLines.forEach(function (line, idx) {
-        // SEP markers are visual-only (rule already drawn) — emit blank text.
-        var shown = isReportSepLine(line) ? "" : line;
-        if (idx === 0) parts.push("(" + pdfEscapeLatin1(shown) + ") Tj");
-        else parts.push("T* (" + pdfEscapeLatin1(shown) + ") Tj");
+        if (idx === 0) parts.push("(" + pdfEscapeLatin1(line) + ") Tj");
+        else parts.push("T* (" + pdfEscapeLatin1(line) + ") Tj");
       });
       parts.push("ET");
       var stream = parts.join("\n");
