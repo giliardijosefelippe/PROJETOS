@@ -22,4 +22,4 @@ that, updates keep data.
 ## Pacote / restauração
 
 Exportar/Importar pacote JSON (☰) preserva OK/NC/notas entre PC e telefone.
-Marcações do Relatório 18/11/2026 (DUO HOME) vêm no pacote embutido `restore-packages/`.
+Marcações do Relatório 18/11/2026 (DUO HOME): preenchimento automático só na 1ª abertura vazia dessa prancha (sem botão Restaurar).

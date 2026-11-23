@@ -75,10 +75,10 @@ Pacote editável (.confarmadura.json):
   Menu ☰ → Exportar pacote / Importar pacote
   (marcações + relatório em JSON; reabre no app no PC ou no telefone).
 
-Restaurar DUO HOME (Relatório 18/11/2026):
-  Abra "GAR_VIGAS E PILARES_EGD_2025012_ARJ_DUO HOME_REV01.pdf"
-  com marcações vazias — o app aplica o pacote embutido automaticamente
-  (ou ☰ → Restaurar marcações). Também em android-dist/*.confarmadura.json.
+DUO HOME (Relatório 18/11/2026):
+  Na 1ª abertura de "GAR_VIGAS E PILARES_EGD_2025012_ARJ_DUO HOME_REV01.pdf"
+  sem marcações, o app preenche automaticamente as 64 do Relatório (só essa prancha).
+  Pacote também em restore-packages/*.confarmadura.json (Exportar/Importar).
 EOF
 
 echo "Packed Desktop release:"

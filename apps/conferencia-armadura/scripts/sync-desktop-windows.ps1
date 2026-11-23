@@ -35,7 +35,7 @@ Copy-Item -Force (Join-Path $AppDir "vendor\pdfjs\pdf.worker.min.js") (Join-Path
   "Atualizar APK nao apaga biblioteca/anotacoes (mesmo applicationId + keystore estavel).",
   "Se o telefone ainda tem 0.1.08: desinstalar uma vez, depois 0.1.33+ atualiza in-place.",
   "Pacote .confarmadura.json: Exportar/Importar no menu ☰ (marcações editaveis PC/telefone).",
-  "DUO HOME: abrir o PDF sem marcas restaura o Relatorio 18/11/2026 (ou Restaurar marcacoes)."
+  "DUO HOME: 1a abertura sem marcas preenche o Relatorio 18/11/2026 (automatico, so essa prancha)."
   "Serve: npx --yes serve -l 5173"
 ) | Set-Content -Encoding UTF8 (Join-Path $DesktopDir "COMO-ABRIR.txt")
 

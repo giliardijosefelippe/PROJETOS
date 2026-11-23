@@ -10,8 +10,8 @@ android {
         // Stable applicationId — updating APK must NOT wipe library/annots (same package).
         // versionName 0.{mid}.{last:00-99}-YYYYMMDD — last rolls to mid (0.1.99 → 0.2.00)
         // Signing: always use android/keystore/conf-armadura.keystore (not ephemeral ~/.android/debug.keystore).
-        versionCode 10134
-        versionName "0.1.34-20261123"
+        versionCode 10135
+        versionName "0.1.35-20261123"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

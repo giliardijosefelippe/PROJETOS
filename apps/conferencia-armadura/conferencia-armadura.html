@@ -545,7 +545,7 @@
         <div class="brand-text">
           <strong>CONF ARMADURA</strong>
           <span id="doc-label">Abra um PDF</span>
-          <span id="app-revision" class="rev-label" title="Versão app (0.mid.last — last 00–99)">0.1.34-20261123</span>
+          <span id="app-revision" class="rev-label" title="Versão app (0.mid.last — last 00–99)">0.1.35-20261123</span>
         </div>
       </div>
       <div class="top-actions">
@@ -708,10 +708,6 @@
         <span>Importar pacote</span>
         <input type="file" id="file-input-package" accept="application/json,.json,.confarmadura.json" hidden />
       </label>
-      <button type="button" id="btn-restore-builtin" class="side-item" title="Restaurar marcações do pacote embutido (se a prancha bater)">
-        <span class="side-ico" aria-hidden="true">♻️</span>
-        <span>Restaurar marcações</span>
-      </button>
     </div>
   </div>
 
@@ -1054,7 +1050,7 @@
   }
 
 
-  var APP_VERSION = "0.1.34-20261123";
+  var APP_VERSION = "0.1.35-20261123";
   var PACKAGE_FORMAT = "conf-armadura-package-v1";
 
   /** Built-in restore packages shipped in www/restore-packages (and android-dist). */
@@ -1247,7 +1243,7 @@
       if (!packageMatchesDoc(pkg, state.docName) && !opts.force) {
         var msg = "Este pacote é para outro PDF (" + ((pkg.document && pkg.document.fileName) || "?")
           + "). Abrindo " + state.docName + ".";
-        if (!opts.ignoreNameMismatch) throw new Error(msg + " Use Restaurar só na prancha certa.");
+        if (!opts.ignoreNameMismatch) throw new Error(msg + " Abra a prancha correspondente ao pacote.");
       }
     }
     await ensureTextItemsReady();
@@ -1361,34 +1357,6 @@
       : "";
     setHint("Pacote aplicado: " + result.placed + " marcações" + skipMsg);
     setTimeout(function () { setHint(""); }, 4500);
-  }
-
-  async function restoreBuiltinForCurrentDoc(opts) {
-    opts = opts || {};
-    if (!state.docName) {
-      setHint("Abra a prancha para restaurar marcações.");
-      return null;
-    }
-    var entry = builtinEntryForFileName(state.docName);
-    if (!entry) {
-      setHint("Não há pacote embutido para este PDF.");
-      return null;
-    }
-    if (!opts.force && annotations.list().length) {
-      var ok = window.confirm(
-        "Já existem " + annotations.list().length + " marcações. Substituir pelas do pacote de restauração (Relatório 18/11/2026)?"
-      );
-      if (!ok) return null;
-    }
-    setHint("Restaurando marcações do pacote…");
-    var pkg = await fetchBuiltinPackage(entry);
-    var result = await applyConferencePackage(pkg, { force: true });
-    var skipMsg = result.skipped.length
-      ? (" · " + result.skipped.length + " não achados no texto")
-      : "";
-    setHint("Restauradas " + result.placed + " marcações" + skipMsg + ".");
-    setTimeout(function () { setHint(""); }, 4500);
-    return result;
   }
 
   async function tryAutoRestoreAfterOpen(docName, hadSaved) {
@@ -2808,7 +2776,6 @@
     btnClear: document.getElementById("btn-clear"),
     btnLibrary: document.getElementById("btn-library"),
     btnExportPackage: document.getElementById("btn-export-package"),
-    btnRestoreBuiltin: document.getElementById("btn-restore-builtin"),
     fileInputPackage: document.getElementById("file-input-package"),
     fileInputPackageLib: document.getElementById("file-input-package-lib"),
     fileInput: document.getElementById("file-input"),
@@ -5126,16 +5093,6 @@
         exportConferencePackage().catch(function (err) {
           console.warn(err);
           setHint(err && err.message ? err.message : "Falha ao exportar pacote.");
-        });
-      });
-    }
-    if (els.btnRestoreBuiltin) {
-      els.btnRestoreBuiltin.addEventListener("click", function () {
-        setSideMenuOpen(false);
-        restoreBuiltinForCurrentDoc({ force: false }).catch(function (err) {
-          console.warn(err);
-          setHint(err && err.message ? err.message : "Falha ao restaurar marcações.");
-          setTimeout(function () { setHint(""); }, 4000);
         });
       });
     }
