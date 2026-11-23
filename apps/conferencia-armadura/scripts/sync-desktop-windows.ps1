@@ -33,9 +33,22 @@ Copy-Item -Force (Join-Path $AppDir "vendor\pdfjs\pdf.worker.min.js") (Join-Path
   "Arquivos: $Stem.html / $Stem.apk"
   "Manter versoes anteriores nesta pasta (nao sobrescrever/apagar)."
   "Atualizar APK nao apaga biblioteca/anotacoes (mesmo applicationId + keystore estavel).",
-  "Se o telefone ainda tem 0.1.08: desinstalar uma vez, depois 0.1.33+ atualiza in-place."
+  "Se o telefone ainda tem 0.1.08: desinstalar uma vez, depois 0.1.33+ atualiza in-place.",
+  "Pacote .confarmadura.json: Exportar/Importar no menu ☰ (marcações editaveis PC/telefone).",
+  "DUO HOME: abrir o PDF sem marcas restaura o Relatorio 18/11/2026 (ou Restaurar marcacoes)."
   "Serve: npx --yes serve -l 5173"
 ) | Set-Content -Encoding UTF8 (Join-Path $DesktopDir "COMO-ABRIR.txt")
+
+
+# Editable restore/export package (JSON) — keep next to APK/HTML when present
+Get-ChildItem (Join-Path $AppDir "android-dist\*.confarmadura.json") -ErrorAction SilentlyContinue | ForEach-Object {
+  Copy-Item -Force $_.FullName (Join-Path $DesktopDir $_.Name)
+}
+Get-ChildItem (Join-Path $AppDir "restore-packages\*.confarmadura.json") -ErrorAction SilentlyContinue | ForEach-Object {
+  $dstDir = Join-Path $DesktopDir "restore-packages"
+  New-Item -ItemType Directory -Force -Path $dstDir | Out-Null
+  Copy-Item -Force $_.FullName (Join-Path $dstDir $_.Name)
+}
 
 Write-Host "Synced:"
 Get-ChildItem $DesktopDir -File | Select-Object Name, Length, LastWriteTime | Format-Table -AutoSize

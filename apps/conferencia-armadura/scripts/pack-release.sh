@@ -36,6 +36,16 @@ fi
 
 cp -f "$APK_VERSIONED" "$DESKTOP_OUT/${STEM}.apk"
 
+# Editable package + built-in restore JSON (keep versioned name + restore-packages/)
+mkdir -p "$DESKTOP_OUT/restore-packages"
+if ls "$ROOT/restore-packages"/*.confarmadura.json >/dev/null 2>&1; then
+  cp -f "$ROOT/restore-packages"/*.confarmadura.json "$DESKTOP_OUT/restore-packages/"
+  cp -f "$ROOT/restore-packages"/*.confarmadura.json "$DESKTOP_OUT/" 2>/dev/null || true
+fi
+if ls "$DIST"/*.confarmadura.json >/dev/null 2>&1; then
+  cp -f "$DIST"/*.confarmadura.json "$DESKTOP_OUT/"
+fi
+
 if [[ -f "$ROOT/vendor/pdfjs/pdf.min.js" ]]; then
   cp -f "$ROOT/vendor/pdfjs/pdf.min.js" "$DESKTOP_OUT/vendor/pdfjs/pdf.min.js"
   cp -f "$ROOT/vendor/pdfjs/pdf.worker.min.js" "$DESKTOP_OUT/vendor/pdfjs/pdf.worker.min.js"
@@ -60,6 +70,15 @@ Atualizar o APK NÃO apaga conferências, biblioteca nem anotações
 Exceção: 0.1.08-20261117 usou outro keystore efêmero — desinstale 0.1.08 uma vez
 antes de instalar 0.1.33+; depois os updates ficam in-place.
 Nunca apague versões anteriores desta pasta.
+
+Pacote editável (.confarmadura.json):
+  Menu ☰ → Exportar pacote / Importar pacote
+  (marcações + relatório em JSON; reabre no app no PC ou no telefone).
+
+Restaurar DUO HOME (Relatório 18/11/2026):
+  Abra "GAR_VIGAS E PILARES_EGD_2025012_ARJ_DUO HOME_REV01.pdf"
+  com marcações vazias — o app aplica o pacote embutido automaticamente
+  (ou ☰ → Restaurar marcações). Também em android-dist/*.confarmadura.json.
 EOF
 
 echo "Packed Desktop release:"

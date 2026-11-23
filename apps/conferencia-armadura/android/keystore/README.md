@@ -18,3 +18,8 @@ That build used a different ephemeral `~/.android/debug.keystore` (SHA-256
 never committed and cannot be recovered from the APK. Installing 0.1.33+ over 0.1.08
 requires **one** uninstall of 0.1.08 (library/annots are wiped by uninstall). After
 that, updates keep data.
+
+## Pacote / restauração
+
+Exportar/Importar pacote JSON (☰) preserva OK/NC/notas entre PC e telefone.
+Marcações do Relatório 18/11/2026 (DUO HOME) vêm no pacote embutido `restore-packages/`.
