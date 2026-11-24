@@ -432,9 +432,10 @@
     .modal[hidden] { display: none !important; }
     /* Relatório / Biblioteca / share — must win over .modal bottom-sheet grid. */
     .modal.prumo-modal {
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      display: flex !important;
+      flex-direction: column;
+      align-items: center !important;
+      justify-content: center !important;
       place-items: center;
       padding: max(12px, env(safe-area-inset-top, 0px), var(--safe-top))
         max(12px, env(safe-area-inset-right, 0px))
@@ -443,11 +444,13 @@
       box-sizing: border-box;
       z-index: 55;
     }
-    .modal.prumo-modal .modal-card {
-      margin-bottom: 0;
-      margin-left: auto;
-      margin-right: auto;
+    .modal.prumo-modal .modal-card,
+    .modal.prumo-modal .prumo-card {
+      margin: auto !important;
       align-self: center;
+      flex: 0 1 auto;
+      width: min(520px, 100%);
+      max-height: min(78dvh, calc(100dvh - var(--safe-top) - var(--safe-bottom) - 32px));
     }
     .modal-card {
       width: min(480px, 100%); background: var(--surface); border: 1px solid var(--border);
