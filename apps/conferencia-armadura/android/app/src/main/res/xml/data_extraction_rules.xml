@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Keep app data (WebView storage, prefs) across backup / device transfer.
+     APK version updates already keep data; uninstall still wipes the sandbox. -->
+<data-extraction-rules>
+    <cloud-backup>
+        <include domain="root" />
+        <include domain="file" />
+        <include domain="database" />
+        <include domain="sharedpref" />
+        <include domain="external" />
+    </cloud-backup>
+    <device-transfer>
+        <include domain="root" />
+        <include domain="file" />
+        <include domain="database" />
+        <include domain="sharedpref" />
+        <include domain="external" />
+    </device-transfer>
+</data-extraction-rules>
