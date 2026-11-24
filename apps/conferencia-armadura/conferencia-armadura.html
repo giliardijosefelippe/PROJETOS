@@ -189,10 +189,26 @@
     .autosave-chip.on { opacity: 1; }
     /* Modais Biblioteca / Relatório — visual teal Prumo (mesmo propósito) */
     .prumo-modal {
+      /* Flex center is more reliable than grid place-items on Android WebView. */
+      display: flex;
+      align-items: center;
+      justify-content: center;
       place-items: center;
-      padding: max(16px, var(--safe-top)) 16px calc(16px + var(--safe-bottom));
+      padding: max(12px, env(safe-area-inset-top, 0px), var(--safe-top))
+        max(12px, env(safe-area-inset-right, 0px))
+        max(12px, env(safe-area-inset-bottom, 0px), var(--safe-bottom))
+        max(12px, env(safe-area-inset-left, 0px));
+      box-sizing: border-box;
       z-index: 55;
       background: rgba(4, 18, 14, 0.62);
+    }
+    .prumo-modal[hidden] { display: none !important; }
+    .prumo-modal .modal-card,
+    .prumo-modal .prumo-card {
+      /* Kill bottom-sheet margin from generic .modal-card so the card stays centered. */
+      margin: 0 auto;
+      align-self: center;
+      max-height: min(86dvh, calc(100dvh - var(--safe-top) - var(--safe-bottom) - 24px));
     }
     .prumo-card {
       --prumo-bg: #102c21;
@@ -214,6 +230,7 @@
       border-radius: 14px;
       color: var(--prumo-text);
       box-shadow: 0 18px 48px rgba(0, 0, 0, 0.55);
+      box-sizing: border-box;
     }
     .prumo-head {
       display: flex; align-items: center; justify-content: space-between; gap: 10px;
@@ -351,10 +368,15 @@
       margin-top: 10px;
       padding-top: 4px;
     }
+    /* Vigas (V) / Pilares (P) / Lajes (L) — bold + white on dark teal modal */
     .report-scroll h4 {
-      margin: 0 0 6px; font-size: 13px; color: #111; font-weight: 700;
+      margin: 0 0 6px; font-size: 13px; color: #ffffff; font-weight: 700;
       letter-spacing: 0.01em;
       border: 0; background: none; box-shadow: none;
+    }
+    .report-scroll .report-vpl > h4 {
+      color: #ffffff;
+      font-weight: 700;
     }
     .report-scroll .group-empty { color: var(--prumo-muted); font-size: 13px; margin: 0 0 8px; }
     .report-scroll h3 {
@@ -408,6 +430,25 @@
       display: grid; place-items: end center; z-index: 50; padding: 16px;
     }
     .modal[hidden] { display: none !important; }
+    /* Relatório / Biblioteca / share — must win over .modal bottom-sheet grid. */
+    .modal.prumo-modal {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      place-items: center;
+      padding: max(12px, env(safe-area-inset-top, 0px), var(--safe-top))
+        max(12px, env(safe-area-inset-right, 0px))
+        max(12px, env(safe-area-inset-bottom, 0px), var(--safe-bottom))
+        max(12px, env(safe-area-inset-left, 0px));
+      box-sizing: border-box;
+      z-index: 55;
+    }
+    .modal.prumo-modal .modal-card {
+      margin-bottom: 0;
+      margin-left: auto;
+      margin-right: auto;
+      align-self: center;
+    }
     .modal-card {
       width: min(480px, 100%); background: var(--surface); border: 1px solid var(--border);
       border-radius: 14px; padding: 14px; margin-bottom: calc(24px + var(--safe-bottom));
@@ -545,7 +586,7 @@
         <div class="brand-text">
           <strong>CONF ARMADURA</strong>
           <span id="doc-label">Abra um PDF</span>
-          <span id="app-revision" class="rev-label" title="Versão app (0.mid.last — last 00–99)">0.1.35-20261123</span>
+          <span id="app-revision" class="rev-label" title="Versão app (0.mid.last — last 00–99)">0.1.36-20261124</span>
         </div>
       </div>
       <div class="top-actions">
@@ -1050,7 +1091,7 @@
   }
 
 
-  var APP_VERSION = "0.1.35-20261123";
+  var APP_VERSION = "0.1.36-20261124";
   var PACKAGE_FORMAT = "conf-armadura-package-v1";
 
   /** Built-in restore packages shipped in www/restore-packages (and android-dist). */
