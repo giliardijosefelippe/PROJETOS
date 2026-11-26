@@ -1,0 +1,20 @@
+{
+  "name": "dispertador",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Dispertador - lembrete de medicamentos com alarme tipo despertador (PWA + APK Capacitor)",
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "serve": "node tools/serve.mjs",
+    "sync": "cap sync android",
+    "apk:debug": "node tools/build-apk.mjs"
+  },
+  "dependencies": {
+    "@capacitor/android": "^7.6.11",
+    "@capacitor/core": "^7.6.11"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^7.6.11"
+  }
+}
